@@ -90,11 +90,26 @@ python pyTranslator.py presentation_chinese.pptx presentation_english.pptx
 | `input`   | Path to the input `.pptx` file       |
 | `output`  | Path for the translated `.pptx` file |
 
+**Optional flags:**
+
+| Flag | Description |
+|------|-------------|
+| `-v`, `--verbose` | Enable detailed per-text translation output (prints every source/target pair) |
+| `-b`, `--batch-size` | Batch size for model inference (default: 128). Larger values reduce per-call overhead but use more memory. |
+| `-p`, `--profile` | Enable timing/profiling output for each phase (collection, translation, mapping, saving) |
+
 **What it does:**
 - Loads the SMALL-100 tokenizer and model from `MODEL_DIR` at startup.
-- Iterates over every slide, processing text boxes, placeholders, tables, and grouped shapes.
-- Translates each text run individually to preserve per-run formatting (colors, fonts, etc.).
+- **Phase 1 (Collection):** Iterates over every slide, collecting all text runs from text boxes, placeholders, tables, and grouped shapes.
+- **Phase 2 (Translation):** Batch translates all collected texts in large batches (default 128 per batch) using a translation cache to skip duplicate strings.
+- **Phase 3 (Mapping):** Maps translated texts back to the original run objects, preserving per-run formatting (colors, fonts, etc.).
 - Saves the translated presentation to the output path.
+
+**Performance:**
+- The two-phase collect-then-translate approach minimizes model inference calls by batching all texts together, rather than translating per-text-frame.
+- A translation cache deduplicates identical strings across the presentation, avoiding redundant model calls.
+- On CPU, PyTorch thread count is automatically set to the number of available CPU cores.
+- Use `--profile` to see timing breakdown per phase.
 
 ---
 
@@ -175,7 +190,7 @@ python PyTranslatorOllama.py presentation_english.pptx presentation_spanish.pptx
 | **Dependencies**    | `python-pptx`, `transformers`, `torch`                                  |
 | **Model**           | SMALL-100 (M2M100 architecture), loaded from a local directory           |
 | **Network required**| No — once the model is downloaded, everything runs offline               |
-| **Speed**           | Fast per-call (no network latency), but model loading takes time       |
+| **Speed**           | Fast per-call (no network latency); global batching and caching minimize inference calls |
 | **Quality**         | Good for common language pairs; limited by the SMALL-100 model capacity  |
 | **Formatting**      | Translates run-by-run, preserving individual text run formatting       |
 | **Languages**       | Configurable via `SOURCE_LANGUAGE` and `TARGET_LANGUAGE` variables       |

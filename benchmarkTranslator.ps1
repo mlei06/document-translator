@@ -1,0 +1,1 @@
+Measure-Command { python.exe .\pyTranslator.py .\samples\前沿端侧推理技术分享.pptx .\test.pptx }
