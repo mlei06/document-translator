@@ -41,7 +41,7 @@ P5 can start once P2 is done, in parallel with P3 and P4.
 
 ## P0 - Project Foundation
 
-Board: [Feature #9008](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9008) | Status: In progress | Plan: [P0-project-foundation.md](plans/P0-project-foundation.md)
+Board: [Feature #9008](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9008) | Status: Done | Plan: [P0-project-foundation.md](plans/P0-project-foundation.md)
 
 ### Goal
 

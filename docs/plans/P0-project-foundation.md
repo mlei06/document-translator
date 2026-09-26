@@ -32,7 +32,7 @@ These were verified on 2026-09-26 by resolving the full future dependency set (c
 | Type checker | **Pyright**, installed as `pyright[nodejs]`, strict mode everywhere | `[nodejs]` bundles Node, so no separate Node install is needed locally or in CI. |
 | Test runner | **pytest** | |
 | Import contracts | **import-linter**, config in `.importlinter` at the root | ADR-003 dependency rules. |
-| CI | **Azure Pipelines**, `azure-pipelines.yml` at the root, Microsoft-hosted `ubuntu-latest` and `windows-latest` agents | The organization already runs hosted jobs; production is a Windows laptop, so tests also run on Windows. |
+| CI | **Azure Pipelines**, `azure-pipelines.yml` at the root, Microsoft-hosted `ubuntu-24.04` and `windows-2025` agents, pinned rather than `-latest` | The organization already runs hosted jobs; production is a Windows laptop, so tests also run on Windows. Images are pinned so an OS upgrade (e.g. `ubuntu-latest` moving to Ubuntu 26 on 2026-10-19) is a deliberate change, not a silent one. |
 | Environment variable prefix | `DOCTRANSLATOR_` | Consistent naming for all apps. |
 | Local data directory | `data/` at the repository root, gitignored | Default location for benchmark data (P1) and job storage (P5); configurable later. |
 
@@ -532,7 +532,7 @@ jobs:
   - job: Checks
     displayName: Format, lint, types, import contracts, tests
     pool:
-      vmImage: ubuntu-latest
+      vmImage: ubuntu-24.04
     steps:
       - checkout: self
         fetchDepth: 1
@@ -564,7 +564,7 @@ jobs:
   - job: WindowsTests
     displayName: Tests on Windows
     pool:
-      vmImage: windows-latest
+      vmImage: windows-2025
     steps:
       - checkout: self
         fetchDepth: 1
@@ -663,14 +663,14 @@ None. P0 defines no public API; `doctranslator_core.__all__` is empty.
 
 ## Completion Criteria
 
-- [ ] A fresh clone runs `uv sync --all-packages` and all six commands in step 8 pass, on Windows and Linux.
-- [ ] `uv.lock` is committed and `uv sync --locked` succeeds in CI.
-- [ ] Every violation in the Tests Required table breaks its contract, and the passing baseline shows all 9 contracts kept.
-- [ ] The Azure Pipelines run on `main` is green for both jobs, and a deliberately broken branch fails.
-- [ ] No package declares any runtime dependency other than `doctranslator-core`.
-- [ ] `src/` is gone; `docs/Structure.md` matches the repository; `AGENTS.md` lists the checks.
-- [ ] The build validation policy on `main` is enabled, or the repository owner has explicitly deferred it (recorded in the pull request).
-- [ ] Board item #9008 is Closed and `docs/IMPLEMENTATION_PLAN.md` shows P0 as Done.
+- [x] A fresh clone runs `uv sync --all-packages` and all six commands in step 8 pass, on Windows and Linux. (Windows: fresh clone of `66ce480` on the development laptop. Linux: CI run 196.)
+- [x] `uv.lock` is committed and `uv sync --locked` succeeds in CI. (Run 196.)
+- [x] Every violation in the Tests Required table breaks its contract, and the passing baseline shows all 9 contracts kept. (Each violation broke exactly its own contract; 9 kept after revert.)
+- [x] The Azure Pipelines run on `main` is green for both jobs, and a deliberately broken branch fails. (Pipeline "Document_Translator CI", ID 9: run 196 on `main` succeeded; run 197 on a throwaway branch failed at `ruff format --check`; branch deleted.)
+- [x] No package declares any runtime dependency other than `doctranslator-core`.
+- [x] `src/` is gone; `docs/Structure.md` matches the repository; `AGENTS.md` lists the checks.
+- [x] The build validation policy on `main` is enabled, or the repository owner has explicitly deferred it. (Deferred by the repository owner on 2026-09-26; no pull request was used for P0, so it is recorded here. CI runs on pushes to `main` only until the policy is enabled.)
+- [x] Board item #9008 is Closed and `docs/IMPLEMENTATION_PLAN.md` shows P0 as Done.
 
 ## Out of Scope
 
