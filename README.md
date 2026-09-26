@@ -1,214 +1,181 @@
-# PPT Translator
+# Document Translator
 
-A set of Python scripts for translating text inside PowerPoint (`.pptx`) presentations. Three scripts are provided:
+Translate office documents between languages while preserving their layout and formatting, running entirely on infrastructure inside the company network.
 
-- **`pyTranslator.py`** — Translates using a **local HuggingFace M2M100 / SMALL-100 model** loaded from disk. No network or external API required at runtime.
-- **`PyTranslatorOllama.py`** — Translates using a **local Ollama API** (e.g., Gemma) running on `localhost:11434`.
-- **`pyTestTranslator.py`** — A standalone test script that loads the local SMALL-100 model and translates a single hardcoded string. Useful for verifying that the model and tokenizer are correctly set up before running the full presentation translator.
+## Problem
 
-Both `pyTranslator.py` and `pyTestTranslator.py` depend on `tokenization_small100.py`, a custom tokenizer module that must be present in the project root.
+Teams regularly receive and produce documents (slide decks, reports, spreadsheets, PDFs) in a language their readers don't speak - most often Chinese and English. Translating these today means one of:
 
----
+- Copying text into a public translation service, which leaks confidential content outside the company.
+- Translating by hand, which is slow and expensive.
+- Using tools that translate text but destroy the document: fonts, colors, tables, and slide layouts are lost, and translated text overflows its boxes because target-language text is often longer than the source.
 
-## Directory Structure
+The output of a useful translator is not "the translated text"; it is a document that looks like the original and can be sent as-is.
 
-```
-PPT_Translator/
-├── pyTranslator.py          # Local HuggingFace model translator (PowerPoint)
-├── pyTestTranslator.py      # Standalone test script for the local model
-├── PyTranslatorOllama.py    # Ollama API translator (PowerPoint)
-├── tokenization_small100.py # Custom SMALL-100 tokenizer (required by pyTranslator.py and pyTestTranslator.py)
-├── README.md                # This file
-└── small100/                # Local model files (config, weights, tokenizer data)
-```
+## Solution
 
----
+A document translation system with one shared translation core and three ways to use it, delivered in this order:
 
-## Prerequisites
+1. **CLI** - a local command-line tool that translates a file and writes a translated copy in the same format.
+2. **Web GUI** - a browser interface where users upload a document, choose languages, and download the result.
+3. **MCP server** - exposes translation as tools for agents on LLM platforms. A user uploads a file in chat; the agent submits a translation job, monitors it until completion, then uses its vision capabilities to inspect rendered pages of the output for visual problems (text overflow, overlapping elements, clipped or unreadable text) and edits the document to fix them. Open WebUI is the first platform, used as a development and test client; enterprise platforms such as Microsoft Copilot are the long-term targets.
 
-- **Python 3.8+** (tested on Python 3.12)
-- **pip** (Python package installer)
-- **Windows, macOS, or Linux** (paths in the scripts are resolved relative to the script's location, so they work on any OS)
+All three surfaces use the same core, so a file translates identically no matter how it was submitted.
 
----
+## Users
 
-## Installation of Dependencies
+- **Staff translating their own documents** - via the web GUI or an agent chat. Not necessarily technical.
+- **Engineers and power users** - via the CLI, for single files, batches, and scripting.
+- **AI agents on LLM platforms** (Open WebUI now, Copilot and others later) - via the MCP server, acting on a user's behalf.
 
-### For `pyTranslator.py` (HuggingFace local model)
+## Goals
 
-```bash
-pip install python-pptx transformers torch
-```
+- Translate PPTX, DOCX, XLSX, PDF, and TXT files, producing output in the same format as the input.
+- Preserve formatting and structure: fonts, styles, colors, run-level formatting (bold, italic, etc.), tables, lists, slide layouts, and sheet structure.
+- Produce documents that look right, not just read right: detect and correct text overflow and other visual defects caused by translation.
+- Keep all document content inside the company network.
+- Translate in both directions between Chinese, English, Japanese, and Spanish, with Chinese -> English as the primary focus and highest quality bar, on technical and business content.
+- Offer more than one translation mode, so users can trade quality against speed and availability.
+- Build the translation core once and reuse it across the CLI, web GUI, and MCP server.
+- Handle realistic document sizes (tens of slides, hundreds of pages) in reasonable time without manual intervention.
 
-> **Note:** The `transformers` library is used for the M2M100 model architecture. The `tokenization_small100.py` file in the project root provides the custom SMALL-100 tokenizer and must be present alongside the scripts. The model files must be downloaded separately and placed in the `small100/` subdirectory (see [Model Setup](#model-setup-for-pytranslatorpy) below).
+## Non-Goals
 
-### For `PyTranslatorOllama.py` (Ollama API)
+- Translating content embedded in images (screenshots, diagrams saved as pictures) - no OCR in scope.
+- Human translation workflows: translation memory management, reviewer assignment, glossary approval processes.
+- Languages beyond Chinese, English, Japanese, and Spanish, even where a model supports them.
+- Real-time or streaming translation of live content (chat, meetings, subtitles).
+- Public or external-facing availability; this is an internal tool.
+- Editing or authoring documents beyond what is needed to translate them and fix translation-induced layout problems.
+- Keeping font sizes consistent across related elements (e.g. all slide titles) when the fit check shrinks text; each container is fitted independently.
 
-```bash
-pip install python-pptx requests
-```
+## Requirements
 
-> **Note:** This script does **not** require `transformers` or `torch`. It communicates with a running Ollama server via HTTP.
+### Functional
 
----
+**Formats**
 
-## Model Setup for `pyTranslator.py` and `pyTestTranslator.py`
+| Format | Requirement |
+|--------|-------------|
+| PPTX | Translate text in text boxes, placeholders, tables, grouped shapes, and speaker notes. Preserve slide layout and run-level formatting. |
+| DOCX | Translate body text, tables, headers, footers, and footnotes. Preserve styles and run-level formatting. |
+| XLSX | Translate cell text and sheet names. Never alter formulas, numbers, or dates. |
+| PDF | Produce a translated PDF that preserves page layout as closely as practical. |
+| TXT | Translate plain text, preserving line and paragraph structure. |
 
-Both scripts load a SMALL-100 model from the `small100/` subdirectory. You must download the model files beforehand:
+**Languages**
 
-1. Download the SMALL-100 model from HuggingFace:
-   ```bash
-   git lfs install
-   git clone https://huggingface.co/alirezamika/small-100
-   ```
-2. Copy the model files (`config.json`, `model.safetensors`, `pytorch_model.bin`, `sentencepiece.bpe.model`, `special_tokens_map.json`, `tokenizer_config.json`, `vocab.json`) into the `small100/` subdirectory of this project.
-3. The `MODEL_DIR` variable in both scripts is set automatically to the `small100/` subdirectory relative to the script's location — no manual path configuration needed.
-4. Adjust `SOURCE_LANGUAGE` and `TARGET_LANGUAGE` as needed (e.g., `"zh"` for Chinese, `"en"` for English).
+All 12 directions between Chinese (Simplified), English, Japanese, and Spanish are supported. Chinese -> English is the primary direction: it is tested most thoroughly and quality decisions are made against it first.
 
----
+**Translation modes**
 
-## How to Run
+The user selects a mode per job. Both modes produce the same output format and go through the same fit check; only the translation engine differs.
 
-### `pyTranslator.py` — Local HuggingFace Model
+| Mode | Engine | Characteristics |
+|------|--------|-----------------|
+| LLM | Prompting the internal LLM server (OpenAI-compatible chat completions API, API key auth) | Higher quality and context awareness; depends on the internal server being reachable. |
+| MT | A machine translation model hosted locally on the machine running the translator | Works without the LLM server; faster and more predictable, lower quality on nuanced text. |
 
-Translates a PowerPoint presentation using a locally loaded M2M100/SMALL-100 model.
+**Translation**
 
-```bash
-python pyTranslator.py input.pptx output.pptx
-```
+- Source and target languages are selectable per job; source language can be auto-detected.
+- Text that should not be translated (numbers, code, URLs, email addresses, product names) passes through unchanged.
+- Repeated strings within a document translate consistently.
 
-**Example:**
+**Visual quality**
 
-```bash
-python pyTranslator.py presentation_chinese.pptx presentation_english.pptx
-```
+Translation must never make the layout worse than the original. This is enforced in two layers.
 
-**Arguments:**
+*Layer 1 - fit check (translation core, all surfaces).* Runs automatically after translation, for every format with fixed-size text containers:
 
-| Argument  | Description                          |
-|-----------|--------------------------------------|
-| `input`   | Path to the input `.pptx` file       |
-| `output`  | Path for the translated `.pptx` file |
+1. For each text container, measure the rendered extent of the original text (using real font metrics and line wrapping at the container's width, not character counts).
+2. The translated text's allowed space is the larger of the container's bounds and the original text's rendered extent. Original text that already overflowed its container is treated as intentional and is not "fixed".
+3. If the translated text's rendered extent exceeds the allowed space, reduce its font size step by step until it fits, down to a floor (a minimum percentage of the original size and a minimum point size, both configurable).
+4. If it still does not fit at the floor, stop shrinking and record it as an unresolved issue.
 
-**Optional flags:**
+Every job produces a fit report listing each adjusted container (location, original and final size) and each unresolved issue.
 
-| Flag | Description |
-|------|-------------|
-| `-v`, `--verbose` | Enable detailed per-text translation output (prints every source/target pair) |
-| `-b`, `--batch-size` | Batch size for model inference (default: 128). Larger values reduce per-call overhead but use more memory. |
-| `-p`, `--profile` | Enable timing/profiling output for each phase (collection, translation, mapping, saving) |
+Overlap is judged only relative to the original. Overlap between elements that already existed in the source document (text over images, labels inside shapes) is intentional design and is never flagged or changed.
 
-**What it does:**
-- Loads the SMALL-100 tokenizer and model from `MODEL_DIR` at startup.
-- **Phase 1 (Collection):** Iterates over every slide, collecting all text runs from text boxes, placeholders, tables, and grouped shapes.
-- **Phase 2 (Translation):** Batch translates all collected texts in large batches (default 128 per batch) using a translation cache to skip duplicate strings.
-- **Phase 3 (Mapping):** Maps translated texts back to the original run objects, preserving per-run formatting (colors, fonts, etc.).
-- Saves the translated presentation to the output path.
+Per format:
 
-**Performance:**
-- The two-phase collect-then-translate approach minimizes model inference calls by batching all texts together, rather than translating per-text-frame.
-- A translation cache deduplicates identical strings across the presentation, avoiding redundant model calls.
-- On CPU, PyTorch thread count is automatically set to the number of available CPU cores.
-- Use `--profile` to see timing breakdown per phase.
+| Format | Fit check scope |
+|--------|-----------------|
+| PPTX | All text containers: text boxes, placeholders, shapes, table cells. |
+| PDF | All text blocks. |
+| XLSX | Cell text clipped by column width or row height. |
+| DOCX | Fixed-size elements only (text boxes, fixed-width table cells); body text reflows naturally. |
+| TXT | Not applicable. |
 
----
+*Layer 2 - visual review (MCP flow only).* The MCP server renders output pages to images and exposes them through MCP tools. The platform's agent inspects them, prioritizing pages listed in the fit report, and checks for problems the geometric check cannot judge: awkward line breaks, text that fits but reads as cramped, and unresolved issues from layer 1. It applies fixes through MCP tools. Rendering happens on the server so the review works with any agent that has vision, regardless of platform.
 
-### `pyTestTranslator.py` — Local Model Test
+**Jobs (web GUI and MCP server)**
 
-A standalone test script that loads the SMALL-100 model and tokenizer from the `small100/` directory and translates a single hardcoded string. This is useful for verifying that the model files and tokenizer are correctly set up before running the full presentation translator.
+- Translation runs as an asynchronous job: submit, check status and progress, retrieve result.
+- Failed jobs report a clear reason; a partial failure (e.g. one unparseable element) does not silently drop content.
 
-```bash
-python pyTestTranslator.py
-```
+### Non-Functional
 
-**What it does:**
-- Loads the SMALL-100 tokenizer and model from the `small100/` subdirectory.
-- Translates a hardcoded English string to Spanish (configurable via `SOURCE_LANGUAGE` and `TARGET_LANGUAGE` variables).
-- Prints the original and translated text to the console.
+- **Confidentiality** - document content and translations never leave the company network. Self-hosted models and services on the internal network are allowed; external cloud translation or LLM APIs are not.
+- **Fidelity** - an output file must always open cleanly in its native application. The input file is never modified.
+- **Translation quality** - measured by an engine benchmark: parallel sentences in all 12 directions, scored with COMET and chrF against reference translations ([ADR-005](docs/decisions/ADR-005-translation-quality-evaluation.md)). Chinese -> English is the deciding direction; no change may significantly lower its score. Absolute thresholds are set from the first baseline run.
+- **Performance** - batch translation work so large documents are not bottlenecked on per-string model calls; exact targets to be set once the model backend is chosen.
+- **Observability** - jobs log timing per phase and counts of translated elements, so slow or lossy translations can be diagnosed.
+- **Extensibility** - adding a file format or a translation backend should not require changes to the other formats or surfaces.
 
-**Configuration variables (edit at the top of the script):**
+## Constraints
 
-| Variable           | Default | Description                          |
-|--------------------|---------|--------------------------------------|
-| `MODEL_DIR`        | `small100/` (relative to script) | Path to the local model folder |
-| `SOURCE_LANGUAGE`  | `"en"`  | Source language code                 |
-| `TARGET_LANGUAGE`  | `"es"`  | Target language code                 |
+- Translation models run locally or on self-hosted servers inside the company network.
+- The MCP server is platform-neutral: standard MCP over the Streamable HTTP transport, with no Open WebUI-specific tools, file handling, or behavior. Both Open WebUI's native MCP integration and Microsoft Copilot Studio support only Streamable HTTP (not stdio). The MCP endpoint is served by the web backend process ([ADR-001](docs/decisions/ADR-001-mcp-server-deployment.md)).
+- Everything lives in one repository, with a shared core consumed by the CLI, web GUI, and MCP server.
+- The LLM server API key is supplied through configuration (environment or a local secrets file) and is never committed to the repository.
+- The LLM server's TLS certificate is issued by the company's internal CA. Certificate verification stays on; the host must trust that CA.
 
----
+## External Dependencies
 
-### `PyTranslatorOllama.py` — Ollama API
+- **Internal LLM server** - company-hosted, OpenAI-compatible chat completions API with Bearer API key auth, currently serving Gemma (`gemma-4-31b-it`). Required for LLM mode only. The endpoint URL, model name, and key are configuration, not code.
+- **Open WebUI** - the company's Open WebUI instance, the initial MCP client for development and testing. Required for the MCP flow only, and replaceable by any MCP-capable platform.
 
-Translates a PowerPoint presentation by sending text to a local Ollama server.
+## Hosting
 
-**Before running:**
+Initially, the web GUI and MCP server run on a single developer laptop on the company network. Coworkers use the web GUI by connecting to the laptop's IP address, and Open WebUI connects to the MCP server at the same address. This means:
 
-1. Install and start [Ollama](https://ollama.com/download).
-2. Pull the model referenced in the script (default: `gemma4:e2b`):
-   ```bash
-   ollama pull gemma4:e2b
-   ```
-3. Ensure the Ollama server is running (it starts automatically with the Ollama app).
+- Availability depends on the laptop being on, awake, and on the network. There is no uptime guarantee at this stage.
+- Job throughput is bounded by the laptop's hardware, especially in MT mode, where the model runs on the laptop.
+- The deployment should not assume the laptop is permanent: moving to a shared server later should be a configuration and deployment change, not a redesign.
+- Cloud platforms such as Copilot Studio cannot reach a laptop on the internal network. Integrating with them requires a stable HTTPS endpoint they can reach, so it depends on moving off the laptop first.
 
-```bash
-python PyTranslatorOllama.py input.pptx output.pptx
-```
+## Delivery Phases
 
-**Example:**
+1. **CLI** - translation core plus CLI covering all five formats.
+2. **Web GUI and job service** - asynchronous jobs, upload/download through the browser.
+3. **MCP server** - platform-neutral agent integration with job monitoring and vision-based visual QA and correction, validated against Open WebUI.
+4. **Enterprise platform integration** - Copilot and similar platforms, once the service runs on a reachable server.
 
-```bash
-python PyTranslatorOllama.py presentation_english.pptx presentation_spanish.pptx
-```
+The detailed roadmap lives in the [Implementation Plan](docs/IMPLEMENTATION_PLAN.md).
 
-**Arguments:**
+## Open Questions
 
-| Argument  | Description                          |
-|-----------|--------------------------------------|
-| `input`   | Path to the input `.pptx` file       |
-| `output`  | Path for the translated `.pptx` file |
+- Which local MT model to use for MT mode, given it must cover all 12 directions and run on laptop hardware? To be decided by ADR, using the benchmark results from ADR-005.
+- Where do the domain benchmark's technical sentences and their reference translations come from (ADR-005)? Until sourced, quality is measured on the general-domain FLORES+ set only.
+- PDF strategy: translate the PDF in place, or convert to an editable format, translate, and re-render?
+- Text measurement needs the documents' fonts (or their metrics) on the machine running the fit check. How are fonts provisioned, and what happens when a document uses a font that isn't available? To be decided by ADR, along with the text layout engine.
+- Default shrink floor (minimum percentage of original size and minimum point size).
+- What authentication do the web GUI and MCP server need when exposed on the laptop's IP, and later to platforms like Copilot (which typically expect OAuth or API key auth)?
+- Copilot runs in Microsoft's cloud, so documents submitted through it pass through the company's Microsoft 365 tenant. Does that count as "inside the company network" for the confidentiality requirement? Needs a decision before Copilot integration.
+- Maximum supported file size and expected job volume?
 
-**What it does:**
-- Sends each text frame's content to the Ollama API at `http://localhost:11434/api/generate`.
-- Uses a structured prompt to translate English to Spanish (modify the `prompt` in `translate_text()` to change languages).
-- Translates text frame-by-frame and table cell-by-cell.
-- Saves the translated presentation to the output path.
+## Current Status
 
-**Configuration variables (edit at the top of the script):**
+Planning. No implementation yet.
 
-| Variable     | Default                          | Description                          |
-|--------------|----------------------------------|--------------------------------------|
-| `OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama API endpoint               |
-| `MODEL`      | `gemma4:e2b`                     | Ollama model name to use             |
+## Documentation
 
----
-
-## Notes on the Translation Approaches
-
-### Local HuggingFace Model (`pyTranslator.py`)
-
-| Aspect              | Details                                                                 |
-|---------------------|-------------------------------------------------------------------------|
-| **Dependencies**    | `python-pptx`, `transformers`, `torch`                                  |
-| **Model**           | SMALL-100 (M2M100 architecture), loaded from a local directory           |
-| **Network required**| No — once the model is downloaded, everything runs offline               |
-| **Speed**           | Fast per-call (no network latency); global batching and caching minimize inference calls |
-| **Quality**         | Good for common language pairs; limited by the SMALL-100 model capacity  |
-| **Formatting**      | Translates run-by-run, preserving individual text run formatting       |
-| **Languages**       | Configurable via `SOURCE_LANGUAGE` and `TARGET_LANGUAGE` variables       |
-
-### Ollama API (`PyTranslatorOllama.py`)
-
-| Aspect              | Details                                                                 |
-|---------------------|-------------------------------------------------------------------------|
-| **Dependencies**    | `python-pptx`, `requests`                                               |
-| **Model**           | Any model served by Ollama (default: `gemma4:e2b`)                      |
-| **Network required**| No external internet — communicates with local Ollama server only      |
-| **Speed**           | Depends on model size and hardware; each call has HTTP overhead         |
-| **Quality**         | Generally higher quality; can use larger models (Gemma, Llama, etc.)    |
-| **Formatting**      | Translates text frame-by-frame; may lose per-run formatting             |
-| **Languages**       | Controlled by the prompt in `translate_text()` (currently EN → ES)      |
-| **Flexibility**     | Easy to switch models or change the prompt for different language pairs |
-
-### Choosing Between Them
-
-- Use **`pyTranslator.py`** when you need **offline operation** with **no external services** and want to **preserve per-run text formatting**.
-- Use **`PyTranslatorOllama.py`** when you want **higher translation quality** and are willing to run a local Ollama server. This approach is more flexible for changing language pairs and models.
+- [Architecture](docs/Architecture.md)
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
+- [Repository Structure](docs/Structure.md)
+- [Architecture Components](docs/architecture/components/)
+- [Implementation Plans](docs/plans/)
+- [Architecture Decisions](docs/decisions/)
+- [Deployment](docs/Deployment.md)
+- [Agent Instructions](AGENTS.md)
