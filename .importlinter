@@ -1,0 +1,96 @@
+[importlinter]
+root_packages =
+    doctranslator_core
+    doctranslator_cli
+    doctranslator_server
+    doctranslator_eval
+include_external_packages = True
+
+[importlinter:contract:core-independent-of-apps]
+name = ADR-003 rule 1: the core imports no app and no surface framework
+type = forbidden
+source_modules = doctranslator_core
+forbidden_modules =
+    doctranslator_cli
+    doctranslator_server
+    doctranslator_eval
+    fastapi
+    starlette
+    uvicorn
+    mcp
+    typer
+    click
+    sqlalchemy
+    alembic
+
+[importlinter:contract:core-internals-private]
+name = ADR-003 rule 2: apps import only the core public API
+type = protected
+protected_modules = doctranslator_core.*
+allowed_importers = doctranslator_core
+ignore_imports =
+    doctranslator_cli.** -> doctranslator_core.types
+    doctranslator_server.** -> doctranslator_core.types
+    doctranslator_eval.** -> doctranslator_core.types
+unmatched_ignore_imports_alerting = none
+
+[importlinter:contract:apps-independent]
+name = ADR-003 rule 3: apps do not import each other
+type = independence
+modules =
+    doctranslator_cli
+    doctranslator_server
+    doctranslator_eval
+
+[importlinter:contract:server-core-entry]
+name = ADR-003 rule 4: in the server, only jobs and settings call the core public API
+type = protected
+protected_modules = doctranslator_core
+as_packages = False
+allowed_importers =
+    doctranslator_core
+    doctranslator_cli
+    doctranslator_eval
+    doctranslator_server.jobs
+    doctranslator_server.settings
+
+[importlinter:contract:api-mcp-independent]
+name = ADR-003 rule 4: api and mcp do not import each other
+type = independence
+modules =
+    doctranslator_server.api
+    doctranslator_server.mcp
+
+[importlinter:contract:db-access]
+name = ADR-003 rule 5: only jobs, auth, and the composition root use db
+type = protected
+protected_modules = doctranslator_server.db
+allowed_importers =
+    doctranslator_server.jobs
+    doctranslator_server.auth
+    doctranslator_server.app
+
+[importlinter:contract:engines-formats-independent]
+name = ADR-003 rule 6: engines and formats do not import each other
+type = independence
+modules =
+    doctranslator_core.engines
+    doctranslator_core.formats
+
+[importlinter:contract:format-packages-independent]
+name = ADR-003 rule 6: format packages do not import each other
+type = independence
+modules =
+    doctranslator_core.formats.pptx
+    doctranslator_core.formats.docx
+    doctranslator_core.formats.xlsx
+    doctranslator_core.formats.pdf
+    doctranslator_core.formats.txt
+
+[importlinter:contract:fit-render-format-neutral]
+name = ADR-003 rule 6: fit and render do not import formats
+type = forbidden
+source_modules =
+    doctranslator_core.fit
+    doctranslator_core.render
+forbidden_modules = doctranslator_core.formats

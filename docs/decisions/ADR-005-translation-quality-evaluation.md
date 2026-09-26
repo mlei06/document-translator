@@ -58,7 +58,9 @@ Languages map to FLORES+ codes: Chinese `cmn_Hans`, English `eng_Latn`, Japanese
 
 ### Location
 
-A separate distribution, `apps/eval` (`doctranslator_eval`), depending on the core plus `unbabel-comet` and `sacrebleu`. Its heavy dependencies (COMET pulls in PyTorch and a ~2 GB model) stay out of the core, CLI, and server.
+A separate distribution, `apps/eval` (`doctranslator_eval`), depending on the core plus `sacrebleu`.
+
+COMET is **not** a dependency of any workspace package. Every current `unbabel-comet` release requires `numpy<2`, which has no wheels for Python 3.13 or later, and a `uv` workspace resolves all members into one lockfile. Declaring it would force the whole product onto Python 3.12 and numpy 1.x (verified 2026-09-26). Instead, `doctranslator_eval` runs COMET's `comet-score` CLI in an isolated tool environment with its own pinned Python and version (e.g. `uvx --python 3.12 --from unbabel-comet==<pinned> comet-score ...`), passing sources, hypotheses, and references as files and reading back per-segment scores. Paired bootstrap comparison is computed in `doctranslator_eval` from those per-segment scores. When a COMET release supports numpy 2, this isolation can be removed.
 
 ## Consequences
 

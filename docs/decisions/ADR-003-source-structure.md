@@ -236,12 +236,12 @@ flowchart TD
 Enforced by import-linter contracts in CI:
 
 1. `doctranslator_core` imports neither app, nor FastAPI, the MCP SDK, or the CLI framework.
-2. Apps import only from `doctranslator_core` and `doctranslator_core.types` (the public API), never from other core submodules.
+2. Apps import only from `doctranslator_core` and `doctranslator_core.types` (the public API), never from other core submodules. Anything else apps need, such as configuration types from `config.py`, is re-exported from `doctranslator_core`.
 3. `doctranslator_cli`, `doctranslator_server`, and `doctranslator_eval` do not import each other.
 4. Within the server, `api` and `mcp` import only `doctranslator_core.types` from the core (for shared enums and value types); only `jobs` and `settings` import `doctranslator_core` itself. `api` and `mcp` do not import each other.
-5. Within the server, only `jobs` and `auth` import `db`.
+5. Within the server, only `jobs`, `auth`, and the composition root `app.py` (which wires up the database session) import `db`.
 6. Within the core, `formats` and `engines` do not import each other; format packages do not import each other; `fit` and `render` do not import `formats`.
-7. Each format library (`pptx`, `docx`, `openpyxl`) is imported only by its format package; `fitz` (PyMuPDF) only by `formats.pdf` and `render`.
+7. Each format library (`pptx`, `docx`, `openpyxl`) is imported only by its format package; `fitz` (PyMuPDF) only by `formats.pdf` and `render`. These are import-linter `protected` contracts, which require the protected module to be present in the import graph, so each one is added in the change that first imports its library, not before.
 
 ## Consequences
 

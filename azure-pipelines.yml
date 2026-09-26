@@ -1,0 +1,71 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  UV_VERSION: "0.12.6"
+  UV_CACHE_DIR: $(Pipeline.Workspace)/.uv-cache
+
+jobs:
+  - job: Checks
+    displayName: Format, lint, types, import contracts, tests
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - checkout: self
+        fetchDepth: 1
+
+      - task: Cache@2
+        displayName: Cache uv
+        inputs:
+          key: 'uv | "$(Agent.OS)" | uv.lock'
+          restoreKeys: |
+            uv | "$(Agent.OS)"
+          path: $(UV_CACHE_DIR)
+
+      - bash: |
+          set -euo pipefail
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "##vso[task.prependpath]$HOME/.local/bin"
+        displayName: Install uv
+
+      - bash: |
+          set -euo pipefail
+          uv sync --locked --all-packages
+          uv run ruff format --check
+          uv run ruff check
+          uv run pyright
+          uv run lint-imports
+          uv run pytest
+        displayName: Run checks
+
+  - job: WindowsTests
+    displayName: Tests on Windows
+    pool:
+      vmImage: windows-latest
+    steps:
+      - checkout: self
+        fetchDepth: 1
+
+      - task: Cache@2
+        displayName: Cache uv
+        inputs:
+          key: 'uv | "$(Agent.OS)" | uv.lock'
+          restoreKeys: |
+            uv | "$(Agent.OS)"
+          path: $(UV_CACHE_DIR)
+
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          irm "https://astral.sh/uv/$env:UV_VERSION/install.ps1" | iex
+          echo "##vso[task.prependpath]$HOME\.local\bin"
+        displayName: Install uv
+
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          uv sync --locked --all-packages
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          uv run pytest
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        displayName: Run tests

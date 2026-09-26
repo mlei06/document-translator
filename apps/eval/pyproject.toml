@@ -1,0 +1,13 @@
+[project]
+name = "doctranslator-eval"
+version = "0.1.0"
+description = "Translation quality benchmark."
+requires-python = ">=3.14"
+dependencies = ["doctranslator-core"]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+doctranslator-core = { workspace = true }

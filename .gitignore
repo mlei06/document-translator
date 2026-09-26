@@ -157,3 +157,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Local data: benchmark datasets, job storage, run outputs. Never committed.
+data/

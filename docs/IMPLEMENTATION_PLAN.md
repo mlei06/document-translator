@@ -41,7 +41,7 @@ P5 can start once P2 is done, in parallel with P3 and P4.
 
 ## P0 - Project Foundation
 
-Board: [Feature #9008](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9008) | Status: Not started
+Board: [Feature #9008](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9008) | Status: In progress | Plan: [P0-project-foundation.md](plans/P0-project-foundation.md)
 
 ### Goal
 
@@ -56,7 +56,7 @@ None.
 - `uv` workspace root with pinned Python version, and skeleton distributions for `packages/core`, `apps/cli`, `apps/server`, and `apps/eval`, each importable with an empty public API. (`apps/web` is created in P6.)
 - Shared tooling configured at the root: formatter and linter, static type checker, test runner.
 - Import-linter contracts for all dependency rules in ADR-003.
-- Azure Pipelines CI running format check, lint, type check, import contracts, and tests on every pull request.
+- Azure Pipelines CI running format check, lint, type check, import contracts, and tests on `main`, and on pull requests through a build validation branch policy.
 - `.env.example` documenting configuration variables, with no secret values.
 - Scaffold root `src/` removed; `docs/Structure.md` describes the real layout.
 

@@ -37,6 +37,21 @@ If documented architecture and existing code disagree, do not assume either is c
 6. Run the relevant lint/typecheck/tests after implementation, and do not mark a task complete until its completion criteria are satisfied.
 7. Inspect the existing code and docs before proposing architecture - never design as if the repository were empty when it isn't.
 
+## Checks
+
+Install and run from the repository root. All six must pass before a task is complete; CI runs the same commands.
+
+```text
+uv sync --all-packages
+uv run ruff format --check
+uv run ruff check
+uv run pyright
+uv run lint-imports
+uv run pytest
+```
+
+An import contract failure means code is in the wrong place (see `docs/decisions/ADR-003-source-structure.md`). Fix it by moving the code, not by editing `.importlinter`.
+
 ## Agent Roles
 
 - **Architect** - `.agents/prompts/architect.md` - designs and documents; does not write production code.

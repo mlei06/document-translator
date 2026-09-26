@@ -1,0 +1,85 @@
+[project]
+name = "doctranslator-workspace"
+version = "0.0.0"
+requires-python = ">=3.14"
+dependencies = [
+    "doctranslator-core",
+    "doctranslator-cli",
+    "doctranslator-server",
+    "doctranslator-eval",
+]
+
+[dependency-groups]
+dev = [
+    "import-linter",
+    "pyright[nodejs]",
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/core", "apps/cli", "apps/server", "apps/eval"]
+
+[tool.uv.sources]
+doctranslator-core = { workspace = true }
+doctranslator-cli = { workspace = true }
+doctranslator-server = { workspace = true }
+doctranslator-eval = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["packages/core/src", "apps/cli/src", "apps/server/src", "apps/eval/src"]
+include = [
+    "packages/**/*.py",
+    "apps/**/*.py",
+    "tests/**/*.py",
+    "scripts/**/*.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "N",        # pep8-naming
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "PTH",      # use pathlib
+    "RUF",      # ruff-specific
+    "S",        # bandit security checks
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]  # assert is how pytest works
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "doctranslator_core",
+    "doctranslator_cli",
+    "doctranslator_server",
+    "doctranslator_eval",
+]
+
+[tool.pyright]
+include = ["packages", "apps", "tests", "scripts"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "packages/core/tests",
+    "apps/cli/tests",
+    "apps/server/tests",
+    "apps/eval/tests",
+    "tests",
+]
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
