@@ -88,15 +88,17 @@ Translate plain text in both LLM and MT modes across all 12 language directions,
 - `engines/mt.py`: local MT model engine, runtime imported lazily behind the `[mt]` extra, model selectable by configuration.
 - Public text-level translation function in the core API.
 - `apps/eval`: FLORES+ download script, benchmark runner, COMET and chrF scoring, paired bootstrap comparison, run recording.
-- ADR selecting the MT model, based on benchmark results across candidates.
-- Committed baselines for LLM mode and the chosen MT model, with quality thresholds.
+- ADR selecting the MT model ([ADR-006](decisions/ADR-006-mt-model-selection.md): SMALL-100).
 
 ### Completion Criteria
 
 - Both modes translate all 12 directions through the public API.
 - LLM engine is tested against a fake HTTP server (errors, retries, auth failures); no test needs the real server.
-- A full benchmark run completes for both modes and its baselines are committed.
 - The MT model ADR is accepted.
+
+### Deferred
+
+The owner moved the benchmark baselines out of P1 on 2026-09-27, since SMALL-100 and Gemma are settled for now. A full benchmark run for both modes and committed baselines (P1 plan step 11) must be done **before the first change to the LLM prompt, the LLM model, or the MT model**: that is when a regression check first matters. The eval app that produces them is complete.
 
 ---
 

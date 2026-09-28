@@ -442,15 +442,21 @@ All tests in step 10, passing under the six checks. Integration tests pass when 
 
 ## Completion Criteria
 
-- [ ] Connectivity check done; JSON mode support and latency recorded.
-- [ ] Both modes translate all 12 directions through `Translator`, exactly as specified in the core component doc.
-- [ ] All six checks pass locally and in CI, including the new import contracts and the core environment-variable ban; no test needs the VPN, a model, or network.
-- [ ] Integration tests pass on the VPN (LLM) and with a converted model (MT).
-- [ ] FLORES+ downloaded at the pinned revision (all four languages); complete benchmark runs exist for LLM mode and SMALL-100.
-- [ ] ADR-006 includes the MT baseline's per-direction scores.
-- [ ] `apps/eval/baselines/llm.json` and `apps/eval/baselines/mt.json` committed, containing no text.
-- [ ] `compare` of each baseline against itself reports no significant difference and exit code 0.
-- [ ] Documentation updated per step 12; board item #9009 Closed; `docs/IMPLEMENTATION_PLAN.md` shows P1 Done.
+- [x] Connectivity check done; JSON mode support and latency recorded (step 1).
+- [x] Both modes translate all 12 directions through `Translator`, exactly as specified in the core component doc (2026-09-27: two FLORES+ sentences per direction, each output non-empty and in the target script).
+- [ ] All six checks pass locally and in CI, including the new import contracts and the core environment-variable ban; no test needs the VPN, a model, or network. (Local: passing, 87 tests. CI: runs when the branch reaches `main` or a pull request.)
+- [x] Integration tests pass on the VPN (LLM) and with a converted model (MT).
+- [x] FLORES+ downloaded at the pinned revision (all four languages).
+- [x] Documentation updated per step 12.
+- [ ] Board item #9009 Closed; `docs/IMPLEMENTATION_PLAN.md` shows P1 Done.
+
+### Deferred
+
+Moved out of P1 by the owner on 2026-09-27; tracked in `docs/IMPLEMENTATION_PLAN.md` under P1. They must be done **before the first change to the LLM prompt, the LLM model, or the MT model**, since that is when a regression check first matters:
+
+- Complete benchmark runs (step 11) for LLM mode and SMALL-100.
+- `apps/eval/baselines/llm.json` and `apps/eval/baselines/mt.json` committed, containing no text; `compare` of each against itself reports no significant difference and exit code 0.
+- ADR-006 includes the MT baseline's per-direction scores.
 
 ## Out of Scope
 

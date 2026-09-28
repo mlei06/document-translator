@@ -156,7 +156,6 @@ The detailed roadmap lives in the [Implementation Plan](docs/IMPLEMENTATION_PLAN
 
 ## Open Questions
 
-- Which local MT model to use for MT mode, given it must cover all 12 directions and run on laptop hardware? To be decided by ADR, using the benchmark results from ADR-005.
 - Where do the domain benchmark's technical sentences and their reference translations come from (ADR-005)? Until sourced, quality is measured on the general-domain FLORES+ set only.
 - PDF strategy: translate the PDF in place, or convert to an editable format, translate, and re-render?
 - Text measurement needs the documents' fonts (or their metrics) on the machine running the fit check. How are fonts provisioned, and what happens when a document uses a font that isn't available? To be decided by ADR, along with the text layout engine.
@@ -167,7 +166,7 @@ The detailed roadmap lives in the [Implementation Plan](docs/IMPLEMENTATION_PLAN
 
 ## Current Status
 
-Planning. No implementation yet.
+Text translation works in both modes: LLM mode through the internal LLM server (Gemma) and MT mode through SMALL-100, which runs locally ([ADR-006](docs/decisions/ADR-006-mt-model-selection.md)). The translation quality benchmark (`apps/eval`) is in place. Document formats and the CLI are next (P2).
 
 ## Documentation
 
