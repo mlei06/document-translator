@@ -3,13 +3,18 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from doctranslator_core.types import EngineInfo, Language
+from doctranslator_core.types import EngineInfo, Language, TranslationIdentity
 
 
 class TranslationEngine(ABC):
     @property
     @abstractmethod
     def info(self) -> EngineInfo: ...
+
+    @property
+    @abstractmethod
+    def identity(self) -> TranslationIdentity:
+        """Everything about the loaded engine that can change its output (ADR-011)."""
 
     @abstractmethod
     def translate_batch(

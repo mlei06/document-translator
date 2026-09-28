@@ -3,7 +3,13 @@ name = "doctranslator-core"
 version = "0.1.0"
 description = "Translation core: formats, engines, fit check, rendering."
 requires-python = ">=3.14"
-dependencies = ["httpx", "pydantic", "truststore"]
+dependencies = [
+    "httpx",
+    "lingua-language-detector>=2.2,<2.3",
+    "lxml>=6.1",
+    "pydantic",
+    "truststore",
+]
 
 [project.optional-dependencies]
 mt = ["ctranslate2", "sentencepiece"]

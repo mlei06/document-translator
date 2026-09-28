@@ -4,9 +4,11 @@ The runtime (``ctranslate2``, ``sentencepiece``) is imported lazily, so an insta
 ``[mt]`` extra works in LLM mode.
 """
 
+import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol, cast
 
 from doctranslator_core.config import MtEngineConfig
@@ -15,10 +17,11 @@ from doctranslator_core.types import (
     EngineInfo,
     EngineUnavailableError,
     Language,
+    TranslationIdentity,
     TranslationMode,
 )
 
-__all__ = ["MtEngine", "MtRuntime"]
+__all__ = ["MtEngine", "MtRuntime", "artifact_sha256", "prepare_identity"]
 
 _SPECIAL_TOKENS = frozenset({"<s>", "</s>", "<pad>", "<unk>"})
 _LANGUAGE_TOKEN = re.compile(r"__[a-z]{2,3}__")
@@ -62,6 +65,8 @@ class MtRuntime:
     translator: _Ct2Translator
     tokenizer: _SentencePiece
     device: str
+    artifact_sha256: str = ""
+    """SHA-256 of the model directory's files (``artifact_sha256``); tests may leave it empty."""
 
 
 class MtEngine(TranslationEngine):
@@ -82,6 +87,11 @@ class MtEngine(TranslationEngine):
                 "beam_size": str(self._config.beam_size),
             },
         )
+
+    @property
+    def identity(self) -> TranslationIdentity:
+        runtime = self._require_runtime()
+        return _identity(self._config, runtime.device, runtime.artifact_sha256)
 
     def translate_batch(
         self, texts: Sequence[str], source: Language, target: Language
@@ -105,6 +115,57 @@ class MtEngine(TranslationEngine):
         if self._runtime is None:
             raise RuntimeError("MT engine is closed")
         return self._runtime
+
+
+def prepare_identity(config: MtEngineConfig) -> TranslationIdentity:
+    """The MT engine's output identity without loading the model.
+
+    Hashes the model directory and resolves ``device="auto"`` (which imports CTranslate2 only to
+    count CUDA devices). Raises ``EngineUnavailableError`` if the directory is missing.
+    """
+    if not config.model_dir.is_dir():
+        raise EngineUnavailableError(f"MT model directory not found: {config.model_dir}")
+    return _identity(config, _resolve_device(config), artifact_sha256(config.model_dir))
+
+
+def artifact_sha256(model_dir: Path) -> str:
+    """SHA-256 over the sorted relative names and contents of every file in the directory."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in model_dir.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(model_dir).as_posix().encode("utf-8") + b"\0")
+        with path.open("rb") as handle:
+            while chunk := handle.read(1 << 20):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _identity(config: MtEngineConfig, device: str, artifact: str) -> TranslationIdentity:
+    return TranslationIdentity(
+        mode=TranslationMode.MT,
+        model=config.model_dir.name,
+        details={
+            "model_family": config.model_family,
+            "artifact_sha256": artifact,
+            "device": device,
+            "compute_type": config.compute_type,
+            "beam_size": str(config.beam_size),
+            "max_batch_size": str(config.max_batch_size),
+        },
+    )
+
+
+def _resolve_device(config: MtEngineConfig) -> str:
+    if config.device != "auto":
+        return config.device
+    try:
+        import ctranslate2  # pyright: ignore[reportMissingTypeStubs]
+    except ImportError as exc:
+        raise EngineUnavailableError(
+            "MT mode requires the 'mt' extra: install doctranslator-core[mt]"
+        ) from exc
+    ct2 = cast(_Ct2Module, ctranslate2)
+    return "cuda" if ct2.get_cuda_device_count() > 0 else "cpu"
 
 
 def _content_pieces(pieces: list[str]) -> list[str]:
@@ -144,4 +205,5 @@ def _load_runtime(config: MtEngineConfig) -> MtRuntime:
         translator=translator,
         tokenizer=cast(_SentencePiece, tokenizer),
         device=device,
+        artifact_sha256=artifact_sha256(model_dir),
     )

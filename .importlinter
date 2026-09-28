@@ -115,6 +115,20 @@ allowed_importers =
     doctranslator_server
     doctranslator_eval
 
+[importlinter:contract:xml-library-contained]
+name = ADR-011: the XML library is used only by format packages
+type = protected
+protected_modules = lxml
+allowed_importers =
+    doctranslator_core.formats
+    doctranslator_core.formats.**
+
+[importlinter:contract:detector-contained]
+name = ADR-011: the language detector is used only by detect
+type = protected
+protected_modules = lingua
+allowed_importers = doctranslator_core.detect
+
 [importlinter:contract:mt-libraries-contained]
 name = ADR-003 core rule: MT runtime libraries only in engines.mt
 type = protected

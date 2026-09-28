@@ -133,9 +133,9 @@ Execution details: [P1.1 baseline capture](plans/P1.1-baseline-capture.md). This
 
 ## P2 - Document Translation and CLI
 
-Board: [Feature #9010](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9010) | Status: Not started
+Board: [Feature #9010](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9010) | Status: In progress | Plan: [P2](plans/P2-document-translation-and-cli.md) (approved 2026-09-28)
 
-Planning: [P2 draft](plans/P2-document-translation-and-cli.md), with [P2.0 design gates](plans/P2.0-document-design-validation.md). Board state verified New on 2026-09-27. No plan has been approved and no document adapter/CLI implementation exists.
+[P2.0](plans/P2.0-document-design-validation.md) is complete: ADR-011 and ADR-009 are accepted and the contract is in the [Document API](Architecture.md#document-api). Board set Active 2026-09-28. Implementation is under way on `release/p2-p6`.
 
 ### Goal
 

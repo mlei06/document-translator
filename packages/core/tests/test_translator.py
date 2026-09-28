@@ -6,7 +6,13 @@ import doctranslator_core.translator as translator_module
 from doctranslator_core import MtEngineConfig, Translator
 from doctranslator_core.config import EngineConfig
 from doctranslator_core.engines import TranslationEngine
-from doctranslator_core.types import EngineInfo, EngineResponseError, Language, TranslationMode
+from doctranslator_core.types import (
+    EngineInfo,
+    EngineResponseError,
+    Language,
+    TranslationIdentity,
+    TranslationMode,
+)
 
 
 class FakeEngine(TranslationEngine):
@@ -20,6 +26,10 @@ class FakeEngine(TranslationEngine):
     @property
     def info(self) -> EngineInfo:
         return EngineInfo(mode=TranslationMode.MT, model="fake", details={})
+
+    @property
+    def identity(self) -> TranslationIdentity:
+        return TranslationIdentity(mode=TranslationMode.MT, model="fake", details={})
 
     def translate_batch(
         self, texts: Sequence[str], source: Language, target: Language

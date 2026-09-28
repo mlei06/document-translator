@@ -2,13 +2,25 @@
 
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from types import TracebackType
 from typing import Self
 
-from doctranslator_core.config import EngineConfig
+from doctranslator_core import pipeline
+from doctranslator_core.config import DocumentLimits, EngineConfig
 from doctranslator_core.engines import TranslationEngine, create_engine
-from doctranslator_core.types import EngineInfo, EngineResponseError, Language
+from doctranslator_core.identity import output_fingerprint
+from doctranslator_core.types import (
+    DocumentTranslationOptions,
+    DocumentTranslationResult,
+    EngineInfo,
+    EngineResponseError,
+    FontManifest,
+    Language,
+    TranslationIdentity,
+    TranslationProgress,
+)
 
 __all__ = ["Translator"]
 
@@ -16,19 +28,54 @@ logger = logging.getLogger(__name__)
 
 
 class Translator:
-    """Translates text through the engine selected by ``config.mode``.
+    """Translates text and documents through the engine selected by ``config.mode``.
 
     Create once and reuse: for MT mode, construction loads the model. Not thread-safe; use one
-    ``Translator`` per thread.
+    ``Translator`` per thread. ``fonts`` is the provisioned font manifest for fit measurement;
+    ``limits`` bounds document parsing (defaults: ``DocumentLimits()``).
     """
 
-    def __init__(self, config: EngineConfig) -> None:
+    def __init__(
+        self,
+        config: EngineConfig,
+        *,
+        fonts: FontManifest | None = None,
+        limits: DocumentLimits | None = None,
+    ) -> None:
         self._engine: TranslationEngine = create_engine(config)
+        self._fonts = fonts
+        self._limits = limits or DocumentLimits()
         self._closed = False
 
     @property
     def engine_info(self) -> EngineInfo:
         return self._engine.info
+
+    @property
+    def identity(self) -> TranslationIdentity:
+        """The loaded engine's output identity (ADR-011); compare with ``prepare_identity``."""
+        return self._engine.identity
+
+    def translate_document(
+        self,
+        input_path: Path,
+        output_path: Path,
+        *,
+        options: DocumentTranslationOptions,
+        on_progress: Callable[[TranslationProgress], None] | None = None,
+    ) -> DocumentTranslationResult:
+        """Translate one document into a new file of the same format (see the Document API)."""
+        if self._closed:
+            raise RuntimeError("Translator is closed")
+        return pipeline.translate_document(
+            self,
+            input_path,
+            output_path,
+            options=options,
+            fingerprint=output_fingerprint(self.identity, options, self._fonts),
+            limits=self._limits,
+            on_progress=on_progress,
+        )
 
     def translate_texts(
         self, texts: Sequence[str], *, source: Language, target: Language

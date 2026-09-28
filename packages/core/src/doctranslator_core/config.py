@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
 
 from doctranslator_core.types import TranslationMode
 
-__all__ = ["EngineConfig", "LlmEngineConfig", "MtEngineConfig"]
+__all__ = ["DocumentLimits", "EngineConfig", "LlmEngineConfig", "MtEngineConfig"]
 
 
 class LlmEngineConfig(BaseModel):
@@ -29,6 +29,9 @@ class LlmEngineConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0, le=2)
     json_mode: bool = True
     """Send ``response_format: {"type": "json_object"}``. Disable for servers that reject it."""
+    deployment_revision: str = ""
+    """The operator's declared revision of the model served as ``model``. Part of the output
+    identity (ADR-011); change it when the server's model changes under an unchanged name."""
 
 
 class MtEngineConfig(BaseModel):
@@ -53,3 +56,21 @@ class MtEngineConfig(BaseModel):
 
 type EngineConfig = Annotated[LlmEngineConfig | MtEngineConfig, Field(discriminator="mode")]
 """Either engine's configuration, discriminated by ``mode``."""
+
+
+class DocumentLimits(BaseModel):
+    """Resource limits applied before any engine call (ADR-011 section 7). Nothing is truncated."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_package_bytes: int = Field(default=1 << 30, ge=1)
+    """Total uncompressed size of an Office package."""
+    max_entry_bytes: int = Field(default=128 << 20, ge=1)
+    """Uncompressed size of one package entry."""
+    max_entries: int = Field(default=20_000, ge=1)
+    max_compression_ratio: float = Field(default=1000.0, gt=1)
+    """Largest allowed uncompressed/compressed ratio of one entry."""
+    max_text_bytes: int = Field(default=100 << 20, ge=1)
+    """Size of a TXT or PDF input file."""
+    max_segments: int = Field(default=200_000, ge=1)
+    """Translatable paragraphs in one document."""

@@ -15,6 +15,7 @@ dev = [
     "pyright[nodejs]",
     "pytest",
     "ruff",
+    "types-lxml",
 ]
 
 [tool.uv]
@@ -78,6 +79,7 @@ pythonVersion = "3.14"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
+extraPaths = ["tests"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -87,6 +89,7 @@ testpaths = [
     "apps/eval/tests",
     "tests",
 ]
+pythonpath = ["tests"]
 addopts = [
     "--import-mode=importlib", "-ra", "--strict-markers", "--strict-config",
     "-m", "not integration",

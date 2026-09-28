@@ -22,10 +22,11 @@ from doctranslator_core.types import (
     EngineUnavailableError,
     Language,
     TranslationError,
+    TranslationIdentity,
     TranslationMode,
 )
 
-__all__ = ["LlmEngine"]
+__all__ = ["LlmEngine", "prepare_identity"]
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,10 @@ class LlmEngine(TranslationEngine):
                 "temperature": str(self._config.temperature),
             },
         )
+
+    @property
+    def identity(self) -> TranslationIdentity:
+        return prepare_identity(self._config)
 
     def translate_batch(
         self, texts: Sequence[str], source: Language, target: Language
@@ -149,6 +154,22 @@ class LlmEngine(TranslationEngine):
             logger.warning("%s; retry %d of %d in %.1f s", failure, attempt + 1, max_retries, delay)
             self._sleep(delay)
         raise AssertionError("unreachable")
+
+
+def prepare_identity(config: LlmEngineConfig) -> TranslationIdentity:
+    """The LLM engine's output identity from configuration alone (no network)."""
+    return TranslationIdentity(
+        mode=TranslationMode.LLM,
+        model=config.model,
+        details={
+            "base_url": str(config.base_url).rstrip("/"),
+            "deployment_revision": config.deployment_revision,
+            "prompt_version": PROMPT_VERSION,
+            "temperature": repr(config.temperature),
+            "json_mode": str(config.json_mode).lower(),
+            "batch_size": str(config.batch_size),
+        },
+    )
 
 
 def _backoff_seconds(attempt: int) -> float:

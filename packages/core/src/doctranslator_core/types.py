@@ -26,6 +26,8 @@ __all__ = [
     "FitOptions",
     "FitReport",
     "FitStatus",
+    "FontFace",
+    "FontManifest",
     "IdentityMismatchError",
     "InvalidDocumentError",
     "Language",
@@ -90,6 +92,38 @@ class TranslationIdentity(BaseModel):
     @property
     def digest(self) -> str:
         canonical = json.dumps(self.model_dump(mode="json"), sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+class FontFace(BaseModel):
+    """One provisioned font face: a file (and face index for collections) with its names."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    family: str
+    """Family name as documents reference it (name ID 1, or 16 when present)."""
+    names: tuple[str, ...]
+    """Every family name the face answers to, including localized names (e.g. 微软雅黑)."""
+    bold: bool
+    italic: bool
+    path: Path
+    index: int = 0
+    sha256: str
+
+
+class FontManifest(BaseModel):
+    """The fonts available for fit measurement and PDF output. ``digest`` ignores file paths."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    faces: tuple[FontFace, ...]
+
+    @property
+    def digest(self) -> str:
+        entries = sorted(
+            (f.family, f.bold, f.italic, f.index, f.sha256, sorted(f.names)) for f in self.faces
+        )
+        canonical = json.dumps(entries, ensure_ascii=False)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -177,6 +211,9 @@ class SegmentCounts(BaseModel):
 class FitStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
     """TXT, or a document with no fixed-size text containers."""
+    NOT_RUN = "not_run"
+    """P2 interim only: fit is not implemented for the format yet. Removed when P3 lands; never
+    acceptable in a release result (P2-P6 handoff)."""
     PASSED = "passed"
     ADJUSTED = "adjusted"
     UNRESOLVED = "unresolved"
