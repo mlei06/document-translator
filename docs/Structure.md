@@ -46,6 +46,8 @@ Deployable surfaces, each a distribution depending on the core. They never impor
 - `server/` - `doctranslator_server`: scaffolds for the future REST/MCP web process and workers (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`). No service is runnable yet.
 - `eval/` - `doctranslator_eval`: implemented translation quality benchmark (ADR-005, [evaluation reference](Architecture.md#evaluation-reference)). `baselines/` is the planned location for committed scores; full baselines are still deferred.
 
+Planned under [ADR-013](decisions/ADR-013-deployment-profiles.md): a desktop client/launcher, model setup and installer assets. Exact directories/toolkit are chosen at D0; they do not exist merely because the product direction is approved. The client uses HTTP and packaged process entry points, not server Python imports. Hosted and per-user local installations reuse the server implementation.
+
 Each package and app has its own `tests/` directory next to `src/`.
 
 ## `/tests`

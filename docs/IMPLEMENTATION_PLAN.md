@@ -6,6 +6,19 @@ This is the roadmap / dependency graph for the project, not the detailed how-to 
 
 Phases build the system from the inside out: the workspace, then the translation engines and the benchmark that measures them, then documents and the CLI, then the server surfaces. The README's delivery phases map onto these as follows: CLI is P0-P4, Web GUI and job service is P5-P6, MCP server is P7, enterprise platform integration is P8.
 
+## Additional Deployment Tracks
+
+Owner-approved [ADR-013](decisions/ADR-013-deployment-profiles.md) adds installer-based desktop delivery and internal-app integration. See [D0-D2/I1](plans/Desktop-and-internal-app-delivery.md). Existing P0-P8 IDs and P2-P6 scope stay unchanged. These proposed delivery tracks have no board IDs yet; this documentation does not claim board synchronization or implementation completion.
+
+| Track | Dependency and outcome |
+|---|---|
+| D0 desktop design/packaging proof | Existing core for prototype; choose and validate installer, packaged runtime, model setup and local-host authentication. |
+| D1 installer/model setup | D0; end-user installation, selected compatible model download, verification/recovery, upgrade/uninstall. |
+| D2 desktop files/folders | D1 and complete P2-P5 backend; real drag/drop batches, progress/history/results and local offline operation. Reuse P6 UI where useful. |
+| I1 internal-app integration | P5 contract, P2-P4 format/fit coverage; independent REST client, credentials/ownership and integration guide. |
+
+D2/I1 do not require P7 MCP or P8 enterprise cloud access. Right-click translation is a later consideration, not a D2 criterion. Lenovo fleet/OEM integration follows a proven installer app and separate hardware/licensing/distribution validation.
+
 ## Board Tracking
 
 Each phase is one **Feature** on the Azure DevOps board (organization `chintand`, project `AI Projects`, tag `Document Translator`), under the Epic [**Document Translator** (#9007)](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9007). The board item ID is listed under each phase heading.
@@ -53,7 +66,7 @@ The following documents define the execution path. Evidence-dependent choices ar
 | Deferred baselines | [P1.1](plans/P1.1-baseline-capture.md) | Run before changing any prompt or model; remains outside P1 closure criteria |
 | Document design validation | [P2.0](plans/P2.0-document-design-validation.md) | Resolve formatting, writer fidelity, XLSX references/recalculation and detection before coders start |
 | Documents and CLI | [P2](plans/P2-document-translation-and-cli.md) | Draft contract and staged implementation after design approval |
-| Fit/font design and implementation | [P3.0](plans/P3.0-fit-design-validation.md), [P3](plans/P3-fit-check.md) | Validate measurement/fonts, then implement and test original-relative fit |
+| Fit/font design and implementation | [P3.0](plans/P3.0-fit-design-validation.md), [P3](plans/P3-fit-check.md) | Close bounded experiment, integrate best-effort fit under ADR-012 |
 | PDF | [P4](plans/P4-pdf-support.md) | Strategy experiment/ADR, then PDF adapter and fit |
 | Server/auth/operations | [P5.0](plans/P5.0-server-design-validation.md), [P5](plans/P5-server-and-service-cli.md) | Users, ownership, batch API, jobs/cache/storage and service CLI |
 | Existing web UI integration | [P6](plans/P6-web-ui-integration.md) | Audit artifacts, preserve/rework features, replace mocks with authenticated backend data |
@@ -172,11 +185,11 @@ Translate TXT, PPTX, DOCX, and XLSX files end to end from the command line, pres
 
 Board: [Feature #9011](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9011) | Status: Not started
 
-Planning: [P3.0 measurement and font design draft](plans/P3.0-fit-design-validation.md). The [implementation plan](plans/P3-fit-check.md) follows its measurement/font gate; no layout engine is selected without evidence.
+Planning revised 2026-09-28: [ADR-012](decisions/ADR-012-lightweight-fit-policy.md) accepts lightweight best-effort fitting. [P3.0](plans/P3.0-fit-design-validation.md) closes existing research; [P3](plans/P3-fit-check.md) integrates and validates the bounded policy. Existing production code does not by itself establish phase completion.
 
 ### Goal
 
-Translated text never overflows beyond what the original did: layer 1 of the README visual quality requirement, for PPTX, DOCX, and XLSX.
+Prioritize translation accuracy and preserved formatting; mitigate obvious measured overflow in changed constrained PPTX/DOCX/XLSX containers with bounded shrinking and honest unresolved warnings. No native layout parity guarantee.
 
 ### Dependencies
 
@@ -184,14 +197,14 @@ Translated text never overflows beyond what the original did: layer 1 of the REA
 
 ### Deliverables
 
-- ADR for text measurement and font provisioning (layout engine, where fonts come from, behavior when a font is missing).
+- ADR-012 lightweight policy and a short closure report for existing font/measurement experiments.
 - `fit/`: text measurement, font lookup, allowed-space and shrink algorithm, with a configurable floor and decided defaults.
 - `LayoutSupport` implementations for PPTX, DOCX, and XLSX, reporting containers per the README fit scope table.
 - Fit report in the translation result; the CLI prints a summary and writes it as JSON.
 
 ### Completion Criteria
 
-- Fixture tests show: text that grows is shrunk until it fits; original overflow is left as is; text that cannot fit at the floor is reported as unresolved and not shrunk further.
+- Small fixed corpus shows supported overflow receives bounded adjustment, source overflow remains unchanged and uncertain/floor-limited cases are unresolved. No wording changes or production rendering. Record obvious false passes, unnecessary shrink and fit timing.
 - Per-format fit scope matches the README table (e.g. DOCX body text is never resized).
 
 ---

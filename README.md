@@ -1,6 +1,6 @@
 # Document Translator
 
-Translate office documents between languages while preserving their layout and formatting, running entirely on infrastructure inside the company network.
+Translate office documents between languages while preserving their layout and formatting, running on the user's laptop or approved company infrastructure.
 
 ## Problem
 
@@ -10,21 +10,24 @@ Teams regularly receive and produce documents (slide decks, reports, spreadsheet
 - Translating by hand, which is slow and expensive.
 - Using tools that translate text but destroy the document: fonts, colors, tables, and slide layouts are lost, and translated text overflows its boxes because target-language text is often longer than the source.
 
-The output of a useful translator is not "the translated text"; it is a document that looks like the original and can be sent as-is.
+The output is a translated document with structure and formatting preserved, plus explicit warnings where layout could not be fitted reliably.
 
 ## Solution
 
-A document translation system with one shared translation core and three ways to use it, delivered in this order:
+One shared translation capability, delivered in three forms:
 
-1. **CLI and API** - a local translation command plus a shared persistent service for batch submission, history, cached results, fit reports and downloads. The service CLI is an HTTP client of the same REST API used by the web UI.
-2. **Web GUI** - a browser interface where users upload a document, choose languages, and download the result.
-3. **MCP server** - exposes translation as tools for agents on LLM platforms. A user uploads a file in chat; the agent submits a translation job, monitors it until completion, then uses its vision capabilities to inspect rendered pages of the output for visual problems (text overflow, overlapping elements, clipped or unreadable text) and edits the document to fix them. Open WebUI is the first platform, used as a development and test client; enterprise platforms such as Microsoft Copilot are the long-term targets.
+1. **Web service** - users sign in, submit documents, track jobs and download owned results.
+2. **Installed desktop app** - users select a supported model to download during setup, then open the app and drag in files or folders. Local translation works offline once its runtime/model is installed. The app manages its local service and workers; no terminal or web sign-in is required for local mode.
+3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with the same job/cache/storage behavior. Python applications may also use the public core when they own orchestration.
 
-All three surfaces use the same core, so a file translates identically no matter how it was submitted.
+The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; histories/caches are not automatically synchronized.
+
+The current implementation handoff remains P2-P6. The [desktop and internal-app plan](docs/plans/Desktop-and-internal-app-delivery.md) adds installer/model setup and drag/drop delivery. Explorer right-click translation is only a later consideration. Lenovo laptop integration/preload is a long-term ambition after a proven installable app, not a current shipping commitment.
 
 ## Users
 
-- **Staff translating their own documents** - via the web GUI or an agent chat. Not necessarily technical.
+- **Staff translating their own documents** - via the signed-in web service or installed desktop app. Not necessarily technical.
+- **Internal application teams** - integrate translation through the shared REST backend or, deliberately, the public Python core.
 - **Engineers and power users** - via the CLI, for single files, batches, and scripting.
 - **AI agents on LLM platforms** (Open WebUI now, Copilot and others later) - via the MCP server, acting on a user's behalf.
 
@@ -32,8 +35,8 @@ All three surfaces use the same core, so a file translates identically no matter
 
 - Translate PPTX, DOCX, XLSX, PDF, and TXT files, producing output in the same format as the input.
 - Preserve formatting and structure: fonts, styles, colors, run-level formatting (bold, italic, etc.), tables, lists, slide layouts, and sheet structure.
-- Produce documents that look right, not just read right: detect and correct text overflow and other visual defects caused by translation.
-- Keep all document content inside the company network.
+- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation and explicit unresolved warnings.
+- Keep document content on the user's device or approved company infrastructure; never silently upload local-mode documents.
 - Translate in both directions between Chinese, English, Japanese, and Spanish, with Chinese -> English as the primary focus and highest quality bar, on technical and business content.
 - Offer more than one translation mode, so users can trade quality against speed and availability.
 - Build the translation core once and reuse it across the CLI, web GUI, and MCP server.
@@ -45,7 +48,7 @@ All three surfaces use the same core, so a file translates identically no matter
 - Human translation workflows: translation memory management, reviewer assignment, glossary approval processes.
 - Languages beyond Chinese, English, Japanese, and Spanish, even where a model supports them.
 - Real-time or streaming translation of live content (chat, meetings, subtitles).
-- Public or external-facing availability; this is an internal tool.
+- Public cloud translation endpoints or an internet-facing public service. Broader Lenovo/OEM distribution is a separately gated long-term ambition.
 - Editing or authoring documents beyond what is needed to translate them and fix translation-induced layout problems.
 - Keeping font sizes consistent across related elements (e.g. all slide titles) when the fit check shrinks text; each container is fitted independently.
 
@@ -84,30 +87,23 @@ The user selects a mode per job. Both modes produce the same output format and g
 
 **Visual quality**
 
-Translation must never make the layout worse than the original. This is enforced in two layers.
+Translation quality and accuracy take priority. Automatic post-processing is a lightweight, best-effort overflow safeguard, not a native-layout or visual-perfection guarantee. [ADR-012](docs/decisions/ADR-012-lightweight-fit-policy.md) records the owner-approved scope.
 
-*Layer 1 - fit check (translation core, all surfaces).* Runs automatically after translation, for every format with fixed-size text containers:
+*Layer 1 - automatic fit (all surfaces).* Preserve wording and formatting, allow natural reflow and inspect changed constrained containers. Use the same supported font/wrapping estimator for source and translation. Allow the larger of container bounds and source extent, then apply bounded proportional font shrinking only when overflow is reliably measurable. Defaults are 70% relative and 8pt absolute floors; original smaller text is not enlarged or further shrunk. Unknown measurements retain original sizes and produce unresolved warnings. Never rewrite, shorten or truncate translations to fit.
 
-1. For each text container, measure the rendered extent of the original text (using real font metrics and line wrapping at the container's width, not character counts).
-2. The translated text's allowed space is the larger of the container's bounds and the original text's rendered extent. Original text that already overflowed its container is treated as intentional and is not "fixed".
-3. If the translated text's rendered extent exceeds the allowed space, reduce its font size step by step until it fits, down to a floor (a minimum percentage of the original size and a minimum point size, both configurable).
-4. If it still does not fit at the floor, stop shrinking and record it as an unresolved issue.
+Every result carries a fit report. A measured pass is not rendered visual approval. Unresolved fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
 
-Every job produces a fit report listing each adjusted container (location, original and final size) and each unresolved issue.
-
-Overlap is judged only relative to the original. Overlap between elements that already existed in the source document (text over images, labels inside shapes) is intentional design and is never flagged or changed.
-
-Per format:
-
-| Format | Fit check scope |
-|--------|-----------------|
-| PPTX | All text containers: text boxes, placeholders, shapes, table cells. |
-| PDF | All text blocks. |
-| XLSX | Cell text clipped by column width or row height. |
-| DOCX | Fixed-size elements only (text boxes, fixed-width table cells); body text reflows naturally. |
+| Format | Minimum fit scope |
+|---|---|
+| PPTX | Changed constrained boxes, placeholders, shapes and table cells; preserve geometry. |
+| PDF | Replacement text placement under the selected PDF strategy; explicit unsupported cases. |
+| XLSX | Changed constrained cell text, respecting wrapping/merges; preserve row/column sizes. |
+| DOCX | Constrained boxes/cells only; body and unconstrained dimensions reflow naturally. |
 | TXT | Not applicable. |
 
-*Layer 2 - visual review (MCP flow only).* The MCP server renders output pages to images and exposes them through MCP tools. The platform's agent inspects them, prioritizing pages listed in the fit report, and checks for problems the geometric check cannot judge: awkward line breaks, text that fits but reads as cramped, and unresolved issues from layer 1. It applies fixes through MCP tools. Rendering happens on the server so the review works with any agent that has vision, regardless of platform.
+Existing overflow/overlaps are not repaired. Objects are not moved and pagination is not forced. A small representative acceptance corpus checks integrity, content preservation and obvious clipping; native checks are acceptance activities, not production dependencies.
+
+*Layer 2 - later optional visual review (P7).* An MCP agent may inspect rendered pages and request supported corrections as new versions. This is outside P2-P6 and does not block its release.
 
 **Users and jobs (service CLI, REST, web GUI and later MCP)**
 
@@ -120,7 +116,7 @@ Per format:
 
 ### Non-Functional
 
-- **Confidentiality** - document content and translations never leave the company network. Self-hosted models and services on the internal network are allowed; external cloud translation or LLM APIs are not.
+- **Confidentiality** - document content and translations stay on the user's device or approved company infrastructure. Self-hosted models and services on the internal network are allowed; external cloud translation or LLM APIs are not.
 - **Fidelity** - an output file must always open cleanly in its native application. The input file is never modified.
 - **Translation quality** - measured by an engine benchmark: parallel sentences in all 12 directions, scored with COMET and chrF against reference translations ([ADR-005](docs/decisions/ADR-005-translation-quality-evaluation.md)). Chinese -> English is the deciding direction; no change may significantly lower its score. Absolute thresholds are set from the first baseline run.
 - **Performance** - batch translation work so large documents are not bottlenecked on per-string model calls; exact targets to be set once the model backend is chosen.
@@ -129,7 +125,7 @@ Per format:
 
 ## Constraints
 
-- Translation models run locally or on self-hosted servers inside the company network.
+- Translation models run on the user's device or approved company servers. Installer model downloads do not authorize remote document inference.
 - The MCP server is platform-neutral: standard MCP over the Streamable HTTP transport, with no Open WebUI-specific tools, file handling, or behavior. Both Open WebUI's native MCP integration and Microsoft Copilot Studio support only Streamable HTTP (not stdio). The MCP endpoint is served by the web backend process ([ADR-001](docs/decisions/ADR-001-mcp-server-deployment.md)).
 - Everything lives in one repository, with a shared core consumed by the CLI, web GUI, and MCP server.
 - The LLM server API key is supplied through configuration (environment or a local secrets file) and is never committed to the repository.
@@ -140,30 +136,28 @@ Per format:
 - **Internal LLM server** - company-hosted, OpenAI-compatible chat completions API with Bearer API key auth, currently serving Gemma (`gemma-4-31b-it`). Required for LLM mode only. The endpoint URL, model name, and key are configuration, not code.
 - **Open WebUI** - the company's Open WebUI instance, the initial MCP client for development and testing. Required for the MCP flow only, and replaceable by any MCP-capable platform.
 
-## Hosting
+## Deployment and Delivery
 
-Initially, the web GUI and MCP server run on a single developer laptop on the company network. Coworkers use the web GUI by connecting to the laptop's IP address, and Open WebUI connects to the MCP server at the same address. This means:
+[ADR-013](docs/decisions/ADR-013-deployment-profiles.md) defines three profiles:
 
-- Availability depends on the laptop being on, awake, and on the network. There is no uptime guarantee at this stage.
-- Job throughput is bounded by the laptop's hardware, especially in MT mode, where the model runs on the laptop.
-- The deployment should not assume the laptop is permanent: moving to a shared server later should be a configuration and deployment change, not a redesign.
-- Cloud platforms such as Copilot Studio cannot reach a laptop on the internal network. Integrating with them requires a stable HTTPS endpoint they can reach, so it depends on moving off the laptop first.
+| Profile | Runtime and identity |
+|---|---|
+| Hosted web/API | Company-hosted job service and workers; authenticated users and authorized internal-app credentials. A developer laptop can host the initial pilot. |
+| Desktop local | Installer-managed per-user runtime, model and storage; OS-user ownership and authenticated local access. No company account needed for local processing. |
+| Internal-app backend | The same versioned hosted REST API; optional public-core embedding for Python callers who own lifecycle/storage. |
 
-## Delivery Phases
+The installer offers a curated compatible model catalog, explains resource/download requirements and verifies selected artifacts. SMALL-100 is the initial supported local engine; internal Gemma is currently a remote option, not a promised downloadable desktop model. Additional model choices require compatibility, licensing and quality validation.
 
-1. **CLI** - translation core plus CLI covering all five formats.
-2. **Web GUI and job service** - asynchronous jobs, upload/download through the browser.
-3. **MCP server** - platform-neutral agent integration with job monitoring and vision-based visual QA and correction, validated against Open WebUI.
-4. **Enterprise platform integration** - Copilot and similar platforms, once the service runs on a reachable server.
+P2-P6 delivers the shared service and existing web UI integration. Desktop tracks D0-D2 and internal-client track I1 build on that backend without requiring P7 MCP or P8 enterprise cloud integration. The main desktop flow is open app -> add files/folders -> choose translation options/destination -> progress -> translated files. Tray notifications are secondary; Explorer integration is optional later work.
 
-The detailed roadmap lives in the [Implementation Plan](docs/IMPLEMENTATION_PLAN.md).
+Lenovo fleet deployment and eventual OEM preload require separate distribution, hardware and servicing validation. No signed installer, native integration or OEM availability is claimed yet. See [Deployment](docs/Deployment.md) for intended profiles versus runnable operations.
 
 ## Open Questions
 
 - Where do the domain benchmark's technical sentences and their reference translations come from (ADR-005)? Until sourced, quality is measured on the general-domain FLORES+ set only.
 - PDF strategy: translate the PDF in place, or convert to an editable format, translate, and re-render?
-- Text measurement needs the documents' fonts (or their metrics) on the machine running the fit check. How are fonts provisioned, and what happens when a document uses a font that isn't available? To be decided by ADR, along with the text layout engine.
-- Default shrink floor (minimum percentage of original size and minimum point size).
+- Deployment must supply the explicit font manifest used by best-effort fit; unavailable fonts produce unresolved diagnostics under ADR-012. Font installation/licensing is an operational concern, not a reason for runtime downloads.
+- Fit defaults are settled by ADR-012 (70% and 8pt); implementation reconciliation and bounded acceptance remain pending.
 - What authentication do the web GUI and MCP server need when exposed on the laptop's IP, and later to platforms like Copilot (which typically expect OAuth or API key auth)?
 - Copilot runs in Microsoft's cloud, so documents submitted through it pass through the company's Microsoft 365 tenant. Does that count as "inside the company network" for the confidentiality requirement? Needs a decision before Copilot integration.
 - Maximum supported file size and expected job volume?

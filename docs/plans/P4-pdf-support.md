@@ -6,11 +6,13 @@ Status: Execution plan for the pre-GUI handoff; the PDF strategy must be validat
 
 P2 core and P3 measurement/fit contracts are complete. Translate extractable text in text-based PDF through both engines; preserve page size, artwork and reading content, write PDF and run fit on all supported text blocks. No OCR. Scanned/image-only content must be explicitly reported, not falsely counted as translated.
 
+Fit scope follows [ADR-012](../decisions/ADR-012-lightweight-fit-policy.md): use the selected PDF writer's placement/layout facilities where available, with bounded shrinking and explicit uncertainty. Do not add a second independent layout engine or render/vision correction loop. Never shorten translations for fit. Use ADR-012's two-document fit corpus; the structural/source-removal tests below remain required because they protect document integrity.
+
 ## P4.0 Strategy Gate
 
 Work as architect first. Use synthetic PDF fixtures for Chinese/English/Japanese/Spanish, embedded/subset fonts, columns, mixed styles, tables, rotations, transparency, text over vector/image artwork, ligatures and scanned/mixed pages.
 
-Compare (A) targeted PDF text replacement while retaining artwork and (B) reconstruction through an editable intermediate. The default candidate is targeted replacement, but do not approve it without demonstrating source-text removal and background preservation. A white rectangle overlay that hides artwork or leaves searchable original text underneath is not acceptable. Do not apply broad redactions that erase adjacent graphics.
+Start with targeted PDF text replacement retaining artwork. Demonstrate source-text removal and background preservation. Compare reconstruction through an editable intermediate only if this direct path exposes a concrete blocker. A white rectangle overlay that hides artwork or leaves searchable original text underneath is not acceptable. Do not apply broad redactions that erase adjacent graphics.
 
 Record in a PDF-strategy ADR: extraction/reading-order rules, span/block segmentation, font embedding and licensing, text removal/reinsertion method, graphics preservation, supported rotations/writing modes, unsupported-construct behavior and comparison evidence. Validate the candidate library on the repository's Python/OS combination and review deployment licensing before pinning it. PyMuPDF is anticipated by ADR-003, not a prevalidated algorithm.
 

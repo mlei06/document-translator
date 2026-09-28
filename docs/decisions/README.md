@@ -19,5 +19,7 @@ An ADR exists so that an agent working on this months later understands a decisi
 | [009 XLSX preservation](ADR-009-xlsx-preservation.md) | Accepted (sheet names preserved; recalculation on open) |
 | [010 shared service CLI](ADR-010-shared-service-cli.md) | Accepted by owner; implementation pending |
 | [011 document translation contract](ADR-011-document-translation-contract.md) | Accepted (formatting, writers, detection, identity) |
+| [012 lightweight fit](ADR-012-lightweight-fit-policy.md) | Accepted by owner; implementation reconciliation pending |
+| [013 deployment profiles](ADR-013-deployment-profiles.md) | Accepted direction; desktop packaging/design gate pending |
 
 Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

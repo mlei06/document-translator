@@ -27,6 +27,8 @@ SIZE_QUANTUM_PT = 0.5
 """Chosen sizes are rounded down to this quantum (Word stores half-points)."""
 TOLERANCE_PT = 1.0
 """Measurement tolerance: extents within this many points of the allowance fit (ADR-012)."""
+MAX_CANDIDATES = 40
+"""Most shrink candidates measured for one container (ADR-012)."""
 
 
 @dataclass(frozen=True)
@@ -67,7 +69,8 @@ def fit_container(
     scale = 1.0 - SCALE_STEP
     last: list[list[float]] | None = None
     final: Measured | None = None
-    while True:
+    measured = 0
+    while measured < MAX_CANDIDATES:
         candidate = [
             [max(floor, _quantize(size * scale)) for size, floor in zip(sizes, fl, strict=True)]
             for sizes, fl in zip(base_sizes, floors, strict=True)
@@ -80,6 +83,7 @@ def fit_container(
                     translated, exc.reason, flat, allowed, _extent(source), _extent(current)
                 )
             last = candidate
+            measured += 1
             if _fits(final, allowed):
                 return FitOutcome(
                     "adjusted",

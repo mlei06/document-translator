@@ -9,6 +9,7 @@ document names (plus metric-compatible aliases); an unavailable font is reported
 """
 
 import hashlib
+import io
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -157,9 +158,11 @@ class LoadedFont:
 
     @cached_property
     def _tables(self) -> TTFont:
+        # Read from memory: no file handle stays open for the lifetime of the library.
+        data = io.BytesIO(self.face.path.read_bytes())
         if self.face.path.suffix.lower() in (".ttc", ".otc"):
-            return TTFont(str(self.face.path), fontNumber=self.face.index, lazy=True)
-        return TTFont(str(self.face.path), lazy=True)
+            return TTFont(data, fontNumber=self.face.index, lazy=True)
+        return TTFont(data, lazy=True)
 
     @cached_property
     def units_per_em(self) -> int:
@@ -172,19 +175,30 @@ class LoadedFont:
 
     @cached_property
     def line_height_em(self) -> float:
-        """Single line height in ems as Office applications compute it (ADR-012)."""
+        """Estimator for a font-metric single line height, in ems (ADR-012).
+
+        Win ascent + descent plus any hhea line gap the win metrics do not already cover. This
+        reproduced Word's line pitch for the Latin fonts compared (Calibri, Arial, Times New
+        Roman); it is an estimate, not a claim about every font or application.
+        """
         tables = self._tables
-        if "OS/2" in tables:
-            os2 = tables["OS/2"]
-            ascent, descent = int(os2.usWinAscent), int(os2.usWinDescent)
-            if ascent + descent > 0:
-                return (ascent + descent) / self.units_per_em
         hhea = tables["hhea"]
-        return (int(hhea.ascent) - int(hhea.descent) + int(hhea.lineGap)) / self.units_per_em
+        hhea_sum = int(hhea.ascent) - int(hhea.descent)
+        os2 = tables.get("OS/2")
+        win_sum = int(os2.usWinAscent) + int(os2.usWinDescent) if os2 is not None else 0
+        if win_sum <= 0:
+            return (hhea_sum + int(hhea.lineGap)) / self.units_per_em
+        extra = max(0, int(hhea.lineGap) - (win_sum - hhea_sum))
+        return (win_sum + extra) / self.units_per_em
 
     @cached_property
     def blob(self) -> bytes:
         return self.face.path.read_bytes()
+
+    def close(self) -> None:
+        if "_tables" in self.__dict__:
+            self._tables.close()
+            del self.__dict__["_tables"]
 
 
 @dataclass
@@ -204,6 +218,11 @@ class FontLibrary:
                 self._by_name.setdefault(name.casefold(), []).append(face)
             for name in face.typographic_names:
                 self._by_typographic.setdefault(name.casefold(), []).append(face)
+
+    def close(self) -> None:
+        """Release font files opened for metrics."""
+        for font in self._loaded.values():
+            font.close()
 
     def resolve(self, family: str, *, bold: bool, italic: bool) -> LoadedFont | None:
         """The face for ``family`` with the closest style, or ``None`` if it is not provisioned."""

@@ -1,6 +1,23 @@
 # Deployment and Local Operation
 
-Status (2026-09-27): local development and the eval CLI are available. There is no deployed document CLI, REST service, web GUI, or MCP endpoint. Laptop hosting is an accepted P5 direction, not a working deployment.
+Status (2026-09-28): this document distinguishes intended deployment profiles from development operations. Desktop packaging/installer and deployment acceptance remain pending; consult the roadmap and release evidence for current implementation status.
+
+## Intended Deployment Profiles
+
+The owner-approved direction in [ADR-013](decisions/ADR-013-deployment-profiles.md) adds an installable desktop app and internal-application integration alongside the signed-in web service. These are deployment targets, not runnable release instructions.
+
+| Profile | Installation and operation |
+|---|---|
+| Hosted web/API | Operator installs service/workers on approved company infrastructure, configures TLS/users/storage and models. Users sign in; internal apps use authorized API credentials. |
+| Desktop local | User runs installer, selects a supported model download, then opens the app and drops files/folders. Packaged per-user host/workers start automatically; no developer environment or web sign-in is needed for local processing. |
+| Desktop connected | User explicitly configures/signs into a company service. Documents are uploaded there; local history is not synchronized automatically and failures never silently switch modes. |
+| Internal-app integration | Use versioned REST for persistent jobs/cache/results. Public-core Python embedding is a separate deliberate choice without service persistence. |
+
+Desktop setup must document supported OS/architecture, installer signature, runtime/model sizes and licenses, download sources, integrity verification, retry/recovery, per-user data paths, output naming, retention, updates and uninstall. No model is ready until verification/load succeeds. Local MT works offline after assets are installed; internal Gemma requires company connectivity. Additional downloadable models require validated catalog entries, not arbitrary names.
+
+The main desktop workflow is open -> drag/drop files or folders -> select options/destination -> translate -> open results. Tray progress/notifications are secondary. Right-click integration is only a later consideration. Lenovo deployment/preload is a long-term goal requiring a separate managed pilot and distribution/servicing decisions.
+
+The [desktop/internal-app delivery plan](plans/Desktop-and-internal-app-delivery.md) defines D0-D2/I1. Do not publish invented installer commands or claim packaging is complete. Existing developer instructions below remain separate from the intended end-user installer.
 
 ## Local Development
 
@@ -17,7 +34,7 @@ uv run pytest
 
 The repository selects Python through `.python-version`; package requirements are Python 3.14 or newer. `uv.lock` owns workspace dependency versions. Optional heavyweight COMET tooling runs outside the workspace as described in the [eval component](Architecture.md#evaluation-reference).
 
-The existing command is `uv run doctranslator-eval --help`. The product command `doctranslator translate` is proposed for P2 and does not exist yet. SMALL-100 conversion is documented in `scripts/convert_mt_model.py`; model files remain under gitignored `data/models/`.
+The evaluation entry point is `uv run doctranslator-eval --help`. P2 owns the document CLI; verify the current checkout's command help and release evidence before treating a planned deployment command as available. SMALL-100 conversion is documented in `scripts/convert_mt_model.py`; model files remain under gitignored `data/models/`.
 
 ## Configuration and Secrets
 

@@ -51,6 +51,10 @@ class LayoutParagraph:
     other_lines_start_pt: float = 0.0
     """Where continuation lines start."""
     right_indent_pt: float = 0.0
+    line_minimum_pt: float | None = None
+    """Smallest line height ("at least" spacing)."""
+    line_grid_pt: float | None = None
+    """Line heights are rounded up to multiples of this document-grid pitch."""
 
 
 @dataclass(frozen=True, slots=True)

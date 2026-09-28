@@ -24,10 +24,11 @@ from pathlib import Path
 from lxml import etree
 
 from doctranslator_core.config import DocumentLimits
-from doctranslator_core.document import Paragraph
+from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats._ooxml.runs import StyleTable, clean_text
-from doctranslator_core.formats.base import DocumentAdapter
+from doctranslator_core.formats.base import DocumentAdapter, LayoutSupport
+from doctranslator_core.formats.docx.layout import DocxLayout
 from doctranslator_core.inline import Inline, Keep, Obj, Text, Wrap
 from doctranslator_core.types import (
     DiagnosticSeverity,
@@ -98,7 +99,7 @@ class _ParagraphRef:
     trailing: list[Element]
 
 
-class DocxAdapter(DocumentAdapter):
+class DocxAdapter(DocumentAdapter, LayoutSupport):
     format = DocumentFormat.DOCX
 
     def __init__(self, path: Path, limits: DocumentLimits) -> None:
@@ -111,8 +112,10 @@ class DocxAdapter(DocumentAdapter):
         self._paragraphs: list[Paragraph] = []
         self._deletions = 0
         self._field_results = 0
+        self._stories: list[str] = []
         try:
             self._scan()
+            self._layout = DocxLayout(self.package, self._stories)
         except BaseException:
             self.package.close()
             raise
@@ -163,6 +166,7 @@ class DocxAdapter(DocumentAdapter):
         )
 
     def _scan_story(self, part: str, label: str) -> None:
+        self._stories.append(part)
         paragraphs = list(self.package.xml(part).iter(qn("w:p")))
         field_depth = 0
         for number, para in enumerate(paragraphs, start=1):
@@ -362,6 +366,12 @@ class DocxAdapter(DocumentAdapter):
                 for element in rendered:
                     target_element.append(element)
                 return [shell]
+
+    def layout_containers(self) -> list[LayoutContainer]:
+        return self._layout.containers()
+
+    def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
+        self.package.mark_modified(self._layout.apply_sizes(container_id, sizes))
 
     def save(self, path: Path) -> None:
         self.package.save(path)

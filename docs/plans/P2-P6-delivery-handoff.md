@@ -6,13 +6,23 @@ This is the entry point for the agent implementing the owner's requested release
 
 The owner explicitly chose a shared service for CLI/API and preservation of XLSX sheet names, then extended the handoff to include the existing mock UI in P6. Those choices supersede the older local-only CLI and mandatory sheet-translation wording. Supported file families are TXT, PPTX, DOCX, XLSX and text-based PDF. OCR, legacy binary Office formats, arbitrary archive uploads, P7 MCP/visual edits and P8 integrations are excluded. P6 may preserve, rework, drop or add UI features to match the working system; no fabricated backend behavior may remain in production.
 
+## Owner Revision - Lightweight Fit (2026-09-28)
+
+[ADR-012](../decisions/ADR-012-lightweight-fit-policy.md) is the accepted fit policy and supersedes the earlier native-layout parity/absolute visual guarantee. Prioritize translation accuracy, complete content, protected values and formatting. Retain useful fit code, close current research, and proceed through P3-P6. No font-by-font tuning, production rendering loop, vision calls or shortening translations for fit.
+
+Use changed constrained containers, supported font/wrap estimates, bounded size changes and explicit unresolved warnings. Missing support is not not_applicable or a pass; no required format may be an unresolved-only stub. Native acceptance is a fixed small corpus of open/visual spot checks, not exhaustive parity. Service ownership, cache, persistence, all five formats and P6 real UI integration remain required.
+
+## Deployment Extension (2026-09-28)
+
+[ADR-013](../decisions/ADR-013-deployment-profiles.md) adds an installed laptop app with installer model selection/file-folder drag/drop, plus internal-app REST integration. Preserve reusable core/job contracts while completing this handoff. Desktop packaging is a separate [D0-D2/I1 plan](Desktop-and-internal-app-delivery.md), not a reason to delay or expand P2-P6. Do not couple translation to browser sessions or require app-to-app Python imports. Right-click integration is optional later work; Lenovo preload is aspirational.
+
 ## Required Outcome
 
 A user supplies one file or a mixed-format batch through the CLI or REST API. Every accepted file gets its own durable job. The service checks the complete-output cache, translates misses with the selected SMALL-100/Gemma mode, fits applicable containers against the original, persists the original/output/report and returns owned download references. Successful files remain available when siblings fail or the client disconnects. Restarting the service does not lose accepted jobs or completed results.
 
 "Any number of files" means a streaming/resumable manifest with no fixed total batch-count ceiling. It does not mean an unlimited multipart request, unlimited memory, unbounded worker concurrency or unlimited disk. Admission limits are observable and retryable; no file is silently skipped. A batch can exceed the number of jobs allowed to wait simultaneously because workers drain it while the client submits further items.
 
-"Fit checked" means the actual P3/P4 measurement policy ran on all required supported containers. TXT and documents proven to contain no applicable containers report `not_applicable`; other Office/PDF results report `passed`, `adjusted` or `unresolved`. `not_run` is forbidden in a successful pre-GUI service result. An unresolved fit report is a complete result under ADR-007, not a claim that every output is visually perfect. Missing/unsupported measurement must be explicit and counted as unresolved, never as a pass or an empty-container result.
+"Fit checked" means the ADR-012/P3/P4 best-effort assessment accounted for applicable changed containers, measuring supported cases and reporting uncertainty explicitly. TXT and documents proven to contain no applicable containers report `not_applicable`; other Office/PDF results report `passed`, `adjusted` or `unresolved`. `not_run` is forbidden in a successful pre-GUI service result. An unresolved fit report is a complete result under ADR-007, not a claim that every output is visually perfect. Missing/unsupported measurement must be explicit and counted as unresolved, never as a pass or an empty-container result.
 
 ## Current Starting Point
 
@@ -70,7 +80,7 @@ No coder receives an unresolved architecture question. This is a complete multi-
 | 0 | P1 delivery review; [P1.1](P1.1-baseline-capture.md) before prompt/model changes | Existing behavior understood; reviewed-commit checks/CI; baselines when triggered |
 | 1 | [P2.0](P2.0-document-design-validation.md) | Serializer/formatting/detection choices validated; XLSX recalculation policy settled; exact public types and identity preparation specified |
 | 2 | [P2](P2-document-translation-and-cli.md) | Four formats through local CLI, required text surfaces and formatting preserved, native-open evidence |
-| 3 | [P3.0](P3.0-fit-design-validation.md), then [P3](P3-fit-check.md) | Fonts/measurement proven; original-relative fit and complete reports on all Office formats |
+| 3 | [P3.0](P3.0-fit-design-validation.md), then [P3](P3-fit-check.md) | Bounded experiment closed; supported best-effort fit and honest reports on all Office formats |
 | 4 | [P4](P4-pdf-support.md) | Evidence-backed PDF strategy; translated PDF plus fit in both modes |
 | 5 | [P5.0](P5.0-server-design-validation.md), then [P5](P5-server-and-service-cli.md) | Durable service, owner auth, bounded batch API, service CLI, cache, recovery and retention |
 | 6 | Backend release matrix below | Combined five-format service works from CLI and an independent HTTP client; operating guide verified |
@@ -87,7 +97,7 @@ P5 schema/API work may proceed once P2's public contract is accepted, but do not
 | XLSX calculation | Preserve names/formula expressions/numeric/date cells; never silently trust stale caches | Label-dependent native recalculation fixture; finish ADR-009 without changing the owner-approved name policy |
 | Detection | Offline zh/en/ja/es; explicit override; ambiguity visible | P2.0 fixture results and pinned detector/thresholds |
 | Output identity | Submission needs no model load; workers verify identity | Canonical schema, artifact/deployment revisions, fit/font identity tests |
-| Fit/fonts | Real shaping/wrapping and original-relative overflow; source baseline retained | P3.0 native comparison and measurement/font ADR |
+| Fit/fonts | Lightweight supported estimates, source baseline retained, explicit uncertainty | Accepted ADR-012; P3.0 closure and small corpus |
 | PDF | Text translation with retained page artwork and no hidden source-text substitution | P4 strategy experiment, extraction and native-view evidence |
 | Service auth/leases | Owned results, revocable credentials, stale workers cannot publish | P5.0 ADRs and race tests against the detailed P5 contract |
 
@@ -107,7 +117,7 @@ All tests use synthetic or approved internal material. Keep confidential documen
 | R08 | Restart API; kill worker mid-translation; allow lease to expire; run old completion | Accepted jobs recover within retry budget; stale attempt cannot publish/delete new output |
 | R09 | Cancel queued/running jobs while batches continue | Correct terminal job states, no partial successful output, sibling jobs unaffected |
 | R10 | Two users and revoked credentials | Cross-owner metadata/download/report/cancel access denied; shared cache never exposes someone else's document IDs |
-| R11 | Source already overflows; translation fits, grows, reaches floor; missing glyph/font; DOCX body; TXT | Original-relative measurement, deterministic shrink floor, explicit unresolved cases, body unchanged, TXT not applicable |
+| R11 | Source already overflows; translation fits, grows, reaches floor; missing glyph/font; DOCX body; TXT | Supported original-relative estimates, bounded shrink floor, explicit unresolved cases, body unchanged, TXT not applicable; no false passes for missing support |
 | R12 | Expire cache, then retrieve retained user result; run GC during upload/completion; backup and restore | Referenced originals/outputs/reports remain intact; restored service downloads matching hashes |
 | R13 | Network failure during download; duplicate filenames; rerun download | Atomic local publication and safe resume/retry; existing files never silently overwritten |
 | R14 | Service CLI on a second internal machine | Authenticated submit/status/report/download through documented TLS and company CA configuration |
@@ -124,4 +134,4 @@ After the backend gate, complete P6 using that working REST/OpenAPI contract. St
 
 ## Copyable Prompt for the Next Agent
 
-> Implement the release described in docs/plans/P2-P6-delivery-handoff.md. Read AGENTS.md and the linked architecture/ADRs/plans first, inspect the existing code and preserve unrelated changes. Work through the technical design gates in the architect role, record evidence and accepted contracts, then implement and review each bounded phase. CLI and API must use the same persistent service; every batch, job and document belongs to an authenticated user. Preserve XLSX sheet names. Support TXT/PPTX/DOCX/XLSX/text-based PDF, resumable mixed batches, both engines, original-relative fit, exact-byte cache reuse and durable owned results. Complete R01-R14, then audit the existing mock web UI (docs/design/web-gui/prototype/lenny.html, documented in the design README's Runnable Prototype section) and integrate it against the real backend under P6. Preserve useful features and deliberately rework/drop/add features as needed; remove fake production data and simulated job success. Complete W01-W08 and publish truthful release evidence. Do not implement P7 MCP/visual edits, weaken preservation requirements, claim skipped tests passed, or stop at scaffolds. Escalate concrete product conflicts/environment blockers while continuing independent authorized work.
+> Implement the release described in docs/plans/P2-P6-delivery-handoff.md. Read AGENTS.md and the linked architecture/ADRs/plans first, inspect the existing code and preserve unrelated changes. Work through the technical design gates in the architect role, record evidence and accepted contracts, then implement and review each bounded phase. CLI and API must use the same persistent service; every batch, job and document belongs to an authenticated user. Preserve XLSX sheet names. Support TXT/PPTX/DOCX/XLSX/text-based PDF, resumable mixed batches, both engines, lightweight best-effort fit under ADR-012, exact-byte cache reuse and durable owned results. Close the current fit experiment with existing evidence and a small acceptance corpus; do not pursue exhaustive native parity or additional font-specific tuning. Preserve wording and report uncertain fitting as unresolved. Complete R01-R14, then audit the existing mock web UI (docs/design/web-gui/prototype/lenny.html, documented in the design README's Runnable Prototype section) and integrate it against the real backend under P6. Preserve useful features and deliberately rework/drop/add features as needed; remove fake production data and simulated job success. Complete W01-W08 and publish truthful release evidence. Do not implement P7 MCP/visual edits, weaken preservation requirements, claim skipped tests passed, or stop at scaffolds. Escalate concrete product conflicts/environment blockers while continuing independent authorized work.

@@ -6,16 +6,17 @@ Accepted ADRs retain decision history; plans retain proposed contracts and imple
 
 ## Overview
 
-Document Translator is an internal document-processing system. A user submits a file through the web UI or an agent using MCP. The server creates a persistent job, reuses a compatible completed translation when possible, or dispatches the job to a worker. The worker runs one shared core pipeline: read the document through its format adapter, translate its text with SMALL-100 or the internal Gemma server, fit translated text against the original layout, and write a translated file in the original format. The server stores the result and makes it available to the submitting user.
+Document Translator is an internal document-processing system. A user submits files through the web UI, installed desktop app, CLI/API or later MCP; internal applications use the same versioned REST backend. The server creates a persistent job, reuses a compatible completed translation when possible, or dispatches the job to a worker. The worker runs one shared core pipeline: read the document through its format adapter, translate its text with SMALL-100 or the internal Gemma server, fit translated text against the original layout, and write a translated file in the original format. The server stores the result and makes it available to the submitting user.
 
 The CLI has two paths: local `translate` runs the core without a database or job queue; service commands submit through REST and share persistent jobs, cache and owned results with API/UI users ([ADR-010](decisions/ADR-010-shared-service-cli.md)). The evaluation app exercises the same translation engines on benchmark text. Translation, formatting and fit behavior belong to the core, never to the UI, CLI, REST routes or MCP tools.
 
-**Status:** text engines and evaluation are implemented. Document adapters, the document CLI, fit checking, jobs, UI and MCP are planned. Diagrams describe the accepted target responsibilities and flow, not a running end-to-end product. Details still under design are explicitly identified. The [roadmap](IMPLEMENTATION_PLAN.md) owns phase status; [accepted ADRs](decisions/README.md) take precedence over summaries here. [ADR-009](decisions/ADR-009-xlsx-preservation.md) and the P2 plans remain proposals.
+**Status:** text engines and evaluation exist; document and fit implementation is in progress. Deployment diagrams describe accepted responsibilities and target flows, not proof of a shipped service or desktop installer. The roadmap owns phase status; accepted ADRs take precedence over summaries here. ADR-009/011/012/013 record the accepted document, fit and deployment decisions.
 
 This single-file layout follows the sibling `Agentic_Project_Scaffold`. The [P2-P6 delivery handoff](plans/P2-P6-delivery-handoff.md) specifies the implementation sequence and release tests. The owner has approved the shared-service CLI, preserved XLSX sheet names, user-owned translation history and integration of the existing mock UI. Evidence-dependent technical decisions remain gated in the phase plans.
 
 ### Reading Guide
 
+- [Deployment profiles](#deployment-profiles): desktop installation, models, local/hosted runtimes and internal apps.
 - [Main translation flow](#main-translation-flow): the user-facing path, including cache hits.
 - [Major components](#major-components): responsibilities and process boundaries.
 - [Users, batches and owned results](#users-batches-and-owned-results): authenticated submission, history, shared bytes and private access.
@@ -32,12 +33,12 @@ This single-file layout follows the sibling `Agentic_Project_Scaffold`. The [P2-
 - Preserve the source document, formatting and structure; expose failures rather than silently discard content.
 - Avoid unnecessary model work while ensuring that reuse reflects the requested languages, engine and output behavior.
 - Keep requests responsive and jobs recoverable when a worker or web process stops.
-- Keep document text inside company-controlled infrastructure, with verified TLS to the internal model server.
-- Start on one laptop and retain a path to a shared server without changing the translation pipeline.
+- Keep document text on the user's device or approved company infrastructure; local processing must not silently become a remote upload.
+- Support a per-user laptop app and a hosted multi-user service using the same core/job implementation, with no automatic transfer between their stores.
 
 ## System Context
 
-People use the web UI or CLI. Agents act for users through standard MCP over Streamable HTTP, initially from Open WebUI. Gemma runs on the company's OpenAI-compatible LLM server. SMALL-100 runs inside the worker or local CLI process through CTranslate2. Neither engine receives an Office file: it receives extracted text segments.
+People use the web UI, desktop app or CLI; internal applications use REST. Agents act for users through standard MCP over Streamable HTTP, initially from Open WebUI. Gemma runs on the company's OpenAI-compatible LLM server. SMALL-100 runs inside the worker or local CLI process through CTranslate2. Neither engine receives an Office file: it receives extracted text segments.
 
 ### Main Translation Flow
 
@@ -47,8 +48,11 @@ This diagram intentionally focuses on submission, reuse, translation and deliver
 flowchart TD
     U["User with a document"] --> UI["Web UI upload"]
     U --> CLI["Service CLI or REST client"]
+    U --> DESKTOP["Desktop: add files or folders"]
+    INTERNAL["Internal application"] --> CLI
     U --> MCP["Agent submits via MCP"]
-    UI --> JOB["Job service: validate request<br/>store original and create job"]
+    UI --> JOB["Selected local or hosted job service<br/>validate, store original and create job"]
+    DESKTOP --> JOB
     MCP --> JOB
     CLI --> JOB
     JOB --> CACHE{"Compatible completed result?<br/>Database lookup"}
@@ -58,7 +62,7 @@ flowchart TD
     WORKER -->|Hit| REUSE
     WORKER -->|Still a miss| READ["Format adapter reads document<br/>and preserves original layout"]
     READ --> MODE{"Selected mode"}
-    MODE -->|MT| MT["Local SMALL-100"]
+    MODE -->|MT| MT["Installed supported MT model<br/>initially SMALL-100"]
     MODE -->|LLM| LLM["Internal Gemma server"]
     MT --> APPLY["Validate translation<br/>and restore text into its structure"]
     LLM --> APPLY
@@ -79,6 +83,66 @@ Important qualifications:
 - The original text, styles and layout measurements must remain available throughout fitting. Fit never compares the translation with a source layout that has already been overwritten.
 - TXT bypasses fit because it has no fixed-size text containers. Document translation first arrives in P2; automatic fit arrives in P3, and PDF in P4. P2 output must say that fit has not run.
 - The MCP upload/download mechanism still needs a wire contract. The arrow above is a logical submission, not a claim that every MCP client can stream a file identically.
+
+## Deployment Profiles
+
+[ADR-013](decisions/ADR-013-deployment-profiles.md) extends the accepted deployment direction. These are targets, not claims that a desktop installer or hosted service is already shipping. The implementation plan retains phase status and the desktop technical gate.
+
+### Shared runtime, separate installations
+
+The desktop is an installed application with file/folder drag/drop, not merely a browser shortcut. It launches a per-user local host/worker using the same job, cache and storage implementation as the company service. The desktop calls REST and may launch packaged executables; it does not import server internals or build a second queue. Translation stays in the Python core. The desktop toolkit/installer remain D0 decisions; existing React UI components may be reused.
+
+```mermaid
+flowchart LR
+    WEB["Signed-in web users"] --> HOST["Company REST job service"]
+    APPS["Internal applications"] --> HOST
+    DESK["Installed desktop app"] --> CHOICE{"Explicit processing location"}
+    CHOICE -->|Local default| LOCAL["Per-user local REST host"]
+    CHOICE -->|Company connection| HOST
+    LOCAL --> LW["Local worker and installed model"]
+    LOCAL --> LS["Local jobs, cache and owned files"]
+    HOST --> HW["Hosted workers and approved engines"]
+    HOST --> HS["Hosted jobs, cache and owned files"]
+    LW --> CORE["Same core: formats, translation, lightweight fit"]
+    HW --> CORE
+```
+
+Local and hosted stores are independent; switching hosts is not synchronization. Within either host, credentials resolve a stable owner before data access. Local bootstrap derives an owner from the OS user without web sign-in, protects loopback requests from other users/unrelated web origins and does not open a LAN listener by default. Exact token/bootstrap mechanics require D0 validation. Hosted sessions/credentials remain required for uploaded work. Machine clients use dedicated service identities; human delegation is explicit and verified, never a client-supplied owner override.
+
+The local runtime runs on demand, owns model/process lifecycle and maintains durable jobs across UI/host restarts. Closing the main window must clearly distinguish background work from quitting. Tray progress and completion notifications can expose that queue, but users can always operate through the window. No work or model loading runs inside an Explorer extension.
+
+### Installer and model readiness
+
+The installer or its launched setup wizard lets users select a supported model download, showing languages, compatibility, resource guidance, size and license. Assets come from approved sources/mirrors using a trusted versioned catalog and integrity checks. Installation includes the Python/native runtime: end users do not install development tools. Interrupted downloads can be retried/resumed; activation occurs only after verification and a load check. A failed download leaves setup recoverable, not a false ready state. Settings manage later model changes using the same installation mechanism.
+
+```mermaid
+flowchart TD
+    SETUP["Install app and packaged runtime"] --> SELECT["Select supported model and location"]
+    SELECT --> CHECK["Check compatibility, license and disk space"]
+    CHECK --> DOWNLOAD["Download selected bundle with recoverable progress"]
+    DOWNLOAD --> VERIFY{"Integrity and model load verified?"}
+    VERIFY -->|No| RETRY["Explain failure; retry or choose another supported model"]
+    RETRY --> SELECT
+    VERIFY -->|Yes| READY["Activate pinned model; local translation ready"]
+    READY --> DROP["Open app; drop files or folders"]
+    DROP --> PREVIEW["Enumerate supported files; options and destination"]
+    PREVIEW --> JOBS["Submit bounded per-file jobs to selected runtime"]
+    JOBS --> OUTPUT["Progress, translated files and reports"]
+```
+
+SMALL-100/CTranslate2 is the initial supported local path. More catalog options require model/runtime/quality/redistribution validation; arbitrary repository IDs are not accepted as working model choices. Gemma is presently the internal remote service. Offline means local translation works after installation without inference network calls; model asset downloads are separately visible. Model versions are pinned per job and participate in cache identity. Removing/updating a model must not invalidate active jobs. Fonts continue to follow ADR-012.
+
+### File and folder ingestion
+
+The desktop enumerates folders incrementally, accounts for unsupported/unreadable files, deduplicates selected source paths and submits bounded per-file requests. It does not follow reparse points or ingest its generated output tree by default. Preserve relative paths beneath distinct input roots; export into a selected destination with explicit collision handling and no overwrite. Source bytes remain unchanged. Each accepted file has an independent job/outcome; one corrupt file does not cancel siblings. Remote mode uploads bytes through the same API, not local path strings for a remote server to open.
+
+### Internal applications and later native integration
+
+Versioned REST is the default integration: submit with idempotency, inspect status/cancel, download owned output/report. Reuse its auth, limits and retention; no bespoke queue or direct database access. Public-core Python embedding remains available for callers deliberately providing their own file/lifecycle management, without implied service persistence.
+
+Right-click translation is an optional future adapter, not a desktop release requirement. If pursued, its selected UX is system-tray progress and completion notifications backed by the same queue. Microsoft documents modern Explorer integration through [IExplorerCommand and app identity](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/integrate-packaged-app-with-file-explorer) and the [notification area](https://learn.microsoft.com/en-us/windows/win32/shell/notification-area); these are later implementation references, not a toolkit selection.
+
+Lenovo managed rollout and eventual OEM preload follow a working installer app. Distribution agreements, model/font licensing, signed updates/rollback, resource/battery behavior and target hardware need separate validation. No mandatory NPU, ARM support or general consumer cloud service is assumed. The [desktop/internal-app plan](plans/Desktop-and-internal-app-delivery.md) owns gates and acceptance.
 
 ## Implementation Boundary
 
@@ -354,23 +418,37 @@ The exact neutral document schema, paragraph segmentation, inline-token format, 
 
 ### Fit Check
 
-The fit baseline is the original document's measured rendering, using fonts and wrapping rather than character counts. For each supported fixed-size container, allowed space is the larger of its bounds and the original text's rendered extent. Original overflow is therefore not automatically corrected. Evaluate the translated text at its preserved initial size, shrink only when it exceeds that allowance, and stop at the configured floor. Report a remaining overflow instead of shrinking indefinitely.
+[ADR-012](decisions/ADR-012-lightweight-fit-policy.md) supersedes the former absolute visual guarantee. Translation accuracy and faithful formatting lead; fit is lightweight best-effort overflow mitigation. Reuse the existing shared estimator/fitter and adapter boundaries. Only changed constrained containers need measurement. Normal reflow, DOCX body and unconstrained content need no fitting.
+
+For supported geometry/fonts, estimate source and translated extents with the same provisioned-font/shaping/wrapping implementation. Allowed extent is the larger of bounds and source extent on each constrained axis. Preserve source overflow. Unknown fonts, glyphs or layout behavior retain original sizes and report unresolved, never a false pass.
 
 ```mermaid
 flowchart TD
-    ORIGINAL["Measure original with its fonts,<br/>wrapping and container geometry"] --> ALLOW["Allowed space = larger of<br/>container bounds and original extent"]
-    TRANSLATED["Measure translated text<br/>at current font sizes"] --> CHECK{"Within allowed space?"}
-    ALLOW --> CHECK
-    CHECK -->|Yes| KEEP["Keep current sizes<br/>report any adjustment already made"]
-    CHECK -->|No| FLOOR{"Can sizes shrink further<br/>without going below the floor?"}
-    FLOOR -->|Yes| SHRINK["Reduce sizes under the fit policy"]
-    SHRINK --> TRANSLATED
-    FLOOR -->|No| ISSUE["Keep floor sizes<br/>record unresolved issue"]
+    INPUT["Translated container with source baseline"] --> NEED{"Changed and constrained?"}
+    NEED -->|No| KEEP["Keep wording, formatting and natural reflow"]
+    NEED -->|Yes| SUPPORT{"Supported geometry and fonts?"}
+    SUPPORT -->|No| UNKNOWN["Retain original sizes; unresolved reason"]
+    SUPPORT -->|Yes| MEASURE["Estimate source and translation"]
+    MEASURE --> ALLOW["Allowance = larger of source extent and bounds"]
+    ALLOW --> FIT{"Within allowance?"}
+    FIT -->|Yes| DONE["Keep chosen sizes; estimator pass or adjusted"]
+    FIT -->|No| LIMIT{"Floor or search limit reached?"}
+    LIMIT -->|No| SHRINK["Apply and estimate next bounded size candidate"]
+    SHRINK --> FIT
+    LIMIT -->|Yes| ISSUE["Report unresolved; no wording changes"]
+    KEEP --> WRITE["Adapter writes output; persist output and report"]
+    UNKNOWN --> WRITE
+    DONE --> WRITE
+    ISSUE --> WRITE
 ```
 
-The floor has both a relative-to-original limit and an absolute point-size limit. Exact defaults, step sizes, mixed-run scaling and measurement tolerances are not selected yet. Each container is independent; equalizing title sizes across slides is a non-goal. Existing overlaps are intentional design, not an instruction to move elements. The fitter changes font sizes within policy; it is not a general document-layout redesign engine. Missing fonts must produce an explicit accepted fallback/diagnostic, not fabricated measurement certainty.
+Defaults remain 70% relative and 8pt absolute floors, 2.5% scale steps, half-point quantization and 1pt tolerance. Never enlarge or further shrink a source run at/below the absolute minimum. Bound candidate measurements to 40 per container, stop at first fit/floor/no further size change and reuse duplicate candidates. If the search cap is reached before a reliable floor result, retain original sizes and report search_limit; never invent a pass. Format adapters apply sizes; generic fit never imports format packages.
 
-The report identifies stable locations, original/final sizes, adjustments and unresolved issues. Geometric fitting cannot guarantee attractive line breaks or resolve every overlap; optional agent visual review addresses the remaining human-visible problems. Font provisioning and the layout engine require the [P3.0 design work](plans/P3.0-fit-design-validation.md).
+Do not move objects, change row/column dimensions, force pagination or rephrase/truncate translations. No runtime renderer, vision/model calls or font downloads for fit. PDF should use its selected writer's placement/layout facilities where available rather than add a second independent measurement engine.
+
+Reports identify adjustments and unresolved locations/reasons, original/final sizes and measurable extents. Passed/adjusted mean estimator outcomes, not native-rendered approval. Missing layout capability is unresolved for a required format; not_applicable is reserved for TXT or proven absence of applicable containers. Preserve cache fingerprinting of policy, fonts and implementation identity.
+
+[P3.0](plans/P3.0-fit-design-validation.md) now closes existing research using a fixed small corpus and explicit support limits; it does not require native line-count/pitch parity or continuing font-specific tuning. Native-open/visual spot checks remain acceptance work, not per-job production steps. Optional visual correction remains P7.
 
 ## File-Specific Flows
 
@@ -533,7 +611,7 @@ All six repository checks remain required. Unit tests do not need VPN/models. Re
 3. The database queue avoids a broker and duplicate job-state systems. It requires correctly implemented claims, leases, recovery and fencing, which must be tested rather than assumed.
 4. Whole-document caching is conservative: exact bytes plus behavior fingerprint. It misses near-duplicate documents and allows concurrent duplicate work. Persistent segment reuse is deferred until evidence justifies it.
 5. The core release version invalidates reuse broadly. Immutable blobs share bytes efficiently while keeping user ownership and edit history separate.
-6. Geometric fit is necessary but insufficient for visual quality. Shrinking has a readability floor and does not fix all layout problems; unresolved findings are part of a successful result, not hidden errors.
+6. Best-effort geometric fit mitigates overflow but does not guarantee visual quality. Shrinking has a readability floor and does not fix all layout problems; unresolved findings are part of a successful result, not hidden errors.
 7. Models translate text, not native document structure. Formatting alignment and safe writeback are first-class requirements, especially for MT and rich text.
 
 ## Design Review and Open Decisions
@@ -547,7 +625,7 @@ The high-level upload -> lookup -> job -> worker -> adapter -> model -> fit -> w
 | Formatting in both modes | Gemma's small tag spike is promising; SMALL-100 lost tags in 10/30 cases. First-run flattening loses required formatting. | P2.0 strategy and correspondence tests |
 | XLSX recalculation | Sheet names stay unchanged by owner decision; preserving formula caches is not the same as preserving their meaning after cell translation. | Finish proposed ADR-009 with native tests |
 | PPTX/DOCX serialization | Candidate libraries may not preserve unsupported structures; XLSX findings cannot establish their behavior. | P2.0 format-specific experiments |
-| Font measurement / shrink policy | Real shaping, wrapping and missing-font behavior determine whether fit measurements are trustworthy. | P3.0 ADR and native comparisons |
+| Font measurement / shrink policy | Lightweight supported estimates with explicit uncertainty; no native parity guarantee. | ADR-012; bounded P3.0 closure |
 | PDF read/write strategy | Reconstructing PDF text while preserving layout has different tradeoffs from Office package edits. | P4 strategy ADR |
 | Queue race and cancellation contract | Progress is not a lease heartbeat; stale attempts must never publish. Current ADR-008 needs exact predicates and tests. | P5.0 worker design |
 | Identity, retention and limits | Downloads/edits must be owned and uploads bounded before colleagues use the server. Shared-cache timing is an accepted signal that auth design must revisit. | P5.0 |

@@ -12,6 +12,7 @@ A glyph that no named font contains, or a font that is not provisioned, makes th
 unmeasurable: no dimension is invented.
 """
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
@@ -123,7 +124,10 @@ def _font_for(ch: str, run: LayoutRun, library: FontLibrary) -> LoadedFont:
 
 
 def _glyphs(
-    paragraph: LayoutParagraph, sizes: Sequence[float], library: FontLibrary, em: float | None
+    paragraph: LayoutParagraph,
+    sizes: Sequence[float],
+    library: FontLibrary,
+    em: float | None,
 ) -> _Glyphs:
     chars: list[str] = []
     advances: list[float] = []
@@ -140,7 +144,8 @@ def _glyphs(
             scale = size / font.units_per_em
             advances.extend(a * scale for a in _advances(font, chunk))
             chars.extend(chunk)
-            heights.extend([size * (em if em is not None else font.line_height_em)] * len(chunk))
+            single = size * em if em is not None else size * font.line_height_em
+            heights.extend([single] * len(chunk))
             index = end
     return _Glyphs(chars, advances, heights)
 
@@ -174,8 +179,12 @@ def _empty_line_height(
 
 def _spaced(paragraph: LayoutParagraph, single: float) -> float:
     if paragraph.line_spacing_pt is not None:
-        return paragraph.line_spacing_pt
-    return single * paragraph.line_spacing
+        height = paragraph.line_spacing_pt
+    else:
+        height = max(single * paragraph.line_spacing, paragraph.line_minimum_pt or 0.0)
+    if paragraph.line_grid_pt:
+        height = math.ceil(height / paragraph.line_grid_pt - 1e-6) * paragraph.line_grid_pt
+    return height
 
 
 def _layout_paragraph(
@@ -256,7 +265,14 @@ def measure(
     for index, paragraph in enumerate(container.paragraphs):
         run_sizes = list(sizes[index]) if sizes is not None else [r.size_pt for r in paragraph.runs]
         end_size = _end_size(paragraph, run_sizes)
-        w, h, n = _layout_paragraph(paragraph, run_sizes, end_size, width, library, em)
+        w, h, n = _layout_paragraph(
+            paragraph,
+            run_sizes,
+            end_size,
+            width,
+            library,
+            em,
+        )
         widest = max(widest, w)
         height += h
         lines += n

@@ -15,10 +15,11 @@ from pathlib import Path
 from lxml import etree
 
 from doctranslator_core.config import DocumentLimits
-from doctranslator_core.document import Paragraph
+from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats._ooxml.runs import StyleTable, clean_text
-from doctranslator_core.formats.base import DocumentAdapter
+from doctranslator_core.formats.base import DocumentAdapter, LayoutSupport
+from doctranslator_core.formats.xlsx.layout import XlsxLayout
 from doctranslator_core.inline import Inline, Keep, Obj, Text, Wrap, plain_text
 from doctranslator_core.types import (
     DiagnosticSeverity,
@@ -54,7 +55,7 @@ class _Sheet:
     part: str
 
 
-class XlsxAdapter(DocumentAdapter):
+class XlsxAdapter(DocumentAdapter, LayoutSupport):
     format = DocumentFormat.XLSX
 
     def __init__(self, path: Path, limits: DocumentLimits) -> None:
@@ -69,6 +70,9 @@ class XlsxAdapter(DocumentAdapter):
         self.sheets: list[_Sheet] = []
         try:
             self._scan()
+            self._layout = XlsxLayout(
+                self.package, self._workbook, [(s.name, s.part) for s in self.sheets]
+            )
         except BaseException:
             self.package.close()
             raise
@@ -217,6 +221,13 @@ class XlsxAdapter(DocumentAdapter):
             item.append(child)
         self._translated_sources.add(ref.source_text)
         self.package.mark_modified(ref.part)
+
+    def layout_containers(self) -> list[LayoutContainer]:
+        return self._layout.containers()
+
+    def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
+        for part in self._layout.apply_sizes(container_id, sizes):
+            self.package.mark_modified(part)
 
     def save(self, path: Path) -> None:
         if self._translated_sources and self._formulas:

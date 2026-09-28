@@ -377,10 +377,11 @@ def _write_verify_publish(
 ) -> None:
     """Write to a temporary file, reopen it as the same format, then publish atomically."""
     temporary = _temporary_path(output_path)
+    expected = _run_sizes(adapter)
     try:
         report(ProgressPhase.WRITE, 0, 1)
         adapter.save(temporary)
-        _verify(temporary, fmt, limits, options)
+        _verify(temporary, fmt, limits, options, expected)
         report(ProgressPhase.WRITE, 1, 1)
         publish(temporary, output_path)
     finally:
@@ -389,16 +390,33 @@ def _write_verify_publish(
 
 
 def _verify(
-    path: Path, fmt: DocumentFormat, limits: DocumentLimits, options: DocumentTranslationOptions
+    path: Path,
+    fmt: DocumentFormat,
+    limits: DocumentLimits,
+    options: DocumentTranslationOptions,
+    expected: dict[str, list[list[float]]] | None,
 ) -> None:
-    """Reopen the written file as the same format and read its paragraphs again."""
+    """Reopen the written file as the same format, read its paragraphs again and check that every
+    container's run sizes in the file are the sizes the fit check applied."""
     if detect_format(path, limits) is not fmt:
         raise InvalidDocumentError("the written output is not a valid document")
     reopened = open_adapter(fmt, path, limits, options)
     try:
         reopened.paragraphs()
+        if expected is not None and _run_sizes(reopened) != expected:
+            raise InvalidDocumentError("the written output does not contain the fitted font sizes")
     finally:
         reopened.close()
+
+
+def _run_sizes(adapter: DocumentAdapter) -> dict[str, list[list[float]]] | None:
+    """Effective run sizes per container, rounded to 0.01 pt, as the adapter reads them."""
+    if not isinstance(adapter, LayoutSupport):
+        return None
+    return {
+        c.id: [[round(r.size_pt, 2) for r in p.runs] for p in c.paragraphs]
+        for c in adapter.layout_containers()
+    }
 
 
 def _check_paths(input_path: Path, output_path: Path) -> None:
@@ -461,35 +479,39 @@ def _fit(
 ) -> FitReport:
     """Fit every container against its original and apply the chosen sizes (ADR-012)."""
     if originals is None or not isinstance(adapter, LayoutSupport):
+        # TXT has no fixed-size containers. Any other format without layout support has fit
+        # missing, which is reported as not run, never as not applicable.
+        status = FitStatus.NOT_APPLICABLE if fmt is DocumentFormat.TXT else FitStatus.NOT_RUN
+        measurement = "none" if fmt is DocumentFormat.TXT else "unsupported"
         return FitReport(
-            format=fmt,
-            status=FitStatus.NOT_APPLICABLE,
-            measurement="none",
-            font_manifest=None,
-            options=options,
+            format=fmt, status=status, measurement=measurement, font_manifest=None, options=options
         )
     translated = {c.id: c for c in adapter.layout_containers()}
     library = FontLibrary(fonts) if fonts is not None else None
-    entries: list[FitEntry] = []
-    unchanged = adjusted = unresolved = 0
-    report(ProgressPhase.FIT, 0, len(originals))
-    for index, original in enumerate(originals):
-        current = translated[original.id]
-        if _same_text(original, current):
-            unchanged += 1  # untranslated text cannot introduce new overflow
-        else:
-            outcome = fit_container(original, current, options, library)
-            if outcome.sizes is not None:
-                adapter.apply_run_sizes(original.id, outcome.sizes)
-            if outcome.entry is not None:
-                entries.append(outcome.entry)
-            if outcome.status == "unchanged":
-                unchanged += 1
-            elif outcome.status == "adjusted":
-                adjusted += 1
+    try:
+        entries: list[FitEntry] = []
+        unchanged = adjusted = unresolved = 0
+        report(ProgressPhase.FIT, 0, len(originals))
+        for index, original in enumerate(originals):
+            current = translated[original.id]
+            if _same_text(original, current):
+                unchanged += 1  # untranslated text cannot introduce new overflow
             else:
-                unresolved += 1
-        report(ProgressPhase.FIT, index + 1, len(originals))
+                outcome = fit_container(original, current, options, library)
+                if outcome.sizes is not None:
+                    adapter.apply_run_sizes(original.id, outcome.sizes)
+                if outcome.entry is not None:
+                    entries.append(outcome.entry)
+                if outcome.status == "unchanged":
+                    unchanged += 1
+                elif outcome.status == "adjusted":
+                    adjusted += 1
+                else:
+                    unresolved += 1
+            report(ProgressPhase.FIT, index + 1, len(originals))
+    finally:
+        if library is not None:
+            library.close()
     if not originals:
         status = FitStatus.NOT_APPLICABLE
     elif unresolved:
