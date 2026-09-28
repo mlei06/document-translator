@@ -46,11 +46,12 @@ Responsibilities:
 
 ### Server (`apps/server`, `doctranslator_server`)
 
-One FastAPI process ([ADR-001](decisions/ADR-001-mcp-server-deployment.md), [ADR-002](decisions/ADR-002-language-and-stack.md)).
+One FastAPI web process serving REST and MCP ([ADR-001](decisions/ADR-001-mcp-server-deployment.md), [ADR-002](decisions/ADR-002-language-and-stack.md)), plus separate worker processes that run jobs ([ADR-008](decisions/ADR-008-job-execution-model.md)). On the laptop, `doctranslator-server serve --workers N` starts both.
 
 Responsibilities:
-- `jobs`: run translations as asynchronous jobs; the only server module that calls the core's pipeline.
-- `db`: job persistence in SQLite via SQLAlchemy, with Alembic migrations; used only by `jobs` and `auth`. Document files live on disk, not in the database ([ADR-004](decisions/ADR-004-job-storage.md)).
+- `jobs`: run translations as asynchronous jobs; the only server module that calls the core's pipeline. The `jobs` table is the queue: workers claim jobs with a lease, report progress through it, and a job whose worker dies is recovered when its lease expires ([ADR-008](decisions/ADR-008-job-execution-model.md)).
+- Translation reuse: a whole-document cache keyed by the input's hash and the core's output fingerprint, shared by all users. Each user's translated document is a chain of versions; edits add versions and never change cached output ([ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
+- `db`: job persistence in SQLite via SQLAlchemy, with Alembic migrations; used only by `jobs` and `auth`. Document files are immutable content-addressed blobs behind a storage interface, not database rows ([ADR-004](decisions/ADR-004-job-storage.md), [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
 - `api`: REST routes over `jobs`.
 - `mcp`: Streamable HTTP MCP tools over `jobs`.
 - `auth`: authentication for REST and MCP.
@@ -68,7 +69,7 @@ Responsibilities:
 Responsibilities:
 - React + TypeScript single-page app for uploading documents, choosing options, tracking jobs, and downloading results, using only the REST API.
 
-Per-component detail: [`architecture/components/`](architecture/components/) (not yet written).
+Per-component detail: [Core](architecture/components/core.md) (text translation; document sections added from P2), [Eval](architecture/components/eval.md). The server and web GUI docs are written in P5 and P6.
 
 ## Component Interactions
 
@@ -118,5 +119,7 @@ Dependency rules (enforced by import-linter; full list in [ADR-003](decisions/AD
 
 ## Known Tradeoffs
 
-- REST and MCP share one process, so they cannot scale or restart independently ([ADR-001](decisions/ADR-001-mcp-server-deployment.md)).
+- REST and MCP share one process, so they cannot scale or restart independently ([ADR-001](decisions/ADR-001-mcp-server-deployment.md)). Translation runs in separate workers, so it scales and fails independently of both ([ADR-008](decisions/ADR-008-job-execution-model.md)).
+- Workers find work by polling the jobs table instead of through a message broker: one source of truth and no extra service to operate, at the cost of about one small query per second per idle worker ([ADR-008](decisions/ADR-008-job-execution-model.md)).
+- The document cache reuses only byte-identical inputs, and every core release invalidates it. Near-identical documents are translated again until a segment cache is justified by measured hit rates ([ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
 - The workspace layout adds per-package `pyproject.toml` files in exchange for explicit, enforced dependency boundaries ([ADR-003](decisions/ADR-003-source-structure.md)).

@@ -70,7 +70,7 @@ None.
 
 ## P1 - Translation Engines and Benchmark
 
-Board: [Feature #9009](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9009) | Status: Not started
+Board: [Feature #9009](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9009) | Status: In progress | Plan: [P1-translation-engines-and-benchmark.md](plans/P1-translation-engines-and-benchmark.md) (approved 2026-09-27)
 
 ### Goal
 
@@ -117,7 +117,8 @@ Translate TXT, PPTX, DOCX, and XLSX files end to end from the command line, pres
 - Core component doc extended with `document.py` (the format-neutral representation) and the format capability interfaces.
 - `document.py`, `formats/base.py`, the format registry, and `formats/_ooxml/`.
 - `DocumentAdapter` implementations for TXT, PPTX, DOCX, and XLSX.
-- `pipeline.py`: extract, translate in batches with consistent translation of repeated strings, write back.
+- `pipeline.py`: extract, translate in batches, write back. Every unique segment of a document is translated once, however the pipeline batches work, so repeated strings translate identically ([ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md) layer 1).
+- Public API additions for the server: a deterministic output fingerprint of the options and engine that determine a translation (ADR-007 layer 2), and an optional pipeline progress callback that can abort the run by raising ([ADR-008](decisions/ADR-008-job-execution-model.md) rule 8).
 - Pass-through of non-translatable text (numbers, code, URLs, email addresses); source language auto-detection.
 - `apps/cli`: input, output, source and target language, mode; configuration from environment and files; progress output; meaningful exit codes.
 - Sample documents for each format in `tests/fixtures/`.
@@ -128,6 +129,8 @@ Translate TXT, PPTX, DOCX, and XLSX files end to end from the command line, pres
 - Outputs reopen cleanly with their format library; the input file is never modified.
 - Numbers, URLs, and Excel formulas, numbers, and dates are unchanged in output (tested).
 - A partial failure is reported and never silently drops content (tested).
+- A repeated segment reaches the engine once per document and receives identical translations everywhere, including across pipeline batches (tested).
+- The output fingerprint changes when any option or engine setting that affects output changes, and is stable otherwise (tested).
 - The CLI translates every fixture in both modes.
 
 ---
@@ -198,16 +201,21 @@ Run translations as persistent asynchronous jobs behind a REST API, hosted on th
 
 ### Deliverables
 
-- ADR for authentication of REST and MCP.
-- ADR for the job execution model (how workers run translations alongside the web server).
+- ADR for authentication of REST and MCP (documents have owners; also weighs the cross-user cache signal recorded in ADR-007).
 - Server component doc (`docs/architecture/components/server.md`).
-- `apps/server`: FastAPI app, settings, `db/` (SQLAlchemy models, repositories), initial Alembic migration, `jobs/`, `auth/`, `api/` with OpenAPI schema.
-- Document file storage in the data directory, with a retention policy.
+- `apps/server`: FastAPI app, settings, `cli.py` (`serve`, `worker`), `db/` (SQLAlchemy models, repositories), initial Alembic migration, `jobs/`, `auth/`, `api/` with OpenAPI schema.
+- Job execution per [ADR-008](decisions/ADR-008-job-execution-model.md): the jobs table as the queue, worker processes with leases, retries, recovery, progress, and cancellation; `serve --workers N` on the laptop.
+- Storage and reuse per [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md): content-addressed blob storage behind a storage interface (local disk implementation), `translation_results`, `documents`, and `document_versions`, the whole-document cache with `force_retranslate`, and cache hit/miss logging.
+- Retention per ADR-007 with decided default durations: cache entries and user documents expire independently, and blobs are deleted only when unreferenced.
 - `docs/Deployment.md` for laptop hosting: running the server, binding to the network, firewall, configuration and secrets, backup.
 
 ### Completion Criteria
 
 - A job submitted over REST survives a server restart and completes.
+- Killing a worker process mid-job leads to another worker completing the job; a document that crashes workers fails after the maximum number of attempts with a clear reason (tested).
+- The API stays responsive while workers translate.
+- Submitting a byte-identical document with the same options completes from the cache without translating; changing an option, the engine, or passing `force_retranslate` translates again (tested).
+- Cache expiry never deletes a file that a user document version still references (tested).
 - A coworker's machine can submit a job and download the result over the laptop's IP.
 - An end-to-end test shows the CLI and REST API produce identical output for the same document and options.
 - Migrations build the database from empty; the server never creates tables outside migrations.
@@ -259,6 +267,7 @@ Agents on LLM platforms translate documents, then inspect rendered pages and fix
 - MCP tool contract in the server component doc, including how files move between the platform and the server.
 - `render/`, plus `RenderSupport` and `EditSupport` for PPTX, DOCX, XLSX, and PDF.
 - `mcp/`: Streamable HTTP tools for submitting jobs, checking status, fetching results and fit reports, fetching page images, and applying edits.
+- Edit and render jobs on the ADR-008 queue. Each edit adds a document version and never changes cached output (ADR-007); an edit based on a stale version fails with a conflict.
 
 ### Completion Criteria
 

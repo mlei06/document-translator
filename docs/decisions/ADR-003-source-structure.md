@@ -102,6 +102,7 @@ The core owns everything that determines what a translated document looks like:
 | `types.py` | Public data types as Pydantic models and enums: `Language`, `TranslationMode`, translation request and options, result, fit report, errors. Part of the public API. |
 | `config.py` | Configuration types (Pydantic models, e.g. LLM endpoint, MT model path, fit floor) and their validation. Takes plain values; never reads the environment. |
 | `document.py` | The format-neutral internal representation passed between formats, engines, and fit: text segments, text containers (geometry, font, size), and stable locations. Internal. |
+| `translator.py` | `Translator`: text-level translation over an engine; part of the public API via `__init__.py`. |
 | `pipeline.py` | Orchestrates one translation: extract, translate, write back, fit check. |
 | `engines/` | `base.py` defines the `TranslationEngine` abstract base class; one module per translation mode implements it (`llm.py`, `mt.py`); `__init__.py` maps `TranslationMode` values to engines. |
 | `formats/` | All file-type-specific code, one package per format. See [Format packages](#format-packages). |
@@ -176,10 +177,11 @@ Parses arguments, loads configuration, calls the core's public API synchronously
 | Module | Responsibility |
 |--------|----------------|
 | `app.py` | Composition root: builds the FastAPI app, mounts REST routes, the MCP endpoint, and the built web GUI. |
+| `cli.py` | The `doctranslator-server` command with `serve` and `worker` subcommands ([ADR-008](ADR-008-job-execution-model.md)). Builds settings and delegates to `app` and `jobs`; imports neither `db` nor the core. |
 | `settings.py` | Loads server configuration from the environment (Pydantic settings) and builds core config objects from it. |
 | `db/` | Persistence: `session.py` (engine and sessions), `models.py` (ORM classes, e.g. job records), `repositories/` (queries). |
 | `auth/` | Authentication for REST and MCP. |
-| `jobs/` | Job service: submit, status, results, workers. `schemas.py` holds the job data types (Pydantic) it returns. The only server module that calls the core's pipeline. |
+| `jobs/` | Job service: submit, status, results, and the worker processes that run jobs ([ADR-008](ADR-008-job-execution-model.md)). `schemas.py` holds the job data types (Pydantic) it returns. The only server module that calls the core's pipeline. |
 | `api/` | REST routes. `schemas.py` holds REST request/response models. Calls `jobs` only. |
 | `mcp/` | MCP tools, with their input/output models alongside the tools. Calls `jobs` only. |
 

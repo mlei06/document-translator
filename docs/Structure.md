@@ -28,7 +28,7 @@ docs/
 - `pyproject.toml` is a virtual project (not a package). It declares the workspace members, the `dev` dependency group (Ruff, Pyright, pytest, import-linter), and the shared configuration for those tools.
 - `.importlinter` holds one contract per ADR-003 dependency rule; contract names cite the rule number.
 - `.gitattributes` keeps line endings LF in the repository and marks document and image formats as binary.
-- `data/` (gitignored, created on demand) is the default local data directory for benchmark datasets, job storage, and run outputs. It is never committed.
+- `data/` (gitignored, created on demand) is the default local data directory, never committed: `benchmarks/` (FLORES+), `models/` (converted MT models, e.g. `alirezamsh--small100-ct2-int8/`), `eval/runs/` (benchmark run directories), and later job storage.
 
 ## `/packages`
 
@@ -43,8 +43,8 @@ Reusable libraries.
 Deployable surfaces, each a distribution depending on the core. They never import each other.
 
 - `cli/` - `doctranslator_cli`: command-line interface.
-- `server/` - `doctranslator_server`: one process serving the REST API, the MCP endpoint, and the job service (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`).
-- `eval/` - `doctranslator_eval`: translation quality benchmark (ADR-005).
+- `server/` - `doctranslator_server`: a web process serving the REST API and the MCP endpoint, plus worker processes that run jobs (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`).
+- `eval/` - `doctranslator_eval`: translation quality benchmark (ADR-005, [component doc](architecture/components/eval.md)). `baselines/` holds the committed baseline scores per mode (created by P1 step 11).
 
 Each package and app has its own `tests/` directory next to `src/`.
 
@@ -55,6 +55,8 @@ Cross-surface end-to-end tests (`e2e/`) and sample documents shared by all test 
 ## `/scripts`
 
 Development, migration, deployment, and maintenance scripts.
+
+- `convert_mt_model.py` converts SMALL-100 to CTranslate2 in a throwaway environment with PyTorch (ADR-006; usage in its docstring).
 
 ## `/docs`
 
@@ -71,6 +73,10 @@ Detailed implementation plans, one per phase or subphase of `docs/IMPLEMENTATION
 ### `/docs/decisions`
 
 Architecture Decision Records (ADRs).
+
+### `/docs/design`
+
+Visual design exploration and source assets gathered ahead of the phase that implements them (for example `web-gui/` for P6). Exploration, not decided architecture.
 
 ## `/.agents`
 
