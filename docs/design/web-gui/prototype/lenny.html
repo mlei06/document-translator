@@ -1,0 +1,2602 @@
+<title>Meet Lenny</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600;700&display=swap">
+<style>
+:root {
+  --ground: #EEF3F7;
+  --surface: #FFFFFF;
+  --ink: #0A0A0A;
+  --muted: #737373;
+  --line: #E5E5E5;
+  --lenny: #72D0B6;
+  --lenny-deep: #2F9C82;
+  --lenny-rim: #D6F29B;
+  --lb0: #E6FFF7;
+  --lb1: #9DE9D1;
+  --lb2: #52C2A2;
+  --lb3: #2A8E75;
+  --lshade: #1B6B57;
+  --look-bg: url(assets/meadow-day.webp);
+  --lenny-filter: none;
+  --lenny-glow: rgba(255, 255, 255, .6);
+  --shadow: rgba(20, 45, 65, .16);
+  --warn: #D97706;
+  --ok: #2F9C82;
+  --scrim: rgba(12, 20, 28, .38);
+  --t-pptx: #D9602F;
+  --t-docx: #3A6BD4;
+  --t-xlsx: #1F8A4E;
+  --t-pdf: #CC3B47;
+  --t-txt: #6B7785;
+  --card: rgba(255, 255, 255, .78);
+  --card-solid: rgba(255, 255, 255, .93);
+  --card-border: rgba(255, 255, 255, .75);
+  --card-shadow: 0 1px 2px rgba(20, 45, 65, .06), 0 16px 40px -12px rgba(20, 45, 65, .28);
+  --orb-bg: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .98), rgba(255, 255, 255, .62) 42%, rgba(235, 246, 252, .42) 70%, rgba(255, 255, 255, .6));
+  --orb-track: rgba(20, 45, 65, .10);
+  --glass: rgba(255, 255, 255, .72);
+  --night: 0;
+  --cloud-alpha: 1;
+  --cloud-filter: brightness(1) saturate(1);
+  --day-only: 1;
+  --sc-bg: #FFFFFF;
+  --sc-fg: #0A0A0A;
+  --sc-primary: #171717;
+  --sc-primary-fg: #FAFAFA;
+  --sc-muted: #737373;
+  --sc-border: #E5E5E5;
+  --sc-input: #E5E5E5;
+  --sc-ring: #A1A1A1;
+  --sc-accent: #F5F5F5;
+  --font: "Geist", "Segoe UI", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, Consolas, monospace;
+  --body: var(--font);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0B1018;
+    --surface: #111822;
+    --ink: #FAFAFA;
+    --muted: #A1A1A1;
+    --line: rgba(255, 255, 255, .1);
+    --lenny-rim: #9DB6FF;
+    --look-bg: url(assets/meadow-night.webp);
+    --lenny-filter: brightness(.9) saturate(.9);
+    --lenny-glow: rgba(160, 190, 255, .32);
+    --shadow: rgba(0, 0, 0, .45);
+    --warn: #F59E0B;
+    --ok: #4CC3A2;
+    --scrim: rgba(2, 6, 12, .55);
+    --t-pptx: #F07A4A;
+    --t-docx: #6B95F0;
+    --t-xlsx: #45B676;
+    --t-pdf: #EE616C;
+    --t-txt: #95A3B1;
+    --card: rgba(14, 20, 30, .7);
+    --card-solid: rgba(14, 20, 30, .9);
+    --card-border: rgba(255, 255, 255, .09);
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -12px rgba(0, 0, 0, .6);
+    --orb-bg: radial-gradient(circle at 32% 26%, rgba(170, 190, 235, .55), rgba(40, 52, 78, .6) 45%, rgba(16, 22, 36, .72) 75%, rgba(60, 76, 110, .6));
+    --orb-track: rgba(255, 255, 255, .12);
+    --glass: rgba(14, 20, 30, .7);
+    --night: 1;
+    --cloud-alpha: .5;
+    --cloud-filter: brightness(.5) saturate(.55);
+    --day-only: 0;
+    --sc-bg: #0A0A0A;
+    --sc-fg: #FAFAFA;
+    --sc-primary: #E5E5E5;
+    --sc-primary-fg: #171717;
+    --sc-muted: #A1A1A1;
+    --sc-border: rgba(255, 255, 255, .1);
+    --sc-input: rgba(255, 255, 255, .15);
+    --sc-ring: #737373;
+    --sc-accent: #262626;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0B1018;
+  --surface: #111822;
+  --ink: #FAFAFA;
+  --muted: #A1A1A1;
+  --line: rgba(255, 255, 255, .1);
+  --lenny-rim: #9DB6FF;
+  --look-bg: url(assets/meadow-night.webp);
+  --lenny-filter: brightness(.9) saturate(.9);
+  --lenny-glow: rgba(160, 190, 255, .32);
+  --shadow: rgba(0, 0, 0, .45);
+  --warn: #F59E0B;
+  --ok: #4CC3A2;
+  --scrim: rgba(2, 6, 12, .55);
+  --t-pptx: #F07A4A;
+  --t-docx: #6B95F0;
+  --t-xlsx: #45B676;
+  --t-pdf: #EE616C;
+  --t-txt: #95A3B1;
+  --card: rgba(14, 20, 30, .7);
+  --card-solid: rgba(14, 20, 30, .9);
+  --card-border: rgba(255, 255, 255, .09);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -12px rgba(0, 0, 0, .6);
+  --orb-bg: radial-gradient(circle at 32% 26%, rgba(170, 190, 235, .55), rgba(40, 52, 78, .6) 45%, rgba(16, 22, 36, .72) 75%, rgba(60, 76, 110, .6));
+  --orb-track: rgba(255, 255, 255, .12);
+  --glass: rgba(14, 20, 30, .7);
+  --night: 1;
+  --cloud-alpha: .5;
+  --cloud-filter: brightness(.5) saturate(.55);
+  --day-only: 0;
+  --sc-bg: #0A0A0A;
+  --sc-fg: #FAFAFA;
+  --sc-primary: #E5E5E5;
+  --sc-primary-fg: #171717;
+  --sc-muted: #A1A1A1;
+  --sc-border: rgba(255, 255, 255, .1);
+  --sc-input: rgba(255, 255, 255, .15);
+  --sc-ring: #737373;
+  --sc-accent: #262626;
+}
+
+html, body { height: 100%; overflow: hidden; }
+body {
+  height: 100dvh; overscroll-behavior: none;
+  background: var(--ground); color: var(--ink);
+  font: 400 14px/1.5 var(--font); -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; padding-inline: 16px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--sc-ring); outline-offset: 2px; }
+
+/* Shape rule: controls 8px, cards 16px, orbs and Lenny round. */
+.frost {
+  background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+
+header.top {
+  position: relative; z-index: 10; width: min(1120px, 100%); margin: 14px auto 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 8px 8px 12px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  transition: opacity .5s ease .45s;
+}
+body.mode-signin header.top { opacity: 0; pointer-events: none; transition-delay: 0s; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+.brand small { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+/* Buttons used across the app (shadcn sizes: default 36px, small 32px). */
+.btn, .ghost, .chip {
+  height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 12px; border-radius: 8px; border: 1px solid transparent;
+  font: 500 13px/1 var(--font); white-space: nowrap;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.btn { background: var(--sc-primary); color: var(--sc-primary-fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.btn:hover { background: color-mix(in srgb, var(--sc-primary) 88%, transparent); }
+.btn.alt, .ghost, .chip { background: var(--sc-bg); color: var(--sc-fg); border-color: var(--sc-border); box-shadow: 0 1px 2px rgba(0, 0, 0, .05); }
+.btn.alt:hover, .ghost:hover, .chip:hover { background: var(--sc-accent); }
+.btn:active, .ghost:active, .chip:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+#stage {
+  position: relative; z-index: 1; flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: clamp(190px, 33vh, 300px); padding-bottom: clamp(16px, 5vh, 48px);
+}
+.lenny-wrap { position: relative; margin-block: auto; display: flex; flex-direction: column; align-items: center; z-index: 3; }
+#lennyBtn { background: none; border: 0; padding: 0; border-radius: 50%; }
+#lennyBtn::before {
+  content: ""; position: absolute; inset: 4% 0 0; border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, .9); opacity: 0; transform: scale(.9);
+  transition: opacity .25s, transform .25s;
+}
+body.dragging #lennyBtn::before { opacity: .8; transform: scale(1.1); animation: spin 16s linear infinite; }
+@keyframes spin { to { transform: scale(1.1) rotate(360deg); } }
+.lenny { filter: var(--lenny-filter); }
+.lenny.big { width: clamp(150px, min(22vw, 30vh), 280px); height: auto; display: block; overflow: visible; }
+#tummy {
+  margin-top: 6px; font: 500 12px/1 var(--font); font-variant-numeric: tabular-nums;
+  color: var(--sc-primary-fg); background: var(--sc-primary); border-radius: 6px; padding: 5px 8px;
+}
+.hint {
+  margin-top: 10px; font-size: 12.5px; color: var(--ink); padding: 4px 10px; border-radius: 999px;
+  background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+
+/* Lenny: rig (lean, driven by JS) > body (squash and stretch, CSS) > face (gaze, JS). */
+.lenny .l-body { transform-box: fill-box; transform-origin: 50% 100%; animation: breathe 4s ease-in-out infinite; }
+.lenny .l-sprout { transform-box: fill-box; transform-origin: 15% 100%; animation: sway 4.6s ease-in-out infinite; }
+.lenny .l-shadow { transform-box: fill-box; transform-origin: 50% 50%; }
+.lenny .l-lid { transform-box: fill-box; transform-origin: 50% 50%; }
+.lenny .l-eyes-happy, .lenny .l-eyes-closed { opacity: 0; transition: opacity .12s; }
+.lenny .l-eyes-open { transition: opacity .12s; }
+.lenny.happy .l-eyes-open, .lenny.shy .l-eyes-open { opacity: 0; }
+.lenny.happy .l-eyes-happy { opacity: 1; }
+.lenny.shy:not(.happy) .l-eyes-closed { opacity: 1; }
+.lenny.blink .l-lid { animation: blink .16s ease-in-out; }
+.lenny .l-open { transform-box: fill-box; transform-origin: 50% 35%; transform: scale(var(--open, 0)); transition: transform .18s cubic-bezier(.3, 1.4, .5, 1); }
+.lenny .l-smile { opacity: calc(1 - var(--open, 0) * 5); }
+.lenny .l-bulge { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; }
+.lenny.gulp .l-bulge { animation: bulge .55s ease-in; }
+.lenny.chew .l-body { animation: chew .22s ease-in-out 6 alternate; }
+.lenny.hop .l-body { animation: hop .5s cubic-bezier(.3, .7, .4, 1) 2; }
+.lenny.hop .l-shadow { animation: shadowhop .5s cubic-bezier(.3, .7, .4, 1) 2; }
+.lenny.gulp .l-body { animation: gulp .45s ease-in-out; }
+@keyframes breathe { 50% { transform: translateY(-1.5%) scale(1.02, .985); } }
+@keyframes sway { 50% { transform: rotate(8deg); } }
+@keyframes blink { 50% { transform: scaleY(.08); } }
+@keyframes chew { from { transform: scale(1.06, .93); } to { transform: scale(.97, 1.04); } }
+@keyframes hop { 30% { transform: scale(1.08, .9); } 55% { transform: translateY(-16%) scale(.95, 1.06); } 85% { transform: translateY(0) scale(1.06, .94); } }
+@keyframes shadowhop { 55% { transform: scale(.72); opacity: .5; } }
+@keyframes gulp { 40% { transform: scale(1.1, .9); } 70% { transform: scale(.97, 1.04); } }
+@keyframes bulge { 0% { opacity: .5; transform: translateY(-18px) scale(.8); } 100% { opacity: 0; transform: translateY(36px) scale(1.4); } }
+
+/* Speech */
+.speech {
+  position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px)); padding: 16px; border-radius: 16px; z-index: 4;
+  background: var(--card-solid); border: 1px solid var(--card-border); box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  color: var(--ink);
+}
+.speech::after {
+  content: ""; position: absolute; left: 50%; bottom: -7px; width: 14px; height: 14px;
+  background: var(--card-solid); border-right: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border);
+  transform: translateX(-50%) rotate(45deg); border-bottom-right-radius: 3px;
+}
+.speech.pop { animation: pop .32s cubic-bezier(.3, 1.45, .5, 1); }
+@keyframes pop { from { transform: translateX(-50%) translateY(6px) scale(.94); opacity: .3; } }
+.say { margin: 0; font-weight: 600; font-size: 16px; line-height: 1.4; letter-spacing: -.01em; text-wrap: balance; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.extra:empty { display: none; }
+.extra { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; max-height: max(120px, calc(33vh - 90px)); overflow-y: auto; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row-actions .sub { margin: 0; }
+.files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow: auto; }
+.files li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13.5px; }
+.fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag {
+  font: 600 10.5px/1 var(--mono); letter-spacing: .02em; color: var(--tc, var(--t-txt));
+  background: color-mix(in srgb, var(--tc, var(--t-txt)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tc, var(--t-txt)) 28%, transparent); border-radius: 6px; padding: 4px 6px;
+}
+.files select, .custom input {
+  height: 28px; border: 1px solid var(--sc-input); border-radius: 8px; background: var(--sc-bg); padding: 0 8px; font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+.custom input { height: 32px; flex: 1; min-width: 0; padding: 0 10px; }
+.files select:focus-visible, .custom input:focus-visible { outline: none; border-color: var(--sc-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 45%, transparent); }
+.rejected { color: var(--muted); font-size: 13px; margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.custom { display: flex; gap: 8px; }
+
+/* File bubbles: glass orbs with a thin progress ring. */
+#bubbles { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.bubble {
+  position: absolute; width: 140px; pointer-events: auto; background: none; border: 0; padding: 0;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.bubble .float { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: float 6s ease-in-out infinite; animation-delay: var(--fd, 0s); }
+@keyframes float { 50% { transform: translateY(-8px); } }
+.orb {
+  position: relative; width: 88px; height: 88px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  background: var(--orb-bg); border: 1px solid var(--card-border);
+  backdrop-filter: blur(12px) saturate(170%); -webkit-backdrop-filter: blur(12px) saturate(170%);
+  box-shadow: inset 0 -10px 18px rgba(70, 130, 165, .16), inset 0 8px 14px rgba(255, 255, 255, .55), 0 18px 34px -14px rgba(15, 40, 60, .45);
+  transition: transform .3s cubic-bezier(.3, 1.4, .5, 1);
+}
+.bubble:hover .orb, .bubble:focus-visible .orb { transform: scale(1.08); }
+.bubble:focus-visible { outline: none; }
+.bubble:focus-visible .orb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 60%, transparent), 0 18px 34px -14px rgba(15, 40, 60, .45); }
+.prog { position: absolute; inset: -7px; width: calc(100% + 14px); height: calc(100% + 14px); transform: rotate(-90deg); pointer-events: none; }
+.prog .trk { fill: none; stroke: var(--orb-track); stroke-width: 2.5; }
+.prog .bar { fill: none; stroke: var(--lenny-deep); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset .4s ease; }
+.ficon {
+  position: relative; width: 24px; height: 30px; border-radius: 3px 8px 3px 3px;
+  background: linear-gradient(#FFFFFF, #EEF2F6); box-shadow: 0 1px 2px rgba(15, 30, 45, .25), 0 0 0 .5px rgba(15, 30, 45, .15);
+}
+.ficon::before { content: ""; position: absolute; top: 0; right: 0; width: 8px; height: 8px; border-radius: 0 8px 0 2px; background: linear-gradient(225deg, transparent 50%, #D5DDE5 50%); }
+.ficon b {
+  position: absolute; left: -5px; right: -5px; bottom: 5px; height: 10px; border-radius: 2px;
+  background: var(--tc); color: #fff; font: 700 6.5px/10px var(--mono); letter-spacing: .04em; text-align: center;
+}
+.orb .pct { font: 600 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink); opacity: .75; }
+.badge {
+  position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  display: grid; place-items: center; font: 600 11.5px/1 var(--font); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
+}
+.badge.ok { background: var(--ok); }
+.badge.warn { background: var(--warn); }
+.blabel {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; max-width: 140px; padding: 5px 10px 6px; border-radius: 10px;
+  background: var(--glass); border: 1px solid var(--card-border); backdrop-filter: blur(12px) saturate(150%); -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow: 0 6px 16px -8px rgba(15, 40, 60, .35);
+}
+.bname { max-width: 120px; font-size: 12.5px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bstat { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+.flycard {
+  position: fixed; z-index: 50; pointer-events: none; display: flex; gap: 8px; align-items: center;
+  padding: 8px 12px; border-radius: 12px; max-width: 220px; white-space: nowrap; font-weight: 500; font-size: 13px;
+  background: var(--card-solid); border: 1px solid var(--card-border); box-shadow: var(--card-shadow);
+}
+.flycard span:last-child { overflow: hidden; text-overflow: ellipsis; }
+
+footer.note { position: relative; z-index: 1; padding-block: 6px 14px; text-align: center; }
+body.mode-signin footer.note { visibility: hidden; }
+footer.note span {
+  display: inline-block; padding: 4px 12px; border-radius: 999px; color: var(--ink); opacity: .85; font-size: 12px;
+  background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+
+/* Preview: a shadcn dialog. */
+#preview { position: fixed; inset: 0; z-index: 60; display: flex; padding: 16px; background: var(--scrim); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.panel {
+  position: relative; margin: auto; width: min(1100px, 100%); height: min(860px, 100%);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 16px;
+  background: var(--sc-bg); color: var(--sc-fg); border: 1px solid var(--sc-border); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45);
+  animation: rise .28s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.985); } }
+.pv-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--sc-border); }
+.pv-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pv-title h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-title span { color: var(--sc-muted); font-size: 13px; }
+.pv-body { flex: 1; overflow: auto; padding: 20px 20px 160px; display: flex; flex-direction: column; gap: 32px; }
+.pv-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pv-label { font-size: 12.5px; font-weight: 500; color: var(--sc-muted); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+.ver { font: 500 11px/1 var(--font); background: var(--sc-accent); color: var(--sc-fg); border: 1px solid var(--sc-border); border-radius: 6px; padding: 3px 6px; }
+.pv-row h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.page {
+  background: #fff; color: #1D2733; border-radius: 8px; border: 1px solid var(--sc-border);
+  padding: 7% 8%; display: flex; flex-direction: column; gap: 9px; position: relative; box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+}
+.page.slide { aspect-ratio: 16 / 9; }
+.page.doc { aspect-ratio: 4 / 3.2; }
+.page.sheet { aspect-ratio: 16 / 10; }
+.blk { text-align: left; background: none; border: 1.5px solid transparent; border-radius: 6px; padding: 3px 5px; margin: -5px; display: block; width: 100%; color: inherit; }
+button.blk:hover { border-color: #9FD9C8; background: rgba(114, 208, 182, .1); }
+button.blk.sel { border-color: #2F9C82; background: rgba(114, 208, 182, .16); }
+.blk.title { font-weight: 700; font-size: clamp(13px, 1.6vw, 19px); line-height: 1.25; letter-spacing: -.01em; }
+.bar { height: 7px; border-radius: 4px; background: #E3E8EE; }
+.blk.warn { border: 1.5px dashed #D97706; position: relative; }
+.blk.warn .bar { background: #F7D3A6; }
+.blk.warn .bar:first-child { width: 118% !important; }
+.blk.warn::after {
+  content: "Text doesn't fit"; position: absolute; right: 4px; top: -10px; background: #D97706; color: #fff;
+  font: 600 10px/1 var(--font); padding: 3px 6px; border-radius: 5px;
+}
+.cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.cells i { height: 11px; border-radius: 3px; background: #EBEFF3; }
+.pending { display: grid; place-items: center; color: #737373; font-weight: 500; font-size: 13px; background: repeating-linear-gradient(-45deg, #F7F8FA 0 12px, #F0F2F5 12px 24px); }
+.discuss { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.comment { border: 1px solid var(--sc-border); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.comment .meta { font-size: 12px; color: var(--sc-muted); margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+.comment .meta.done { color: var(--ok); font-weight: 500; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lenny-deep); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+.composer { display: flex; flex-direction: column; gap: 8px; }
+.composer .about { font-size: 12.5px; color: var(--sc-muted); }
+.composer .about b { color: var(--sc-fg); font-weight: 500; }
+.composer textarea {
+  width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--sc-input); border-radius: 8px; padding: 8px 12px;
+  background: transparent; font-size: 13.5px; box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+.composer textarea:focus-visible { outline: none; border-color: var(--sc-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 45%, transparent); }
+.composer .row-actions { justify-content: flex-end; }
+.locked { color: var(--sc-muted); font-size: 13px; }
+.mini { position: absolute; right: 16px; bottom: 12px; display: flex; align-items: flex-end; gap: 6px; pointer-events: none; max-width: calc(100% - 32px); }
+.mini .lenny { width: 96px; height: auto; flex: none; overflow: visible; }
+.mini-say {
+  padding: 10px 14px; border-radius: 14px 14px 4px 14px; max-width: 320px; margin-bottom: 46px;
+  font-weight: 500; font-size: 13.5px; line-height: 1.45; color: var(--ink);
+  background: var(--card-solid); border: 1px solid var(--sc-border); box-shadow: var(--card-shadow);
+}
+
+#toast {
+  position: fixed; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 80; max-width: min(360px, calc(100vw - 48px));
+  padding: 12px 16px; border-radius: 10px; font-weight: 500; font-size: 13.5px;
+  background: var(--sc-bg); color: var(--sc-fg); border: 1px solid var(--sc-border); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .3);
+  animation: rise .25s cubic-bezier(.2, .9, .3, 1);
+}
+
+@media (max-width: 759px) {
+  #stage { padding-top: 12px; padding-bottom: 168px; gap: 0; }
+  .lenny-wrap { margin-block: 0 auto; }
+  .lenny.big { width: clamp(110px, min(34vw, 20vh), 170px); }
+  .speech { position: static; transform: none; width: min(420px, 100%); margin-bottom: 12px; }
+  .speech::after { display: none; }
+  .speech.pop { animation: none; }
+  .extra { max-height: 26vh; }
+  #bubbles {
+    position: absolute; inset: auto 0 6px; display: flex; gap: 4px; justify-content: safe center;
+    overflow-x: auto; padding: 10px 8px 8px; scroll-snap-type: x proximity; scrollbar-width: none;
+  }
+  .bubble { position: relative; left: auto !important; top: auto !important; width: 112px; flex: none; scroll-snap-align: center; }
+  .blabel { max-width: 108px; padding-inline: 8px; }
+  .bname { max-width: 92px; }
+  .sc-form { gap: 18px; }
+  footer.note { display: none; }
+  .pv-cols { grid-template-columns: 1fr; }
+  .mini .lenny { width: 66px; }
+  .mini-say { font-size: 13px; margin-bottom: 30px; }
+  .brand small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lenny .l-body, .lenny .l-sprout, .bubble .float, body.dragging #lennyBtn::before, .panel, #toast { animation: none !important; }
+  .speech.pop { animation: none; }
+}
+
+/* World: always a full-screen scene. On the sign-in page it is clipped to a card, so opening
+   the clip reads as the picture being uncropped. A generated image can replace the SVG as-is. */
+#world { position: fixed; inset: 0; z-index: 0; overflow: hidden; clip-path: inset(0 0 0 0 round 0); transition: clip-path 1s cubic-bezier(.7, 0, .2, 1); }
+.w-ground { position: absolute; inset: -24px; }
+.w-scene { position: absolute; inset: 0; }
+.w-scene img {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  object-fit: cover; object-position: 50% 62%;
+}
+.w-night { opacity: var(--night); transition: opacity 1.2s ease; }
+.w-clouds {
+  position: absolute; inset: 0; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 var(--fade-start, 30%), transparent var(--fade-end, 40%));
+  mask-image: linear-gradient(to bottom, #000 var(--fade-start, 30%), transparent var(--fade-end, 40%));
+}
+.w-clouds img {
+  position: absolute; left: 0; top: 0; will-change: transform;
+  opacity: calc(var(--o) * var(--cloud-alpha)); filter: var(--cloud-filter);
+  transition: opacity 1.2s ease, filter 1.2s ease;
+}
+.w-clouds img.day-only { opacity: calc(var(--o) * var(--cloud-alpha) * var(--day-only)); }
+
+/* Soft glow behind Lenny so it separates from the grass. */
+#lennyBtn, #signLenny { position: relative; isolation: isolate; }
+#lennyBtn::after, #signLenny::after {
+  content: ""; position: absolute; inset: -4% -16% 2%; border-radius: 50%; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, var(--lenny-glow), transparent);
+  animation: glow 4.5s ease-in-out infinite;
+}
+@keyframes glow { 50% { opacity: .55; transform: scale(.93); } }
+
+
+:root { --card-clip: inset(0 0 0 50% round 0); }
+body.mode-signin #world { clip-path: var(--card-clip); }
+
+#signin { position: fixed; inset: 0; z-index: 5; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 100%; overflow: hidden; }
+.sign-card { display: flex; align-items: center; justify-content: center; padding: 150px 40px 40px; }
+.sign-card .lenny-wrap { margin-block: 0; }
+#signLenny .lenny.big { width: clamp(180px, 19vw, 240px); }
+#signin .speech { transition: opacity .3s; }
+body.mode-app #signin { pointer-events: none; }
+body.mode-app #signin .speech { opacity: 0; }
+.lenny .l-lid { transition: transform .18s ease-out; }
+.lenny.shy .l-lid { transform: scaleY(.08); }
+
+/* Form panel: shadcn login-02 (new-york-v4), tokens --sc-*. */
+.signpanel {
+  display: flex; flex-direction: column; gap: 16px; padding: 40px; overflow-y: auto; min-height: 0;
+  background: var(--sc-bg); color: var(--sc-fg); font-family: "Geist", var(--body);
+  transition: transform 1s cubic-bezier(.7, 0, .2, 1), opacity .9s ease-in;
+}
+body.mode-app .signpanel { transform: translateX(calc(-100% - 80px)); opacity: 0; }
+.signpanel :focus-visible { outline: none; }
+.sc-brand { display: flex; align-items: center; gap: 8px; align-self: flex-start; font-size: 14px; font-weight: 500; color: inherit; text-decoration: none; }
+.sc-logo { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: var(--sc-primary); color: var(--sc-primary-fg); }
+.sc-logo svg { width: 16px; height: 16px; }
+.sc-center { flex: 1; display: flex; align-items: center; justify-content: center; }
+.sc-form { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 28px; }
+.sc-head { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.sc-head h1 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -.015em; }
+.sc-head p { margin: 0; font-size: 14px; line-height: 20px; color: var(--sc-muted); text-wrap: balance; }
+.sc-field { display: flex; flex-direction: column; gap: 12px; }
+.sc-field label { font-size: 14px; font-weight: 500; line-height: 1.375; }
+.sc-row { display: flex; align-items: center; }
+.sc-row a { margin-left: auto; font-size: 14px; color: inherit; text-decoration: none; text-underline-offset: 4px; }
+.sc-row a:hover, .sc-row a:focus-visible { text-decoration: underline; }
+.sc-form input {
+  height: 36px; width: 100%; padding: 4px 12px; border: 1px solid var(--sc-input); border-radius: 8px;
+  background: transparent; color: inherit; font: 400 14px/20px "Geist", var(--body);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05); transition: border-color .15s, box-shadow .15s;
+}
+.sc-form input::placeholder { color: var(--sc-muted); }
+.sc-form input:focus-visible { border-color: var(--sc-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 50%, transparent); }
+.sc-btn {
+  height: 36px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid transparent; border-radius: 8px; background: var(--sc-primary); color: var(--sc-primary-fg);
+  font: 500 14px/1 "Geist", var(--body); box-shadow: 0 1px 2px rgba(0, 0, 0, .05); transition: background .15s, box-shadow .15s;
+}
+.sc-btn:hover { background: color-mix(in srgb, var(--sc-primary) 90%, transparent); }
+.sc-btn:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 50%, transparent); }
+.sc-btn svg { width: 16px; height: 16px; flex: none; }
+.sc-outline { background: var(--sc-bg); color: var(--sc-fg); border-color: var(--sc-border); }
+.sc-outline:hover { background: var(--sc-accent); }
+.sc-sep { position: relative; height: 20px; margin-block: -8px; text-align: center; font-size: 14px; line-height: 20px; color: var(--sc-muted); }
+.sc-sep::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--sc-border); }
+.sc-sep span { position: relative; padding: 0 8px; background: var(--sc-bg); }
+.sc-desc { margin: 0; text-align: center; font-size: 14px; line-height: 20px; color: var(--sc-muted); }
+.sc-desc a { color: inherit; text-decoration: underline; text-underline-offset: 4px; }
+.sc-desc a:hover { color: var(--sc-fg); }
+.sc-note { margin: 0; text-align: center; font-size: 12px; color: var(--sc-muted); }
+.actions { display: flex; gap: 8px; }
+
+.lenny-wrap.arriving .speech, .lenny-wrap.arriving .hint, .lenny-wrap.arriving #tummy { visibility: hidden; }
+#signLenny .lenny { filter: var(--lenny-filter); }
+.sc-sm { height: 32px; width: auto; padding: 0 12px; font-size: 13px; }
+
+@media (max-width: 759px) {
+  :root { --card-clip: inset(0 0 64% 0 round 0); }
+  #signin { grid-template-columns: 1fr; grid-template-rows: 36% minmax(0, 1fr); }
+  .sign-card { order: -1; padding: 16px; align-items: flex-end; }
+  #signLenny .lenny.big { width: min(130px, 16vh); }
+  .signpanel { padding: 24px; }
+  .sc-brand { align-self: center; }
+  body.mode-app .signpanel { transform: translateY(110%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #world, .signpanel { transition-duration: .01s; }
+  #lennyBtn::after, #signLenny::after { animation: none; }
+}
+
+/* Boop: clicking Lenny squashes him and he bounces back. */
+.lenny.boop .l-body { animation: boop .52s cubic-bezier(.3, 1.5, .5, 1); }
+@keyframes boop { 0% { transform: scale(1.14, .82); } 45% { transform: scale(.94, 1.08); } 75% { transform: scale(1.03, .98); } }
+body.no-sprout .lenny .l-sprout { display: none; }
+#signLenny { cursor: pointer; }
+
+/* Lenny's menu: a shadcn dropdown menu. */
+.lmenu {
+  position: fixed; z-index: 65; min-width: 236px; padding: 4px; border-radius: 12px;
+  background: var(--sc-bg); color: var(--sc-fg); border: 1px solid var(--sc-border);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .35); transform-origin: var(--origin, left top);
+  animation: menuIn .2s cubic-bezier(.2, .9, .3, 1.2);
+}
+@keyframes menuIn { from { opacity: 0; transform: scale(.92); } }
+.m-head { padding: 8px 10px 6px; }
+.m-head b { display: block; font-size: 13.5px; font-weight: 600; }
+.m-head span { display: block; font-size: 12.5px; color: var(--sc-muted); }
+.lmenu hr { border: 0; border-top: 1px solid var(--sc-border); margin: 4px -4px; }
+.mi {
+  width: 100%; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  border: 0; border-radius: 8px; background: transparent; color: inherit; font: 400 13.5px/1 var(--font); text-align: left;
+}
+.mi svg { width: 16px; height: 16px; flex: none; color: var(--sc-muted); }
+.mi:hover, .mi:focus-visible { background: var(--sc-accent); outline: none; }
+
+/* Settings: a shadcn dialog. */
+#settings { position: fixed; inset: 0; z-index: 70; display: flex; padding: 16px; background: var(--scrim); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.sheet {
+  margin: auto; width: min(540px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column;
+  border-radius: 16px; background: var(--sc-bg); color: var(--sc-fg); border: 1px solid var(--sc-border);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45); animation: rise .28s cubic-bezier(.2, .9, .3, 1);
+}
+.sheet-head { padding: 22px 24px 0; }
+.sheet-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.sheet-head p { margin: 4px 0 0; font-size: 13.5px; color: var(--sc-muted); }
+.sheet-body { padding: 18px 24px 8px; display: flex; flex-direction: column; gap: 22px; }
+.set-group h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.look { display: grid; grid-template-columns: 140px 1fr; gap: 20px; align-items: center; }
+.look-stage {
+  height: 150px; border-radius: 12px; border: 1px solid var(--sc-border); overflow: hidden;
+  display: grid; place-items: center; background: var(--look-bg) center 72% / cover;
+}
+.look-stage .lenny { width: 96px; height: auto; overflow: visible; }
+.look-ctl { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.sw { position: relative; cursor: pointer; }
+.sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.sw span { display: block; width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0, var(--c) 45%, color-mix(in srgb, var(--c) 70%, #000) 100%); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); transition: box-shadow .15s; }
+.sw input:checked + span { box-shadow: 0 0 0 2px var(--sc-bg), 0 0 0 4px var(--sc-fg); }
+.sw input:focus-visible + span { box-shadow: 0 0 0 2px var(--sc-bg), 0 0 0 4px var(--sc-ring); }
+.hue-l { font-size: 12.5px; color: var(--sc-muted); margin-bottom: -6px; }
+.hue {
+  width: 100%; height: 10px; margin: 0; border-radius: 999px; -webkit-appearance: none; appearance: none; cursor: pointer;
+  background: linear-gradient(to right, hsl(0 55% 62%), hsl(60 55% 62%), hsl(120 55% 62%), hsl(180 55% 62%), hsl(240 55% 62%), hsl(300 55% 62%), hsl(359 55% 62%));
+}
+.hue::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid var(--sc-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.hue::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--sc-primary); }
+.hue:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 50%, transparent); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--sc-border); }
+.set-group h3 + .set-row { border-top: 0; padding-top: 0; }
+.set-row.compact { padding: 0; border: 0; }
+.set-row b { display: block; font-size: 13.5px; font-weight: 500; }
+.set-row span { display: block; font-size: 12.5px; color: var(--sc-muted); margin-top: 2px; }
+.switch {
+  position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 999px;
+  background: var(--sc-input); transition: background .15s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .18s cubic-bezier(.3, 1.3, .5, 1);
+}
+.switch[aria-checked="true"] { background: var(--sc-primary); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--sc-primary-fg); }
+.switch:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 50%, transparent); }
+.sc-select {
+  height: 36px; min-width: 180px; padding: 0 10px; border: 1px solid var(--sc-input); border-radius: 8px;
+  background: var(--sc-bg); color: var(--sc-fg); font-size: 13.5px; box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+.sc-select:focus-visible { outline: none; border-color: var(--sc-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 45%, transparent); }
+.sheet-foot { display: flex; justify-content: space-between; gap: 8px; padding: 16px 24px 20px; border-top: 1px solid var(--sc-border); margin-top: 8px; }
+@media (max-width: 759px) {
+  .look { grid-template-columns: 1fr; }
+  .set-row { flex-wrap: wrap; }
+  .sc-select { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lmenu, .sheet { animation: none; }
+}
+
+/* ===== Polish pass ===== */
+::selection { background: color-mix(in srgb, var(--lenny-deep) 28%, transparent); }
+@property --open { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+/* World atmosphere: floating pollen or fireflies, warm light by day, a soft vignette. */
+#motes { position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px); pointer-events: none; }
+.w-light {
+  position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light;
+  background: radial-gradient(110% 85% at 6% -8%, rgba(255, 240, 205, .75), rgba(255, 240, 205, 0) 58%);
+  opacity: calc(1 - var(--night)); transition: opacity 1.2s ease;
+}
+#world::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(140% 110% at 50% 42%, transparent 55%, rgba(6, 22, 30, .3) 100%);
+}
+
+/* Drag: the meadow dims around a spotlight on Lenny, and rings ripple out from him. */
+#spot {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .35s ease;
+  background: radial-gradient(circle at var(--lx, 50%) var(--ly, 60%), transparent 0, transparent 150px, rgba(6, 16, 26, .45) 480px);
+}
+body.dragging #spot { opacity: 1; }
+#lennyBtn::before { inset: 10% 4% 2%; border: 0; box-shadow: 0 0 0 2px rgba(255, 255, 255, .75), 0 0 24px rgba(255, 255, 255, .35); }
+body.dragging #lennyBtn::before { opacity: 1; transform: none; animation: ripple 1.5s ease-out infinite; }
+@keyframes ripple { from { transform: scale(.92); opacity: .95; } to { transform: scale(1.55); opacity: 0; } }
+
+/* Lenny talks: words fade in one after another while his mouth moves. */
+.say .w { display: inline-block; opacity: 0; transform: translateY(4px); filter: blur(3px); animation: wordIn .4s cubic-bezier(.2, .8, .3, 1) forwards; animation-delay: calc(var(--i) * 34ms); }
+@keyframes wordIn { to { opacity: 1; transform: none; filter: blur(0); } }
+.speech .sub, .speech.pop .extra { animation: fadeIn .45s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--n, 0) * 34ms + 90ms); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } }
+.lenny.talk { animation: talk .14s ease-in-out infinite alternate; }
+@keyframes talk { from { --open: .04; } to { --open: .34; } }
+.speech { transition: opacity .6s ease; }
+
+/* Sleep: closed eyes, slow breathing, drifting z's. */
+.lenny.sleep .l-eyes-open { opacity: 0; }
+.lenny.sleep .l-eyes-closed { opacity: 1; }
+.lenny.sleep .l-body { animation-duration: 6.5s; }
+.zz { position: fixed; z-index: 4; pointer-events: none; font: 600 17px/1 var(--font); color: #fff; text-shadow: 0 1px 8px rgba(0, 30, 40, .35); }
+
+/* Celebrations. */
+.spark {
+  position: fixed; z-index: 55; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; pointer-events: none; background: var(--c, #fff);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+}
+.orb.done::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .8) 50%, transparent 65%) no-repeat;
+  background-size: 250% 100%; animation: glint 1.3s ease-out 1 both;
+}
+@keyframes glint { from { background-position: 130% 0; } to { background-position: -70% 0; } }
+
+/* Header: brand, a quiet prototype badge, and an account menu. */
+header.top { padding: 6px 6px 6px 12px; }
+.hdr-right { display: flex; align-items: center; gap: 6px; }
+.proto {
+  height: 26px; padding: 0 9px; border-radius: 6px; background: transparent; color: var(--muted);
+  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent); font: 500 11.5px/1 var(--font);
+}
+.proto:hover { color: var(--ink); }
+.uchip {
+  height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink); font: 500 13px/1 var(--font); transition: background .15s;
+}
+.uchip:hover, .uchip[aria-expanded="true"] { background: color-mix(in srgb, var(--sc-bg) 70%, transparent); }
+.uchip svg { width: 14px; height: 14px; color: var(--muted); }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 11px/1 var(--font); color: #0B2A22; letter-spacing: .02em;
+  background: radial-gradient(circle at 35% 30%, var(--lb0), var(--lb1) 45%, var(--lb2));
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, .14), 0 0 0 1px rgba(255, 255, 255, .6);
+}
+
+/* Sign-in: the form eases in, and a caption sits on the meadow. */
+.signpanel .sc-brand, .sc-form > * { animation: fadeUp .7s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--d, 0) * 55ms + 120ms); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } }
+.sign-card { position: relative; }
+.sign-caption {
+  position: absolute; left: 28px; right: 28px; bottom: 28px; max-width: 440px; margin: 0; padding: 16px 18px; border-radius: 16px;
+  color: var(--ink); background: var(--card); border: 1px solid var(--card-border); box-shadow: var(--card-shadow);
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  animation: fadeUp .8s cubic-bezier(.2, .8, .3, 1) .45s both; transition: opacity .3s;
+}
+.sign-caption p { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.45; letter-spacing: -.01em; text-wrap: balance; }
+.sign-caption span { display: block; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+body.mode-app .sign-caption { opacity: 0; }
+
+.speech .extra { scrollbar-width: thin; }
+@media (max-width: 759px) {
+  .sign-caption { display: none; }
+  .proto, #uname { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .say .w { animation: none; opacity: 1; transform: none; filter: none; }
+  .speech .sub, .speech.pop .extra, .signpanel .sc-brand, .sc-form > *, .sign-caption, .orb.done::after, body.dragging #lennyBtn::before { animation: none !important; }
+}
+
+/* Theme toggle */
+.icon-btn {
+  width: 32px; height: 32px; flex: none; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink); transition: background .15s, transform .15s;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--sc-bg) 70%, transparent); }
+.icon-btn:active { transform: scale(.94); }
+.icon-btn svg { width: 17px; height: 17px; animation: spinIn .45s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes spinIn { from { transform: rotate(-90deg) scale(.5); opacity: 0; } }
+.signpanel .icon-btn { color: var(--sc-fg); }
+.signpanel .icon-btn:hover { background: var(--sc-accent); }
+.sc-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sc-top .sc-brand { align-self: auto; }
+.theme-anim, .theme-anim *, .theme-anim *::before, .theme-anim *::after {
+  transition: background-color .6s ease, color .6s ease, border-color .6s ease, box-shadow .6s ease !important;
+}
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--sc-accent); }
+.seg button {
+  height: 28px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--sc-muted); font: 500 13px/1 var(--font);
+}
+.seg button[aria-pressed="true"] { background: var(--sc-bg); color: var(--sc-fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.seg button:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc-ring) 60%, transparent); }
+@media (prefers-reduced-motion: reduce) { .icon-btn svg { animation: none; } }
+
+/* ===== Preview: page strip, compare slider, side by side, notes panel ===== */
+.panel { height: min(900px, 100%); width: min(1280px, 100%); }
+.pv-head .seg { flex: none; }
+.pv-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 136px minmax(0, 1fr) 320px; }
+.pv-strip {
+  overflow-y: auto; padding: 14px 14px 20px; display: flex; flex-direction: column; gap: 14px;
+  border-right: 1px solid var(--sc-border); background: color-mix(in srgb, var(--sc-accent) 55%, var(--sc-bg)); scrollbar-width: thin;
+}
+.thumb { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--sc-muted); font: 500 11.5px/1 var(--font); }
+.thumb .pgbox { width: 100%; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px var(--sc-border), 0 1px 3px rgba(0, 0, 0, .08); transition: box-shadow .15s, transform .15s; }
+.thumb:hover .pgbox { transform: translateY(-1px); }
+.thumb[aria-current="page"] { color: var(--sc-fg); }
+.thumb[aria-current="page"] .pgbox { box-shadow: 0 0 0 2px var(--lenny-deep), 0 4px 12px -4px rgba(0, 0, 0, .25); }
+.thumb:focus-visible { outline: none; }
+.thumb:focus-visible .pgbox { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 60%, transparent); }
+.thumb .wdot { position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px #fff; }
+.thumb .vdot { position: absolute; top: 4px; left: 4px; font: 600 9.5px/1 var(--font); font-style: normal; padding: 2px 4px; border-radius: 4px; background: var(--sc-primary); color: var(--sc-primary-fg); }
+.thumb .blk.warn::after { display: none; }
+
+.pv-stage {
+  position: relative; min-width: 0; min-height: 0; overflow: hidden; padding: 24px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: radial-gradient(ellipse at 50% 35%, var(--sc-bg), color-mix(in srgb, var(--sc-accent) 85%, var(--sc-bg)));
+}
+.pv-nav { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sc-muted); font-variant-numeric: tabular-nums; }
+.pv-nav .icon-btn { color: var(--sc-fg); width: 30px; height: 30px; }
+.pv-nav .icon-btn:hover { background: var(--sc-accent); }
+.pv-nav .icon-btn:disabled { opacity: .35; cursor: default; }
+.pv-nav .icon-btn svg { animation: none; }
+
+.cmp {
+  position: relative; aspect-ratio: var(--ar); border-radius: 8px; flex: none; user-select: none; -webkit-user-select: none;
+  box-shadow: 0 0 0 1px var(--sc-border), 0 18px 40px -16px rgba(0, 0, 0, .4);
+}
+.cmp .pgbox { position: absolute; inset: 0; border-radius: 8px; overflow: hidden; }
+.cmp .page { height: 100%; }
+.cmp .pgbox.trans { clip-path: inset(0 0 0 var(--x)); }
+.cmp-handle { position: absolute; top: 0; bottom: 0; left: var(--x); width: 2px; margin-left: -1px; background: #fff; cursor: ew-resize; touch-action: none; outline: none; box-shadow: 0 0 0 1px rgba(0, 0, 0, .12), 0 0 14px rgba(0, 0, 0, .25); }
+.cmp-handle::before { content: ""; position: absolute; inset: 0 -14px; }
+.cmp-handle .knob {
+  position: absolute; top: 50%; left: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--sc-bg); color: var(--sc-fg);
+  box-shadow: 0 0 0 1px var(--sc-border), 0 4px 14px rgba(0, 0, 0, .3); transition: transform .15s;
+}
+.cmp-handle .knob svg { width: 18px; height: 18px; }
+.cmp-handle:hover .knob, .cmp.dragging .knob { transform: scale(1.08); }
+.cmp-handle:focus-visible .knob { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 60%, transparent), 0 4px 14px rgba(0, 0, 0, .3); }
+.cmp-tag {
+  position: absolute; top: 10px; pointer-events: none; padding: 5px 8px; border-radius: 6px; color: #fff;
+  font: 500 11.5px/1 var(--font); background: rgba(15, 20, 28, .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.cmp-tag.l { left: 10px; }
+.cmp-tag.r { right: 10px; }
+.cmp-hint { font-size: 12px; color: var(--sc-muted); margin-top: -6px; }
+.sbs { display: flex; gap: 20px; align-items: flex-start; }
+.sbs figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.sbs figcaption { font-size: 12.5px; font-weight: 500; color: var(--sc-muted); }
+.sbs .pgbox { border-radius: 8px; overflow: visible; box-shadow: 0 0 0 1px var(--sc-border), 0 14px 32px -16px rgba(0, 0, 0, .4); }
+
+.pv-notes { min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; border-left: 1px solid var(--sc-border); }
+.pv-notes h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pv-notes .discuss { margin-top: 0; }
+.pv-lenny { display: flex; align-items: flex-start; gap: 10px; }
+.pv-lenny .lenny { width: 58px; height: auto; flex: none; overflow: visible; }
+.pv-lenny .mini-say {
+  flex: 1; max-width: none; margin: 4px 0 0; padding: 10px 12px; border-radius: 4px 14px 14px 14px;
+  background: var(--sc-accent); border: 0; box-shadow: none; color: var(--sc-fg);
+}
+
+/* Placeholder pages that read like documents; sized from their box so thumbnails scale down cleanly. */
+.pgbox { container-type: inline-size; }
+.page { padding: 6cqw 7cqw; gap: 2.8cqw; border-radius: 1.2cqw; border: 0; box-shadow: none; font-family: var(--font); overflow: visible; }
+.page.slide { aspect-ratio: 16 / 9; }
+.page.doc { aspect-ratio: 8.5 / 11; padding: 10cqw 9cqw; gap: 3.4cqw; }
+.page.sheet { aspect-ratio: 16 / 10; }
+.page .blk { margin: -.8cqw -1cqw; padding: .8cqw 1cqw; border-radius: .8cqw; border-width: max(1px, .22cqw); }
+.page .blk.title { font-size: 4.4cqw; line-height: 1.2; font-weight: 700; color: #111827; }
+.page.doc .blk.title { font-size: 5.4cqw; }
+.ln { display: block; height: 1.3cqw; min-height: 1px; border-radius: 1cqw; background: #D6DDE4; }
+.blk > .ln + .ln { margin-top: 1.2cqw; }
+.page.doc .ln { height: 1.6cqw; }
+.page.doc .blk > .ln + .ln { margin-top: 1.5cqw; }
+.sl-body { flex: 1; display: grid; grid-template-columns: 1.1fr 1fr; gap: 4cqw; min-height: 0; }
+.bul { display: flex; flex-direction: column; gap: 2.4cqw; padding-top: 1cqw; }
+.bul .ln { position: relative; margin-left: 2.8cqw; }
+.bul .ln::before { content: ""; position: absolute; left: -2.6cqw; top: 50%; width: 1.2cqw; height: 1.2cqw; margin-top: -.6cqw; border-radius: 50%; background: #9AA7B4; }
+.page .blk.chart { display: flex; }
+.bars { flex: 1; display: flex; align-items: flex-end; gap: 1.6cqw; padding: 0 1cqw; border-bottom: .3cqw solid #C8D0D8; }
+.bars i { flex: 1; border-radius: .6cqw .6cqw 0 0; background: linear-gradient(#93DAC5, #4DB093); }
+.bars i:nth-child(3n) { background: linear-gradient(#CDD6DE, #AEB9C4); }
+.tbl { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: .5cqw; }
+.tbl i { height: 3cqw; border-radius: .4cqw; background: #EEF1F4; }
+.tbl i.h { background: #D4DBE2; }
+.page .blk.warn { border-width: max(1px, .25cqw); }
+.page .blk.warn::after { font-size: max(9px, 1.4cqw); top: -2.2cqw; right: 1cqw; padding: .5cqw 1cqw; }
+.page .blk.hl { border-color: #2F9C82; background: rgba(114, 208, 182, .14); }
+.page.pending { font-size: max(11px, 2.2cqw); }
+
+@media (max-width: 899px) {
+  #preview { padding: 0; }
+  .panel { height: 100%; border-radius: 0; }
+  .pv-main { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow-y: auto; }
+  .pv-strip { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--sc-border); }
+  .thumb { width: 78px; }
+  .pv-stage { padding: 16px 12px; }
+  .pv-notes { overflow: visible; border-left: 0; border-top: 1px solid var(--sc-border); }
+  .pv-head { gap: 10px; padding: 12px 14px; }
+  .pv-title { flex: 1 1 calc(100% - 70px); }
+  .pv-head .seg { margin-right: auto; }
+  .cmp-tag { top: auto; bottom: 8px; font-size: 10.5px; padding: 4px 6px; }
+}
+
+/* Settled: entrance animations are dropped once they should be over, so text can never stay invisible. */
+body.settled .signpanel .sc-brand, body.settled .sc-form > *, body.settled .sign-caption { animation: none !important; }
+.speech.settled .sub, .speech.settled .extra { animation: none !important; }
+.speech.settled .say .w { animation: none !important; opacity: 1; transform: none; filter: none; }
+
+/* ===== Persistence: clearable bubbles and the "Your files" panel ===== */
+.bubble { transition: left .55s cubic-bezier(.3, 1.1, .5, 1), top .55s cubic-bezier(.3, 1.1, .5, 1); }
+.bubble .float { position: relative; }
+.bopen { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.bopen:focus-visible { outline: none; }
+.bopen:focus-visible .orb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 60%, transparent), 0 18px 34px -14px rgba(15, 40, 60, .45); }
+.bclear {
+  position: absolute; top: -4px; left: 22px; z-index: 2; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; border: 1px solid var(--sc-border); background: var(--sc-bg); color: var(--sc-fg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .18); opacity: 0; transform: scale(.7);
+  transition: opacity .15s, transform .2s cubic-bezier(.3, 1.4, .5, 1);
+}
+.bclear svg { width: 13px; height: 13px; }
+.bubble:hover .bclear, .bubble:focus-within .bclear { opacity: 1; transform: none; }
+.bclear:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 60%, transparent); }
+@media (hover: none) { .bclear { opacity: .9; transform: none; } }
+@media (max-width: 759px) { .bclear { left: 10px; } }
+.icon-btn.ping { animation: ping .55s cubic-bezier(.3, 1.5, .5, 1); }
+@keyframes ping { 40% { transform: scale(1.28); } }
+
+#history { position: fixed; inset: 0; z-index: 58; display: flex; justify-content: flex-end; background: rgba(8, 14, 20, .22); }
+.hsheet {
+  width: min(460px, 100%); height: 100%; display: flex; flex-direction: column;
+  background: var(--sc-bg); color: var(--sc-fg); border-left: 1px solid var(--sc-border);
+  box-shadow: -24px 0 60px -24px rgba(0, 0, 0, .45); animation: slideIn .34s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes slideIn { from { transform: translateX(48px); } }
+.h-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 12px; }
+.h-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.h-head p { margin: 4px 0 0; font-size: 13px; color: var(--sc-muted); }
+.hsheet .icon-btn { color: var(--sc-fg); }
+.hsheet .icon-btn:hover { background: var(--sc-accent); }
+.hsheet .icon-btn svg { width: 16px; height: 16px; animation: none; }
+.h-tools { display: flex; flex-direction: column; gap: 10px; padding: 0 20px 14px; border-bottom: 1px solid var(--sc-border); }
+.h-search {
+  height: 36px; width: 100%; padding: 0 12px; border: 1px solid var(--sc-input); border-radius: 8px;
+  background: transparent; font-size: 13.5px; box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+.h-search:focus-visible { outline: none; border-color: var(--sc-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-ring) 45%, transparent); }
+.h-tools .seg { align-self: flex-start; }
+.h-list { flex: 1; overflow-y: auto; padding: 4px 12px 24px; scrollbar-width: thin; }
+.h-group h3 {
+  position: sticky; top: 0; z-index: 1; margin: 0; padding: 14px 8px 8px; background: var(--sc-bg);
+  display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; font-weight: 600;
+}
+.h-group h3 span { font-weight: 400; color: var(--sc-muted); }
+.h-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 8px; border-radius: 10px; }
+.h-row:hover, .h-row:focus-within { background: var(--sc-accent); }
+.h-row .ficon { margin: 0 5px; flex: none; }
+.h-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h-name { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-meta, .h-exp { font-size: 12px; color: var(--sc-muted); }
+.h-warn { color: var(--warn); font-weight: 500; }
+.h-on { color: var(--lenny-deep); font-weight: 500; }
+.h-actions { display: flex; align-items: center; gap: 2px; opacity: .6; transition: opacity .15s; }
+.h-row:hover .h-actions, .h-row:focus-within .h-actions { opacity: 1; }
+.h-ask { font-size: 12.5px; margin-right: 6px; white-space: nowrap; }
+.btn.h-del { background: #DC2626; color: #fff; }
+.btn.h-del:hover { background: #B91C1C; }
+.h-empty { text-align: center; padding: 56px 24px; color: var(--sc-muted); font-size: 13.5px; }
+.h-empty b { display: block; color: var(--sc-fg); font-size: 14px; margin-bottom: 4px; }
+.h-empty p { margin: 0 0 16px; }
+@media (hover: none) { .h-actions { opacity: 1; } }
+
+/* Pop-ins start from a visible state, so nothing can get stuck transparent. */
+@keyframes pop { from { transform: translateX(-50%) translateY(6px) scale(.94); } }
+@keyframes rise { from { transform: translateY(12px) scale(.985); } }
+@keyframes menuIn { from { transform: scale(.92); } }
+@keyframes spinIn { from { transform: rotate(-90deg) scale(.5); } }
+</style>
+
+<header class="top">
+  <div class="brand"><span class="sc-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span><span>Lenny</span><small>Document Translator</small></div>
+  <div class="hdr-right" id="appActions" hidden>
+    <button class="icon-btn" type="button" data-act="history" aria-label="Your files" title="Your files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
+    <button class="icon-btn" type="button" data-act="theme"></button>
+    <button class="proto" type="button" data-act="proto">Prototype</button>
+    <button class="uchip" id="uchip" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account"><span class="avatar" id="uavatar"></span><span id="uname"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  </div>
+</header>
+
+<div id="world" aria-hidden="true">
+  <div class="w-ground" data-depth="8">
+    <div class="w-scene">
+      <img src="assets/meadow-day.webp" alt="">
+    </div>
+    <div class="w-scene w-night">
+      <img src="assets/meadow-night.webp" alt="">
+    </div>
+  </div>
+  <canvas id="motes" data-depth="12"></canvas>
+  <div class="w-clouds" id="wClouds" data-depth="18"></div>
+  <div class="w-light"></div>
+</div>
+<div id="spot" aria-hidden="true"></div>
+
+<section id="signin">
+  <div class="signpanel">
+    <div class="sc-top">
+    <a class="sc-brand" href="#" data-act="home">
+      <span class="sc-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>
+      Lenny
+    </a>
+      <button class="icon-btn" type="button" data-act="theme"></button>
+    </div>
+    <div class="sc-center">
+      <form id="signForm" class="sc-form" novalidate>
+        <div class="sc-head">
+          <h1>Sign in to Lenny</h1>
+          <p>Enter your username below and Lenny will translate your documents</p>
+        </div>
+        <div class="sc-field">
+          <label for="user">Username</label>
+          <input id="user" name="username" autocomplete="username" spellcheck="false" placeholder="mei.tanaka">
+        </div>
+        <div class="sc-field">
+          <div class="sc-row">
+            <label for="pass">Password</label>
+            <a href="#" data-act="forgot">Forgot your password?</a>
+          </div>
+          <input id="pass" name="password" type="password" autocomplete="current-password">
+        </div>
+        <button class="sc-btn" type="submit">Sign in</button>
+        <div class="sc-sep"><span>Or continue with</span></div>
+        <div class="sc-field">
+          <button class="sc-btn sc-outline" type="button" data-act="sso">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
+            Sign in with your work account
+          </button>
+          <p class="sc-desc">Need access? <a href="#" data-act="access">Ask your IT admin</a></p>
+        </div>
+        <p class="sc-note">Prototype: any username and password works.</p>
+      </form>
+    </div>
+  </div>
+  <div class="sign-card">
+    <div class="lenny-wrap">
+      <div id="signSpeech" class="speech" aria-live="polite"><p class="say"></p></div>
+      <div id="signLenny"></div>
+    </div>
+    <figure class="sign-caption">
+      <p>Drop in a PowerPoint, Word, Excel or PDF file. Lenny translates it and keeps every layout intact.</p>
+      <span>Lenny, the document translator for your team</span>
+    </figure>
+  </div>
+</section>
+
+<main id="stage" hidden>
+  <div class="lenny-wrap" id="lennyWrap">
+    <div id="speech" class="speech" aria-live="polite"><p class="say"></p><div class="extra"></div></div>
+    <button id="lennyBtn" type="button" aria-label="Lenny" aria-haspopup="menu" aria-expanded="false"></button>
+    <span id="tummy" hidden></span>
+    <span class="hint" id="hint">Drag files onto the page, or click Lenny for more</span>
+  </div>
+  <div id="bubbles"></div>
+</main>
+
+
+<input type="file" id="picker" multiple hidden>
+<div id="preview" hidden></div>
+<div id="toast" hidden></div>
+<div id="lmenu" class="lmenu" role="menu" aria-label="Lenny" hidden></div>
+<div id="umenu" class="lmenu" role="menu" aria-label="Account" hidden></div>
+<div id="settings" hidden></div>
+<div id="history" hidden></div>
+
+
+<script>
+(() => {
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+document.body.classList.add('mode-signin');
+const dur = ms => RM ? 1 : ms;
+const wait = ms => new Promise(r => setTimeout(r, RM ? Math.min(ms, 300) : ms));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = s => document.querySelector(s);
+
+const TYPES = {
+  pptx: { label: 'PowerPoint', a: 'a PowerPoint', tag: 'PPTX', tc: 'var(--t-pptx)', kind: 'slide', pages: 3 },
+  docx: { label: 'Word doc', a: 'a Word doc', tag: 'DOCX', tc: 'var(--t-docx)', kind: 'doc', pages: 2 },
+  xlsx: { label: 'Excel sheet', a: 'an Excel sheet', tag: 'XLSX', tc: 'var(--t-xlsx)', kind: 'sheet', pages: 1 },
+  pdf:  { label: 'PDF', a: 'a PDF', tag: 'PDF', tc: 'var(--t-pdf)', kind: 'doc', pages: 3 },
+  txt:  { label: 'text file', a: 'a text file', tag: 'TXT', tc: 'var(--t-txt)', kind: 'doc', pages: 1 },
+};
+const LANGS = ['English', 'Chinese', 'Japanese', 'Korean', 'Spanish', 'French', 'German', 'Portuguese', 'Russian', 'Vietnamese', 'Thai', 'Arabic'];
+const QUICK = ['English', 'Japanese', 'Chinese', 'Spanish', 'Korean', 'French'];
+const BLOCK_NAMES = { page: 'the whole page', title: 'the title', b1: 'text box 1', b2: 'text box 2', b3: 'text box 3' };
+
+const SAMPLES = [
+  { name: 'Q3 销售汇报.pptx', lang: 'Chinese', pages: [['第三季度销售汇报', 'Q3 Sales Report'], ['区域业绩概览', 'Regional Performance Overview'], ['下季度计划', 'Plan for Next Quarter']] },
+  { name: '業務委託契約書_2026.docx', lang: 'Japanese', pages: [['業務委託契約書', 'Service Agreement'], ['第2条 報酬及び支払', 'Article 2: Fees and Payment']] },
+  { name: 'Preisliste_Ersatzteile.xlsx', lang: 'German', pages: [['Preisliste Ersatzteile 2026', 'Spare Parts Price List 2026']] },
+  { name: 'manual_de_usuario.pdf', lang: 'Spanish', pages: [['Manual de usuario', 'User Manual'], ['Instalación', 'Installation'], ['Solución de problemas', 'Troubleshooting']] },
+];
+
+const S = { user: '', phase: 'greet', tummy: [], files: [], slot: 0, batch: 0, chain: Promise.resolve(), previewId: null, speech: null, dragging: false, uid: 0 };
+
+
+/* ---------- World: painted meadow stills with clouds drifting in code ---------- */
+const IMG_W = 2912, IMG_H = 1632, OBJ_Y = .62, BLEED = 24;
+const PARALLAX = [...document.querySelectorAll('#world [data-depth]')];
+
+
+// Clouds: each drifts right at its own speed and wraps around. They stay in the upper sky and
+// fade out above the hills, so they never need to pass behind the land.
+const CLOUDS = [
+  { src: 'cloud-cumulus-2', w: .23, y: .35, v: 12, o: .95, x: .06 },
+  { src: 'cloud-cumulus-1', w: .21, y: .04, v: 9, o: .92, x: .55 },
+  { src: 'cloud-puffy-small-1', w: .11, y: .55, v: 16, o: .9, x: .82, day: 1 },
+  { src: 'cloud-wispy-2', w: .18, y: 0, v: 20, o: .8, x: .3, day: 1 },
+  { src: 'cloud-soft-distant-1', w: .16, y: .7, v: 6, o: .65, x: .68 },
+];
+const wc = $('#wClouds');
+CLOUDS.forEach(c => {
+  const img = new Image();
+  img.src = `assets/${c.src}.webp`;
+  img.alt = '';
+  img.decoding = 'async';
+  if (c.day) img.className = 'day-only';
+  img.style.setProperty('--o', c.o);
+  wc.append(img);
+  c.el = img;
+  c.xp = c.x * innerWidth;
+});
+let band = { top: 0, bottom: 300 };
+function layoutWorld() {
+  // Mirror object-fit: cover + object-position so cloud limits follow the painted horizon.
+  const W = innerWidth + BLEED * 2, H = innerHeight + BLEED * 2;
+  const dh = IMG_H * Math.max(W / IMG_W, H / IMG_H);
+  const top = -BLEED + (H - dh) * OBJ_Y;
+  const clip = top + dh * .36; // the hills never rise above ~36% of the painting
+  wc.style.setProperty('--fade-start', Math.max(0, clip - dh * .1) + 'px');
+  wc.style.setProperty('--fade-end', Math.max(40, clip) + 'px');
+  band = { top: Math.max(8, top + dh * .02), bottom: clip - dh * .05 };
+  CLOUDS.forEach(c => { c.px = Math.max(90, c.w * innerWidth); c.el.style.width = c.px + 'px'; });
+}
+let lastT = performance.now();
+function drift(now) {
+  const dt = Math.min(.1, (now - lastT) / 1000);
+  lastT = now;
+  const k = Math.max(.5, innerWidth / 1440);
+  CLOUDS.forEach(c => {
+    if (!RM) c.xp += c.v * k * dt;
+    if (c.xp > innerWidth + 40) c.xp = -c.px - 40;
+    const ratio = c.el.naturalWidth ? c.el.naturalHeight / c.el.naturalWidth : .6;
+    const y = band.top + c.y * Math.max(0, band.bottom - band.top - c.px * ratio);
+    c.el.style.transform = `translate3d(${c.xp.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+  });
+  requestAnimationFrame(drift);
+}
+layoutWorld();
+addEventListener('resize', layoutWorld);
+requestAnimationFrame(drift);
+const big = () => $('#lennyBtn .lenny');
+
+function setOpen(el, v) { el && el.style.setProperty('--open', v.toFixed(2)); }
+function mood(el, cls, ms) {
+  if (!el || RM) return;
+  el.classList.remove(cls); void el.getBBox; el.getBoundingClientRect();
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), ms);
+}
+function mouthCenter(el) {
+  const r = el.querySelector('.l-mouth').getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+// Eyes follow the pointer, including during a native file drag (dragover carries coordinates).
+let px = innerWidth / 2, py = innerHeight / 2, raf = 0;
+function track(x, y) { px = x; py = y; if (!raf) raf = requestAnimationFrame(updateEyes); }
+function updateEyes() {
+  raf = 0;
+  if (!RM) PARALLAX.forEach(g => {
+    const d = +g.dataset.depth;
+    g.style.transform = `translate3d(${(-(px / innerWidth - .5) * d).toFixed(1)}px, ${(-(py / innerHeight - .5) * d * .35).toFixed(1)}px, 0)`;
+  });
+  if (S.dragging) {
+    const m = mouthCenter(big());
+    setOpen(big(), Math.max(.25, Math.min(1, 1.25 - Math.hypot(px - m.x, py - m.y) / 380)));
+  }
+}
+addEventListener('pointermove', e => track(e.clientX, e.clientY));
+setInterval(() => document.querySelectorAll('.lenny').forEach(l => { if (Math.random() < .6) mood(l, 'blink', 180); }), 2600);
+
+/* ---------- Lenny ---------- */
+// Lit like a soft 3D object: light from the upper left, green bounce light from the grass below
+// (moonlight at night), a glossy highlight, blurred blush and a contact shadow on the ground.
+const BODY = 'M0,-80 C52,-80 88,-44 88,8 C88,58 52,84 0,84 C-52,84 -88,58 -88,8 C-88,-44 -52,-80 0,-80Z';
+let lennyCount = 0;
+function lennyEyes(u) {
+  const eye = cx => `<g class="l-lid">
+      <ellipse cx="${cx}" cy="-10" rx="11.5" ry="15.5" fill="url(#${u}e)"/>
+      <ellipse cx="${cx + 3.5}" cy="-16.5" rx="4.2" ry="5.4" fill="#fff"/>
+      <circle cx="${cx - 3.5}" cy="-3" r="2" fill="#fff" opacity=".75"/>
+    </g>`;
+  const arc = (cx, up) => `<path d="M${cx - 11},${up ? -6 : -12} Q${cx},${up ? -19 : 0} ${cx + 11},${up ? -6 : -12}" stroke="#101826" stroke-width="4.6" fill="none" stroke-linecap="round"/>`;
+  return `<g class="l-eyes-open">${eye(-27)}${eye(27)}</g>
+    <g class="l-eyes-happy">${arc(-27, true)}${arc(27, true)}</g>
+    <g class="l-eyes-closed">${arc(-27, false)}${arc(27, false)}</g>`;
+}
+function lennySVG(cls) {
+  const u = 'ln' + (++lennyCount);
+  return `<svg class="lenny ${cls}" viewBox="-110 -126 220 232" aria-hidden="true">
+    <defs>
+      <radialGradient id="${u}b" cx="36%" cy="28%" r="80%">
+        <stop offset="0" style="stop-color:var(--lb0)"/><stop offset=".3" style="stop-color:var(--lb1)"/>
+        <stop offset=".7" style="stop-color:var(--lb2)"/><stop offset="1" style="stop-color:var(--lb3)"/>
+      </radialGradient>
+      <linearGradient id="${u}r" x1="0" y1="0" x2="0" y2="1">
+        <stop offset=".55" style="stop-color:var(--lenny-rim)" stop-opacity="0"/>
+        <stop offset="1" style="stop-color:var(--lenny-rim)" stop-opacity=".8"/>
+      </linearGradient>
+      <radialGradient id="${u}e" cx="38%" cy="30%" r="75%"><stop offset="0" stop-color="#34455E"/><stop offset="1" stop-color="#0B111C"/></radialGradient>
+      <linearGradient id="${u}l" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#3F9E45"/><stop offset="1" stop-color="#B9EE7E"/></linearGradient>
+      <radialGradient id="${u}m" cx="50%" cy="25%" r="75%"><stop offset="0" stop-color="#6A2940"/><stop offset="1" stop-color="#26101A"/></radialGradient>
+      <filter id="${u}s" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3.5"/></filter>
+      <filter id="${u}g" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
+      <clipPath id="${u}c"><path d="${BODY}"/></clipPath>
+    </defs>
+    <ellipse class="l-shadow" cx="0" cy="90" rx="62" ry="10" fill="rgba(16, 40, 28, .32)" filter="url(#${u}s)"/>
+    <g class="l-rig"><g class="l-body">
+      <g class="l-sprout">
+        <path d="M0,-78 C0,-90 3,-99 8,-107" stroke="#3E9E5F" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <path d="M8,-107 C20,-122 43,-117 45,-104 C32,-95 16,-97 8,-107Z" fill="url(#${u}l)"/>
+        <path d="M11,-106 C23,-109 33,-107 41,-105" stroke="#fff" stroke-opacity=".4" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path d="M6,-102 C-6,-118 -29,-116 -31,-104 C-18,-95 -5,-96 6,-102Z" fill="url(#${u}l)"/>
+        <path d="M3,-102 C-9,-105 -19,-105 -27,-104" stroke="#fff" stroke-opacity=".4" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      </g>
+      <path d="${BODY}" fill="url(#${u}b)"/>
+      <g clip-path="url(#${u}c)">
+        <ellipse cx="52" cy="46" rx="64" ry="70" style="fill:var(--lshade)" opacity=".22" filter="url(#${u}g)"/>
+        <path d="${BODY}" fill="url(#${u}r)"/>
+        <ellipse class="l-bulge" cx="0" cy="34" rx="22" ry="14" style="fill:var(--lb3)"/>
+      </g>
+      <ellipse cx="-38" cy="-44" rx="24" ry="13" fill="#fff" opacity=".55" transform="rotate(-32 -38 -44)" filter="url(#${u}s)"/>
+      <ellipse cx="-46" cy="-50" rx="6.5" ry="3.6" fill="#fff" opacity=".95" transform="rotate(-32 -46 -50)"/>
+      <ellipse cx="-50" cy="16" rx="13" ry="8" fill="#FF8AA5" opacity=".6" filter="url(#${u}s)"/>
+      <ellipse cx="50" cy="16" rx="13" ry="8" fill="#FF8AA5" opacity=".6" filter="url(#${u}s)"/>
+      <g class="l-face">
+        ${lennyEyes(u)}
+        <g class="l-mouth" transform="translate(0 20)">
+          <path class="l-smile" d="M-10,0 Q0,9.5 10,0" stroke="#101826" stroke-width="4.2" fill="none" stroke-linecap="round"/>
+          <g class="l-open"><ellipse rx="17" ry="15" fill="url(#${u}m)"/><ellipse cy="8" rx="10" ry="5.5" fill="#FF7C93"/></g>
+        </g>
+      </g>
+    </g></g>
+  </svg>`;
+}
+
+// Springs: the face looks toward the pointer (or dragged file) and the body leans a little,
+// both easing in with a damped spring so the motion feels alive rather than mechanical.
+const rigs = new WeakMap();
+let rigT = performance.now();
+function rigLoop(now) {
+  const dt = Math.min(.05, (now - rigT) / 1000);
+  rigT = now;
+  document.querySelectorAll('.lenny').forEach(svg => {
+    const r = svg.getBoundingClientRect();
+    if (!r.width) return;
+    let st = rigs.get(svg);
+    if (!st) { st = { fx: 0, fy: 0, vx: 0, vy: 0, lean: 0, vl: 0 }; rigs.set(svg, st); }
+    const dx = px - (r.left + r.width / 2), dy = py - (r.top + r.height * .45);
+    const d = Math.hypot(dx, dy) || 1, reach = Math.min(1, d / (r.width * 1.1));
+    const on = S.set.follow;
+    const tx = on ? dx / d * 9 * reach : 0, ty = on ? dy / d * 6.5 * reach : 0;
+    const eager = S.dragging && svg === big();
+    const tl = on ? Math.max(-1, Math.min(1, dx / (r.width * 2))) * (eager ? 9 : 3) : 0;
+    st.vx += (150 * (tx - st.fx) - 19 * st.vx) * dt; st.fx += st.vx * dt;
+    st.vy += (150 * (ty - st.fy) - 19 * st.vy) * dt; st.fy += st.vy * dt;
+    st.vl += (80 * (tl - st.lean) - 13 * st.vl) * dt; st.lean += st.vl * dt;
+    svg.querySelector('.l-face').setAttribute('transform', `translate(${st.fx.toFixed(2)} ${st.fy.toFixed(2)})`);
+    svg.querySelector('.l-rig').setAttribute('transform', `rotate(${st.lean.toFixed(2)} 0 84)`);
+  });
+  requestAnimationFrame(rigLoop);
+}
+if (!RM) requestAnimationFrame(rigLoop);
+function cheer(el, ms = 1000) { if (S.set.playful) mood(el, 'hop', ms); mood(el, 'happy', ms + 150); }
+$('#lennyBtn').innerHTML = lennySVG('big');
+/* ---------- Settings (saved in this browser; the real app would keep them on the user's profile) ---------- */
+const DEFAULTS = { hue: 162, sprout: true, lang: '', follow: true, playful: true, theme: 'system' };
+const SWATCHES = [['Mint', 162], ['Sky', 205], ['Lilac', 262], ['Rose', 340], ['Peach', 22], ['Sunny', 45]];
+S.set = { ...DEFAULTS };
+try { Object.assign(S.set, JSON.parse(localStorage.getItem('lenny.settings') || '{}')); } catch {}
+function saveSettings() { try { localStorage.setItem('lenny.settings', JSON.stringify(S.set)); } catch {} }
+function applySettings() {
+  const h = S.set.hue, r = document.documentElement.style;
+  r.setProperty('--lb0', `hsl(${h} 90% 95%)`);
+  r.setProperty('--lb1', `hsl(${h} 62% 78%)`);
+  r.setProperty('--lb2', `hsl(${h} 46% 54%)`);
+  r.setProperty('--lb3', `hsl(${h} 54% 35%)`);
+  r.setProperty('--lshade', `hsl(${h} 58% 26%)`);
+  r.setProperty('--lenny-deep', `hsl(${h} 54% 38%)`);
+  document.body.classList.toggle('no-sprout', !S.set.sprout);
+}
+applySettings();
+
+function boop(el) {
+  if (!el) return;
+  mood(el, 'boop', 540);
+  mood(el, 'happy', 800);
+}
+
+/* ---------- Lenny's menu ---------- */
+const ICON = {
+  upload: '<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+  sparkles: '<path d="M9.94 14.06 4 20"/><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/>',
+  languages: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+  download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+  rotate: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  settings: '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
+};
+const ico = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+const BOOPS = ['Hehe, that tickles!', 'Boop! Hi there.', 'You rang?', 'At your service!'];
+const menu = $('#lmenu');
+function openMenu() {
+  const done = bubbles().filter(f => f.status === 'done').length;
+  const items = [
+    ['pick', 'upload', 'Upload files'],
+    ['samples', 'sparkles', 'Try sample files'],
+    S.tummy.length && S.phase === 'collect' ? ['done', 'languages', S.set.lang ? `Translate to ${S.set.lang}` : 'Translate what I ate'] : null,
+    done ? ['download-all', 'download', `Download ${done === 1 ? '1 file' : done + ' files'}`] : null,
+    done ? ['clear-done', 'x', 'Clear finished bubbles'] : null,
+    ['history', 'history', 'Your files'],
+    bubbles().length || S.tummy.length ? ['restart', 'rotate', 'Start over'] : null,
+  ].filter(Boolean);
+  menu.innerHTML = `<div class="m-head"><b>${BOOPS[Math.floor(Math.random() * BOOPS.length)]}</b><span>${S.set.lang ? `Translating to ${esc(S.set.lang)} by default` : 'What should we do?'}</span></div>`
+    + items.map(([act, ic, label]) => `<button class="mi" type="button" role="menuitem" data-act="${act}">${ico(ic)}${esc(label)}</button>`).join('')
+    + `<hr><button class="mi" type="button" role="menuitem" data-act="settings">${ico('settings')}Lenny settings</button>`;
+  menu.hidden = false;
+  placeMenu();
+  $('#lennyBtn').setAttribute('aria-expanded', 'true');
+  menu.querySelector('.mi').focus();
+}
+function placeMenu() {
+  const r = $('#lennyBtn').getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let x, y, origin;
+  if (r.right + 4 + mw < innerWidth - 12) { x = r.right - r.width * .06; y = r.top + r.height * .18; origin = 'left top'; }
+  else if (r.left - mw > 12) { x = r.left + r.width * .06 - mw; y = r.top + r.height * .18; origin = 'right top'; }
+  else { x = (innerWidth - mw) / 2; y = r.bottom + 6; origin = 'center top'; }
+  menu.style.left = Math.max(12, x) + 'px';
+  menu.style.top = Math.max(12, Math.min(innerHeight - mh - 12, y)) + 'px';
+  menu.style.setProperty('--origin', origin);
+}
+function closeMenu(refocus) {
+  if (!umenu.hidden) {
+    umenu.hidden = true;
+    $('#uchip').setAttribute('aria-expanded', 'false');
+    if (refocus) $('#uchip').focus();
+  }
+  if (menu.hidden) return;
+  menu.hidden = true;
+  $('#lennyBtn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('#lennyBtn').focus();
+}
+function menuKeys(e) {
+  const items = [...e.currentTarget.querySelectorAll('.mi')], i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  } else if (e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    items[e.key === 'Home' ? 0 : items.length - 1].focus();
+  } else if (e.key === 'Tab') closeMenu(false);
+}
+menu.addEventListener('keydown', menuKeys);
+addEventListener('resize', () => { if (!menu.hidden) placeMenu(); });
+
+/* ---------- Settings dialog ---------- */
+const sheetEl = $('#settings');
+function settingsHTML() {
+  const sw = (key, label) => `<button class="switch" type="button" role="switch" data-set="${key}" aria-checked="${S.set[key]}" aria-label="${label}"></button>`;
+  return `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="set-title">
+    <div class="sheet-head"><h2 id="set-title">Lenny settings</h2><p>Make Lenny yours. Changes save automatically in this browser.</p></div>
+    <div class="sheet-body">
+      <section class="set-group"><h3>Look</h3>
+        <div class="look">
+          <div class="look-stage">${lennySVG('preview')}</div>
+          <div class="look-ctl">
+            <div class="swatches" role="radiogroup" aria-label="Lenny's color">
+              ${SWATCHES.map(([n, h]) => `<label class="sw" title="${n}"><input type="radio" name="lhue" value="${h}" aria-label="${n}"${S.set.hue === h ? ' checked' : ''}><span style="--c:hsl(${h} 50% 58%)"></span></label>`).join('')}
+            </div>
+            <label class="hue-l" for="hue">Or pick any color</label>
+            <input class="hue" id="hue" type="range" min="0" max="359" value="${S.set.hue}">
+            <div class="set-row compact"><div><b>Sprout</b></div>${sw('sprout', 'Sprout')}</div>
+          </div>
+        </div>
+      </section>
+      <section class="set-group"><h3>Theme</h3>
+        <div class="set-row">
+          <div><b>Meadow</b><span>Day or night. System follows your computer.</span></div>
+          <div class="seg" role="group" aria-label="Theme">
+            ${[['system', 'System'], ['light', 'Day'], ['dark', 'Night']].map(([v, l]) => `<button type="button" data-theme-opt="${v}" aria-pressed="${S.set.theme === v}">${l}</button>`).join('')}
+          </div>
+        </div>
+      </section>
+      <section class="set-group"><h3>Translation</h3>
+        <div class="set-row">
+          <div><b>Default language</b><span>Lenny skips the question and translates to this.</span></div>
+          <select class="sc-select" id="deflang" aria-label="Default language">
+            <option value="">Ask me every time</option>
+            ${LANGS.map(l => `<option${S.set.lang === l ? ' selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </div>
+      </section>
+      <section class="set-group"><h3>Behavior</h3>
+        <div class="set-row"><div><b>Follow my cursor</b><span>Lenny watches your pointer and anything you drag.</span></div>${sw('follow', 'Follow my cursor')}</div>
+        <div class="set-row"><div><b>Playful reactions</b><span>Hops and cheers when files finish.</span></div>${sw('playful', 'Playful reactions')}</div>
+      </section>
+    </div>
+    <div class="sheet-foot"><button class="btn alt" type="button" data-act="set-reset">Reset to defaults</button><button class="btn" type="button" data-act="set-done">Done</button></div>
+  </div>`;
+}
+function openSettings() {
+  closeMenu(false);
+  sheetEl.innerHTML = settingsHTML();
+  sheetEl.hidden = false;
+  (sheetEl.querySelector('input[name=lhue]:checked') || sheetEl.querySelector('#hue')).focus();
+  track(px, py);
+}
+function closeSettings() {
+  if (sheetEl.hidden) return;
+  sheetEl.hidden = true;
+  sheetEl.innerHTML = '';
+  $('#lennyBtn').focus();
+  cheer(big());
+  speak(() => ({ say: 'Looking good!', sub: S.set.lang ? `I'll translate to ${S.set.lang} unless you tell me otherwise.` : 'Drop files on me whenever you\'re ready.' }), false);
+  // Then go back to whatever Lenny was saying, unless something else has happened meanwhile.
+  setTimeout(() => {
+    if ($('#speech .say').textContent === 'Looking good!' && S.speech) speak(S.speech);
+  }, RM ? 1200 : 2400);
+}
+function settingChanged() { applySettings(); saveSettings(); }
+/* ---------- Atmosphere: pollen by day, fireflies at night ---------- */
+const motes = $('#motes'), mctx = motes.getContext('2d');
+let MW = 0, MH = 0, DPR = 1, nightAmt = 0;
+const newMote = anywhere => ({
+  x: Math.random() * MW, y: anywhere ? Math.random() * MH : MH + 10, r: .8 + Math.random() * 2.2,
+  vx: 4 + Math.random() * 10, vy: -(3 + Math.random() * 8), ph: Math.random() * 6.283, sp: .6 + Math.random() * 1.2,
+  low: .56 + Math.random() * .4,
+});
+function sizeMotes() {
+  DPR = Math.min(2, devicePixelRatio || 1);
+  MW = motes.clientWidth; MH = motes.clientHeight;
+  motes.width = MW * DPR; motes.height = MH * DPR;
+}
+sizeMotes();
+const parts = Array.from({ length: 46 }, () => newMote(true));
+addEventListener('resize', sizeMotes);
+const readNight = () => { nightAmt = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--night')) || 0; };
+readNight();
+setInterval(readNight, 1000);
+let moteT = performance.now();
+function drawMotes(now) {
+  const dt = Math.min(.05, (now - moteT) / 1000);
+  moteT = now;
+  mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  mctx.clearRect(0, 0, MW, MH);
+  const night = nightAmt > .5;
+  parts.forEach((p, i) => {
+    p.ph += dt * p.sp;
+    if (night) {
+      if (i >= 30) return;
+      p.x += p.vx * .12 * dt;
+      if (p.x > MW + 40) p.x = -40;
+      const x = p.x + Math.sin(p.ph * .6) * 30, y = MH * p.low + Math.sin(p.ph * .9) * 18;
+      const a = Math.max(0, Math.sin(p.ph * 1.4)) ** 2, R = p.r * 7;
+      const g = mctx.createRadialGradient(x, y, 0, x, y, R);
+      g.addColorStop(0, `rgba(240, 255, 170, ${(.95 * a).toFixed(3)})`);
+      g.addColorStop(.22, `rgba(215, 250, 120, ${(.45 * a).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(200, 240, 100, 0)');
+      mctx.fillStyle = g;
+      mctx.beginPath(); mctx.arc(x, y, R, 0, 6.283); mctx.fill();
+    } else {
+      p.x += (p.vx + Math.sin(p.ph) * 6) * dt;
+      p.y += (p.vy + Math.cos(p.ph * .8) * 4) * dt;
+      if (p.x > MW + 10 || p.y < -10) Object.assign(p, newMote(false));
+      const a = .3 + .35 * Math.sin(p.ph * 1.7), R = p.r * 2.2;
+      const g = mctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R);
+      g.addColorStop(0, `rgba(255, 252, 236, ${Math.max(0, a).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(255, 252, 236, 0)');
+      mctx.fillStyle = g;
+      mctx.beginPath(); mctx.arc(p.x, p.y, R, 0, 6.283); mctx.fill();
+    }
+  });
+  if (!RM) requestAnimationFrame(drawMotes);
+}
+requestAnimationFrame(drawMotes);
+
+/* ---------- Speech: words fade in and Lenny's mouth moves ---------- */
+function setSay(box, text, who) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  box.querySelector('.say').innerHTML = words.map((w, i) => `<span class="w" style="--i:${i}">${esc(w)}</span>`).join(' ');
+  box.style.setProperty('--n', words.length);
+  box.classList.remove('settled');
+  clearTimeout(box.settle);
+  box.settle = setTimeout(() => box.classList.add('settled'), words.length * 34 + 800);
+  if (who) mood(who, 'talk', Math.min(1800, 160 + words.length * 80));
+}
+
+/* ---------- Celebrations and flight paths ---------- */
+function burst(x, y, n = 12) {
+  if (RM) return;
+  const cols = ['var(--lb1)', '#FFFFFF', '#FFE08A'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('i');
+    s.className = 'spark';
+    s.style.left = x + 'px'; s.style.top = y + 'px';
+    s.style.setProperty('--c', cols[i % 3]);
+    document.body.append(s);
+    const a = (i / n) * 6.283 + Math.random() * .4, d = 40 + Math.random() * 34, sc = .6 + Math.random() * .9;
+    s.animate([
+      { transform: 'translate(0, 0) scale(0) rotate(0deg)', opacity: 1 },
+      { transform: `translate(${Math.cos(a) * d}px, ${Math.sin(a) * d}px) scale(${sc}) rotate(${90 + Math.random() * 90}deg)`, opacity: 1, offset: .6 },
+      { transform: `translate(${Math.cos(a) * d * 1.25}px, ${Math.sin(a) * d * 1.25 + 12}px) scale(0) rotate(200deg)`, opacity: 0 },
+    ], { duration: 900 + Math.random() * 300, easing: 'cubic-bezier(.2, .8, .3, 1)' }).finished.then(() => s.remove());
+  }
+}
+// Keyframes along a parabola: things are tossed, not slid.
+function arcFrames(dx, dy, lift, endScale, endRot) {
+  const f = [], n = 14;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    f.push({
+      transform: `translate(${(dx * t).toFixed(1)}px, ${(dy * t - lift * 4 * t * (1 - t)).toFixed(1)}px) scale(${(1 + (endScale - 1) * t * t).toFixed(3)}) rotate(${(endRot * t).toFixed(1)}deg)`,
+      opacity: t < .8 ? 1 : 1 - (t - .8) * 2.5,
+    });
+  }
+  return f;
+}
+function spitFrames(ox, oy) {
+  const lift = 110 + Math.random() * 60, f = [], n = 14;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    f.push({ transform: `translate(${(ox * (1 - t)).toFixed(1)}px, ${(oy * (1 - t) - lift * 4 * t * (1 - t)).toFixed(1)}px) scale(${(.08 + 1.04 * t).toFixed(3)})`, opacity: Math.min(1, .3 + t * 2), offset: t * .8 });
+  }
+  f.push({ transform: 'scale(.97)', offset: .9 }, { transform: 'none', offset: 1 });
+  return f;
+}
+
+/* ---------- Sleep when left alone ---------- */
+let lastActive = performance.now(), asleep = false, zzTimer = 0;
+function spawnZ() {
+  if (RM || !big()) return;
+  const r = big().getBoundingClientRect();
+  const z = document.createElement('span');
+  z.className = 'zz';
+  z.textContent = 'z';
+  z.style.left = (r.left + r.width * .7) + 'px';
+  z.style.top = (r.top + r.height * .16) + 'px';
+  document.body.append(z);
+  z.animate([
+    { transform: 'translate(0, 0) scale(.6)', opacity: 0 },
+    { opacity: 1, offset: .2 },
+    { transform: 'translate(28px, -64px) scale(1.25)', opacity: 0 },
+  ], { duration: 2400, easing: 'ease-out' }).finished.then(() => z.remove());
+}
+function wake() {
+  lastActive = performance.now();
+  if (!asleep) return;
+  asleep = false;
+  clearInterval(zzTimer);
+  big().classList.remove('sleep');
+  $('#speech').style.opacity = '';
+  boop(big());
+}
+['pointermove', 'pointerdown', 'keydown', 'dragenter', 'wheel', 'touchstart'].forEach(t => addEventListener(t, wake, { passive: true }));
+setInterval(() => {
+  if (asleep || !S.user || S.previewId || !menu.hidden || !sheetEl.hidden || document.body.classList.contains('mode-signin')) return;
+  if (performance.now() - lastActive < 40000) return;
+  asleep = true;
+  big().classList.add('sleep');
+  $('#speech').style.opacity = '.5';
+  spawnZ();
+  zzTimer = setInterval(spawnZ, 1500);
+}, 2000);
+
+/* ---------- Account menu ---------- */
+ICON.sep = '<path d="m18 8 4 4-4 4"/><path d="m6 8-4 4 4 4"/><path d="M2 12h20"/>';
+ICON.left = '<path d="m15 18-6-6 6-6"/>';
+ICON.right = '<path d="m9 18 6-6-6-6"/>';
+ICON.logout = '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>';
+const umenu = $('#umenu');
+function openUMenu() {
+  umenu.innerHTML = `<div class="m-head"><b>${esc(S.user)}</b><span>Signed in</span></div>
+    <button class="mi" type="button" role="menuitem" data-act="history">${ico('history')}Your files</button>
+    <button class="mi" type="button" role="menuitem" data-act="settings">${ico('settings')}Lenny settings</button>
+    <button class="mi" type="button" role="menuitem" data-act="restart">${ico('rotate')}Start over</button>
+    <hr><button class="mi" type="button" role="menuitem" data-act="signout">${ico('logout')}Sign out</button>`;
+  umenu.hidden = false;
+  const r = $('#uchip').getBoundingClientRect();
+  umenu.style.left = Math.max(12, r.right - umenu.offsetWidth) + 'px';
+  umenu.style.top = (r.bottom + 6) + 'px';
+  umenu.style.setProperty('--origin', 'right top');
+  $('#uchip').setAttribute('aria-expanded', 'true');
+  umenu.querySelector('.mi').focus();
+}
+umenu.addEventListener('keydown', menuKeys);
+function initials(name) {
+  const parts = name.split(/[.\s_@-]+/).filter(Boolean);
+  return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
+}
+
+/* ---------- Sign-in entrance ---------- */
+document.querySelectorAll('.signpanel .sc-brand, .sc-form > *').forEach((el, i) => el.style.setProperty('--d', i));
+setTimeout(() => document.body.classList.add('settled'), 1800);
+/* ---------- Persistence (simulated per user in this browser; the real app lists jobs from the server) ---------- */
+const RETAIN = 7 * 864e5;
+let tickN = 0;
+ICON.x = '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>';
+ICON.eye = '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>';
+ICON.trash = '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>';
+ICON.restore = '<circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/>';
+ICON.history = '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>';
+const jobsKey = () => 'lenny.jobs.' + S.user.toLowerCase();
+function doSaveJobs() {
+  if (!S.user) return;
+  const jobs = S.files.map(({ el, file, finishedAway, bubble, ...j }) => j);
+  try { localStorage.setItem(jobsKey(), JSON.stringify({ savedAt: Date.now(), batch: S.batch, uid: S.uid, jobs })); } catch {}
+}
+function saveJobs() { clearTimeout(saveJobs.t); saveJobs.t = setTimeout(doSaveJobs, 250); }
+addEventListener('pagehide', doSaveJobs);
+// Coming back: translations kept running on the server while you were away.
+function loadJobs() {
+  let data = null;
+  try { data = JSON.parse(localStorage.getItem(jobsKey()) || 'null'); } catch {}
+  S.files = [];
+  if (!data) return;
+  const now = Date.now(), away = Math.max(0, (now - data.savedAt) / 1000);
+  S.batch = data.batch || 0;
+  S.uid = Math.max(S.uid, data.uid || 0);
+  data.jobs.forEach(f => {
+    if (now - f.createdAt > RETAIN) return;
+    if (f.status === 'working') {
+      f.progress += away * 2.5 * f.speed;
+      if (f.progress >= 100) {
+        f.progress = 100;
+        f.status = 'done';
+        for (let i = 0; i < f.pendingWarn; i++) f.pages[i].warn = 'b2';
+        f.finishedAway = true;
+      }
+    }
+    // Bubbles come back only for work in progress and results you haven't looked at yet.
+    f.bubble = !f.cleared && (f.status === 'working' || (f.status === 'done' && !f.openedAt && !f.downloadedAt));
+    f.el = null;
+    S.files.push(f);
+  });
+}
+const nFiles = k => k === 1 ? 'one file' : `${k} files`;
+const capital = t => t[0].toUpperCase() + t.slice(1);
+function welcome() {
+  const back = S.files.filter(f => f.bubble);
+  const working = back.filter(f => f.status === 'working').length;
+  const away = back.filter(f => f.finishedAway).length, waiting = back.filter(f => f.status === 'done').length;
+  if (!S.files.length) return greet();
+  speak(() => {
+    let sub;
+    if (away && working) sub = `${capital(nFiles(away))} finished while you were away, and ${nFiles(working)} ${working === 1 ? 'is' : 'are'} still translating.`;
+    else if (away) sub = `${capital(nFiles(away))} finished while you were away. Tap ${away === 1 ? 'it' : 'one'} to take a look.`;
+    else if (waiting && working) sub = `${capital(nFiles(waiting))} ${waiting === 1 ? 'is' : 'are'} ready, and ${nFiles(working)} ${working === 1 ? 'is' : 'are'} still translating.`;
+    else if (waiting) sub = `${capital(nFiles(waiting))} ${waiting === 1 ? 'is' : 'are'} ready and waiting for you.`;
+    else if (working) sub = `${capital(nFiles(working))} ${working === 1 ? 'is' : 'are'} still translating. I'll tell you when ${working === 1 ? 'it\'s' : 'they\'re'} done.`;
+    else sub = 'Your earlier files are in Your files. Drop in something new whenever you like.';
+    const ex = html('<div class="row-actions"><button class="btn" type="button" data-act="pick">Pick files</button><button class="btn alt" type="button" data-act="history">Your files</button></div>');
+    return { say: `Welcome back, ${S.user}!`, sub, extra: ex };
+  });
+}
+function restoreBubbles() {
+  const list = S.files.filter(f => f.bubble);
+  list.forEach((f, i) => { f.slot = i; makeBubble(f, i, null); });
+  if (list.some(f => f.status === 'working')) S.phase = 'working';
+  list.filter(f => f.finishedAway).forEach((f, i) => setTimeout(() => {
+    const r = f.el?.querySelector('.orb').getBoundingClientRect();
+    if (r?.width) burst(r.left + r.width / 2, r.top + r.height / 2);
+  }, 700 + i * 220));
+}
+// Clearing tosses the bubble up into the header's "Your files" button.
+function clearBubble(f, i = 0) {
+  if (!f?.el) return;
+  const el = f.el, btn = $('header [data-act=history]');
+  f.el = null;
+  f.cleared = true;
+  const r = el.querySelector('.orb').getBoundingClientRect(), to = btn.getBoundingClientRect();
+  const done = () => { el.remove(); relayout(); btn.classList.remove('ping'); void btn.offsetWidth; btn.classList.add('ping'); };
+  if (RM || !to.width) done();
+  else el.animate(arcFrames(to.left + to.width / 2 - (r.left + r.width / 2), to.top + to.height / 2 - (r.top + r.height / 2), 70, .12, 0),
+    { duration: 700, delay: i * 90, easing: 'cubic-bezier(.45, .05, .6, .95)', fill: 'forwards' }).finished.then(done);
+  saveJobs();
+  refreshHistory();
+}
+function restoreBubble(f) {
+  f.cleared = false;
+  f.slot = bubbles().length;
+  makeBubble(f, 0, null);
+  relayout();
+  if (f.status === 'working') S.phase = 'working';
+  saveJobs();
+  refreshHistory();
+  toast(`${f.name} is back on the meadow.`);
+}
+function deleteJob(f) {
+  if (f.el) { f.el.remove(); f.el = null; relayout(); }
+  S.files = S.files.filter(x => x !== f);
+  saveJobs();
+  refreshHistory();
+  toast(`Deleted ${f.name} and its translation.`);
+}
+function startOver() {
+  if (S.previewId) closePreview();
+  bubbles().forEach((f, i) => clearBubble(f, i));
+  S.tummy = [];
+  S.phase = 'greet';
+  updateTummy();
+  greet();
+}
+
+/* ---------- Your files ---------- */
+const hist = $('#history');
+function whenLabel(t) {
+  const d = new Date(t), now = new Date();
+  const day = d.toDateString() === now.toDateString() ? 'Today'
+    : new Date(now - 864e5).toDateString() === d.toDateString() ? 'Yesterday'
+    : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  return `${day}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+function daysLeft(f) {
+  const d = Math.ceil((f.createdAt + RETAIN - Date.now()) / 864e5);
+  return d <= 1 ? 'Deletes within a day' : `Deletes in ${d} days`;
+}
+function statusText(f) {
+  if (f.status === 'working') return `<span class="h-prog">Translating ${Math.floor(f.progress)}%</span>`;
+  if (f.status === 'skipped') return `Skipped, already in ${esc(f.target)}`;
+  const w = f.pages.filter(p => p.warn).length;
+  return w ? `<span class="h-warn">${w} to check</span>` : 'Ready';
+}
+function rowHTML(f) {
+  const t = TYPES[f.ext], name = esc(f.name);
+  const acts = S.hconfirm === f.id
+    ? `<span class="h-ask">Delete for good?</span><button class="btn h-del" type="button" data-hact="del-yes" data-id="${f.id}">Delete</button><button class="btn alt" type="button" data-hact="del-no">Cancel</button>`
+    : [
+      f.status !== 'skipped' ? `<button class="icon-btn" type="button" data-hact="open" data-id="${f.id}" aria-label="Preview ${name}" title="Preview">${ico('eye')}</button>` : '',
+      f.status === 'done' ? `<button class="icon-btn" type="button" data-hact="download" data-id="${f.id}" aria-label="Download ${name}" title="Download">${ico('download')}</button>` : '',
+      !f.el && f.status !== 'skipped' ? `<button class="icon-btn" type="button" data-hact="restore" data-id="${f.id}" aria-label="Put ${name} back on the meadow" title="Put back on the meadow">${ico('restore')}</button>` : '',
+      `<button class="icon-btn" type="button" data-hact="del" data-id="${f.id}" aria-label="Delete ${name}" title="Delete">${ico('trash')}</button>`,
+    ].join('');
+  return `<div class="h-row" data-id="${f.id}">
+      <span class="ficon" style="--tc:${t.tc}"><b>${t.tag}</b></span>
+      <div class="h-main">
+        <b class="h-name" title="${name}">${name}</b>
+        <span class="h-meta">${esc(f.lang)} → ${esc(f.target)} · ${statusText(f)}</span>
+        <span class="h-exp">${daysLeft(f)}${f.el ? ' · <span class="h-on">On the meadow</span>' : ''}</span>
+      </div>
+      <div class="h-actions">${acts}</div>
+    </div>`;
+}
+function historyListHTML() {
+  if (!S.files.length) return `<div class="h-empty"><b>Nothing here yet</b><p>Files you translate show up here and are kept for 7 days.</p><button class="btn alt" type="button" data-hact="example">Add example history</button></div>`;
+  const q = (S.hq || '').toLowerCase(), flt = S.hf || 'all';
+  const rows = S.files.filter(f => (!q || f.name.toLowerCase().includes(q)) && (flt === 'all' || f.status === flt)).sort((a, b) => b.createdAt - a.createdAt);
+  if (!rows.length) return '<div class="h-empty"><b>No matches</b><p>Try a different search or filter.</p></div>';
+  const groups = new Map();
+  rows.forEach(f => { if (!groups.has(f.batch)) groups.set(f.batch, []); groups.get(f.batch).push(f); });
+  return [...groups.values()].map(g => `<section class="h-group"><h3>${whenLabel(g[0].createdAt)}<span>${g.length === 1 ? '1 file' : g.length + ' files'} to ${esc(g[0].target)}</span></h3>${g.map(rowHTML).join('')}</section>`).join('');
+}
+function openHistory() {
+  closeMenu(false);
+  hist.innerHTML = `<aside class="hsheet" role="dialog" aria-modal="true" aria-labelledby="h-title">
+      <div class="h-head">
+        <div><h2 id="h-title">Your files</h2><p>Everything you've translated. Files are deleted automatically after 7 days.</p></div>
+        <button class="icon-btn" type="button" data-hact="close" aria-label="Close">${ico('x')}</button>
+      </div>
+      <div class="h-tools">
+        <input class="h-search" id="hsearch" type="search" placeholder="Search by file name" aria-label="Search files" value="${esc(S.hq || '')}" autocomplete="off">
+        <div class="seg" role="group" aria-label="Filter">${[['all', 'All'], ['working', 'Translating'], ['done', 'Done'], ['skipped', 'Skipped']].map(([v, l]) => `<button type="button" data-hf="${v}" aria-pressed="${(S.hf || 'all') === v}">${l}</button>`).join('')}</div>
+      </div>
+      <div class="h-list">${historyListHTML()}</div>
+    </aside>`;
+  hist.hidden = false;
+  hist.querySelector('.h-search').focus();
+}
+function closeHistory() {
+  if (hist.hidden) return;
+  hist.hidden = true;
+  hist.innerHTML = '';
+  S.hconfirm = null;
+  $('header [data-act=history]')?.focus();
+}
+function refreshHistory() {
+  const list = hist.querySelector('.h-list');
+  if (!hist.hidden && list) list.innerHTML = historyListHTML();
+}
+function updateHistoryProgress() {
+  if (hist.hidden) return;
+  S.files.forEach(f => {
+    const n = f.status === 'working' && hist.querySelector(`.h-row[data-id="${f.id}"] .h-prog`);
+    if (n) n.textContent = `Translating ${Math.floor(f.progress)}%`;
+  });
+}
+function seedExample() {
+  const now = Date.now(), day = 864e5;
+  const add = (batch, ago, name, lang, target, extra = {}) => {
+    const it = { id: ++S.uid, name, ext: extOf(name), lang };
+    S.files.push({ ...it, target, batch, createdAt: now - ago, status: 'done', progress: 100, speed: 1, pendingWarn: 0, pages: makePages(it), openedAt: now - ago + 6e5, cleared: true, ...extra });
+  };
+  add(-1, 2 * day + 3 * 36e5, 'Onboarding_Handbook_DE.docx', 'German', 'English');
+  add(-1, 2 * day + 3 * 36e5, 'Brand_Guidelines_FR.pdf', 'French', 'English', { downloadedAt: now - 2 * day });
+  add(-2, 5 * day + 5 * 36e5, 'Kickoff_Deck.pptx', 'English', 'Japanese');
+  add(-2, 5 * day + 5 * 36e5, 'Q2 预算.xlsx', 'Chinese', 'Japanese');
+  S.files.filter(f => f.name === 'Kickoff_Deck.pptx').forEach(f => { f.pages[0].warn = 'b2'; });
+  saveJobs();
+  refreshHistory();
+}
+hist.addEventListener('click', e => {
+  if (e.target === hist) return closeHistory();
+  const fb = e.target.closest('[data-hf]');
+  if (fb) {
+    S.hf = fb.dataset.hf;
+    hist.querySelectorAll('[data-hf]').forEach(b => b.setAttribute('aria-pressed', String(b === fb)));
+    return refreshHistory();
+  }
+  const b = e.target.closest('[data-hact]');
+  if (!b) return;
+  const a = b.dataset.hact, f = S.files.find(x => x.id === +b.dataset.id);
+  if (a === 'close') closeHistory();
+  else if (a === 'open') openPreview(f.id);
+  else if (a === 'download') { f.downloadedAt = Date.now(); saveJobs(); toast(`In the real app, this downloads ${f.name}.`); }
+  else if (a === 'restore') { restoreBubble(f); refreshHistory(); }
+  else if (a === 'del') { S.hconfirm = f.id; refreshHistory(); hist.querySelector('.h-del')?.focus(); }
+  else if (a === 'del-no') { S.hconfirm = null; refreshHistory(); }
+  else if (a === 'del-yes') { S.hconfirm = null; deleteJob(f); }
+  else if (a === 'example') seedExample();
+});
+hist.addEventListener('input', e => {
+  if (e.target.id !== 'hsearch') return;
+  S.hq = e.target.value;
+  refreshHistory();
+});
+
+/* ---------- Theme ---------- */
+ICON.sun = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
+ICON.moon = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+const hostTheme = document.documentElement.dataset.theme || '';
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : darkMQ.matches;
+}
+function syncThemeButtons() {
+  const d = isDark(), label = d ? 'Switch to day' : 'Switch to night';
+  document.querySelectorAll('[data-act=theme]').forEach(b => {
+    b.innerHTML = ico(d ? 'sun' : 'moon');
+    b.setAttribute('aria-label', label);
+    b.title = label;
+  });
+}
+function applyTheme(animate) {
+  const root = document.documentElement;
+  if (animate && !RM) {
+    root.classList.add('theme-anim');
+    clearTimeout(applyTheme.t);
+    applyTheme.t = setTimeout(() => root.classList.remove('theme-anim'), 700);
+  }
+  const t = S.set.theme;
+  if (t === 'light' || t === 'dark') root.dataset.theme = t;
+  else if (hostTheme) root.dataset.theme = hostTheme;
+  else delete root.dataset.theme;
+  syncThemeButtons();
+  readNight();
+}
+function toggleTheme() {
+  S.set.theme = isDark() ? 'light' : 'dark';
+  saveSettings();
+  applyTheme(true);
+  const night = isDark();
+  if (S.user) {
+    cheer(big());
+    speak(() => ({ say: night ? 'Ooh, fireflies!' : 'Good morning!', sub: night ? 'Night mode is on.' : 'Day mode is on.' }), false);
+    setTimeout(() => { if (/fireflies|Good morning/.test($('#speech .say').textContent) && S.speech) speak(S.speech); }, RM ? 1200 : 2200);
+  } else {
+    boop(signL());
+    signSay(night ? 'Ooh, fireflies!' : 'Good morning!', 'Sign in so I can start translating your documents.');
+  }
+}
+darkMQ.addEventListener('change', () => { syncThemeButtons(); readNight(); });
+applyTheme(false);
+sheetEl.addEventListener('input', e => {
+  if (e.target.id === 'hue') {
+    S.set.hue = +e.target.value;
+    sheetEl.querySelectorAll('input[name=lhue]').forEach(r => { r.checked = +r.value === S.set.hue; });
+    settingChanged();
+  }
+});
+sheetEl.addEventListener('change', e => {
+  if (e.target.name === 'lhue') { S.set.hue = +e.target.value; sheetEl.querySelector('#hue').value = S.set.hue; settingChanged(); }
+  if (e.target.id === 'deflang') { S.set.lang = e.target.value; settingChanged(); }
+});
+sheetEl.addEventListener('click', e => {
+  if (e.target === sheetEl) return closeSettings();
+  const opt = e.target.closest('[data-theme-opt]');
+  if (opt) {
+    S.set.theme = opt.dataset.themeOpt;
+    settingChanged();
+    applyTheme(true);
+    sheetEl.querySelectorAll('[data-theme-opt]').forEach(b => b.setAttribute('aria-pressed', String(b === opt)));
+  }
+  const sw = e.target.closest('[data-set]');
+  if (sw) {
+    S.set[sw.dataset.set] = !S.set[sw.dataset.set];
+    sw.setAttribute('aria-checked', String(S.set[sw.dataset.set]));
+    settingChanged();
+    if (sw.dataset.set !== 'follow') boop(sheetEl.querySelector('.lenny'));
+  }
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'set-done') closeSettings();
+  if (act === 'set-reset') {
+    S.set = { ...DEFAULTS };
+    settingChanged();
+    applyTheme(true);
+    sheetEl.innerHTML = settingsHTML();
+    boop(sheetEl.querySelector('.lenny'));
+  }
+});
+
+/* ---------- Speech ---------- */
+function speak(render, store = true) {
+  if (store) S.speech = render;
+  const { say, sub, extra } = render();
+  const box = $('#speech');
+  setSay(box, say, big());
+  box.querySelectorAll('.sub').forEach(n => n.remove());
+  if (sub) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = sub; box.querySelector('.say').after(p); }
+  const ex = box.querySelector('.extra'); ex.innerHTML = '';
+  if (extra) ex.append(extra);
+  box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+}
+function html(s) { const t = document.createElement('template'); t.innerHTML = s.trim(); return t.content; }
+
+function greet() {
+  speak(() => {
+    const ex = html(`<div class="row-actions">
+      <button class="btn" type="button" data-act="pick">Pick files</button>
+      <button class="btn alt" type="button" data-act="samples">Feed me sample files</button></div>`);
+    return { say: `Hi ${S.user}! Drop your documents on me and I'll translate them.`, sub: 'I eat PowerPoint, Word, Excel, PDF and text files.', extra: ex };
+  });
+}
+
+function langSelect(item) {
+  const opts = LANGS.includes(item.lang) ? LANGS : [item.lang, ...LANGS];
+  return `<select data-fix="${item.id}" aria-label="Source language of ${esc(item.name)}">${opts.map(l => `<option${l === item.lang ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+}
+function report(good, bad) {
+  speak(() => {
+    let say;
+    if (good.length === 1) say = `Om nom, ${TYPES[good[0].ext].a}! Looks like it's in ${good[0].lang}.`;
+    else if (good.length > 1) say = `Om nom nom, ${good.length} files!`;
+    else say = 'Bleh! I can\'t eat that.';
+    const rows = good.map(it => `<li><span class="tag" style="--tc:${TYPES[it.ext].tc}">${TYPES[it.ext].tag}</span><span class="fname" title="${esc(it.name)}">${esc(it.name)}</span>${langSelect(it)}</li>`).join('');
+    const rej = bad.length ? `<p class="rejected">Spat out ${bad.map(b => esc(b.name)).join(', ')}. I only like PowerPoint, Word, Excel, PDF and text files.</p>` : '';
+    const ex = html(`${rows ? `<ul class="files">${rows}</ul>` : ''}${rej}
+      <div class="row-actions">${S.tummy.length ? (S.set.lang ? `<button class="btn" type="button" data-act="done">Translate to ${esc(S.set.lang)}</button><button class="btn alt" type="button" data-act="ask">Other language</button>` : '<button class="btn" type="button" data-act="done">That\'s everything</button>') : ''}<span class="sub" style="margin:0">${S.tummy.length ? 'Or drop in more.' : 'Try another file.'}</span></div>`);
+    return { say, sub: good.length > 1 ? 'Wrong language? Fix it here.' : (good.length ? 'Wrong language? Fix it below.' : ''), extra: ex };
+  });
+}
+function askTarget() {
+  S.phase = 'ask';
+  speak(() => {
+    const n = S.tummy.length;
+    const ex = html(`<div class="chips">${QUICK.map(l => `<button class="chip" type="button" data-target="${l}">${l}</button>`).join('')}</div>
+      <form class="custom" data-act="custom"><input id="customLang" placeholder="Another language, e.g. Thai" aria-label="Another language" autocomplete="off"><button class="btn" type="submit">Translate</button></form>
+      <div class="row-actions"><button class="btn alt" type="button" data-act="back">Wait, I have more files</button></div>`);
+    return { say: `Yum, ${n === 1 ? 'one file' : n + ' files'} in my tummy. What language should I translate ${n === 1 ? 'it' : 'them'} into?`, extra: ex };
+  });
+}
+
+/* ---------- Eating files ---------- */
+const extOf = n => (n.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
+function guessLang(s) {
+  if (/[぀-ヿ]/.test(s)) return 'Japanese';
+  if (/[가-힯]/.test(s)) return 'Korean';
+  if (/[一-鿿]/.test(s)) return 'Chinese';
+  if (/[Ѐ-ӿ]/.test(s)) return 'Russian';
+  if (/[؀-ۿ]/.test(s)) return 'Arabic';
+  if (/[฀-๿]/.test(s)) return 'Thai';
+  if (/[ñ¿¡]|ción\b/i.test(s)) return 'Spanish';
+  if (/[äöüß]/i.test(s)) return 'German';
+  if (/[àâçèêëîïôûœ]/i.test(s)) return 'French';
+  return 'English';
+}
+async function detect(it) {
+  if (it.lang) return;
+  let text = it.name;
+  if (it.file && it.ext === 'txt') { try { text += ' ' + await it.file.slice(0, 4000).text(); } catch {} }
+  it.lang = guessLang(text);
+}
+
+function fly(it, from, to, i, reject) {
+  const t = TYPES[it.ext];
+  const el = document.createElement('div');
+  el.className = 'flycard';
+  el.innerHTML = `<span class="tag" style="--tc:${t ? t.tc : 'var(--t-txt)'}">${esc(t ? t.tag : (it.ext || '?').toUpperCase())}</span><span>${esc(it.name)}</span>`;
+  document.body.append(el);
+  el.style.left = (from.x - el.offsetWidth / 2) + 'px';
+  el.style.top = (from.y - el.offsetHeight / 2) + 'px';
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const kf = reject
+    ? [{ transform: 'none' }, { transform: `translate(${dx * .85}px,${dy * .85}px) scale(.5) rotate(-10deg)`, offset: .45 }, { transform: `translate(${dx * .55 + 140}px,${dy * .55 + 120}px) scale(.8) rotate(160deg)`, opacity: 0 }]
+    : arcFrames(dx, dy, Math.min(170, Math.abs(dx) * .3 + 70), .1, 18);
+  const a = el.animate(kf, { duration: dur(reject ? 1000 : 760), delay: RM ? 0 : i * 130, easing: reject ? 'ease-in-out' : 'cubic-bezier(.45, .05, .6, .95)', fill: 'forwards' });
+  return a.finished.then(() => el.remove());
+}
+
+function feed(items, from) {
+  S.chain = S.chain.then(() => eat(items, from)).catch(console.error);
+}
+async function eat(items, from) {
+  if (S.phase === 'greet' || S.phase === 'working') S.tummy = [];
+  S.phase = 'collect';
+  const L = big();
+  items = items.map(it => ({ ...it, id: ++S.uid, ext: extOf(it.name) }));
+  const good = items.filter(it => TYPES[it.ext]), bad = items.filter(it => !TYPES[it.ext]);
+  setOpen(L, 1);
+  await Promise.all(items.map((it, i) => fly(it, from, mouthCenter(L), i, !TYPES[it.ext])));
+  setOpen(L, 0);
+  mood(L, 'gulp', 400);
+  await wait(300);
+  if (good.length) {
+    speak(() => ({ say: good.length > 1 ? 'Chewing...' : 'Chewing... let me taste this one.', sub: 'Checking the file type and language.' }), false);
+    mood(L, 'chew', 1300);
+    mood(L, 'happy', 1300);
+    await Promise.all([Promise.all(good.map(detect)), wait(1300)]);
+  }
+  S.tummy.push(...good);
+  updateTummy();
+  report(good, bad);
+}
+function updateTummy() {
+  const t = $('#tummy');
+  t.hidden = !S.tummy.length;
+  t.textContent = `${S.tummy.length} in my tummy`;
+  $('#hint').hidden = S.phase === 'collect' || S.phase === 'ask';
+}
+
+/* ---------- Spitting out bubbles ---------- */
+// Columns either side of Lenny, filled centre-out; the upper row is only used away from the speech card.
+const SLOTS = [[0, 0], [0, 1], [1, 0], [1, 1], [1, -1], [2, 0], [2, 1], [2, -1], [0, -1]];
+function slotPos(slot) {
+  const st = $('#stage').getBoundingClientRect(), lr = $('#lennyBtn').getBoundingClientRect();
+  const cx = lr.left + lr.width / 2 - st.left, cy = lr.top + lr.height / 2 - st.top;
+  const k = slot % (SLOTS.length * 2), side = k % 2 ? 1 : -1, [col, row] = SLOTS[k >> 1];
+  const lap = Math.floor(slot / (SLOTS.length * 2)) * 40;
+  const x = cx + side * (Math.max(250, lr.width / 2 + 120) + col * 150) + lap;
+  const y = cy + row * 172 - 20 + lap;
+  return { x: Math.max(75, Math.min(st.width - 75, x)), y: Math.max(60, Math.min(st.height - 112, y)) };
+}
+function placeBubble(f) {
+  const p = slotPos(f.slot);
+  f.el.style.left = (p.x - 70) + 'px';
+  f.el.style.top = (p.y - 52) + 'px';
+}
+addEventListener('resize', () => relayout());
+
+function makePages(it) {
+  const s = SAMPLES.find(x => x.name === it.name);
+  const n = s ? s.pages.length : TYPES[it.ext].pages;
+  const unit = TYPES[it.ext].kind === 'slide' ? 'Slide' : TYPES[it.ext].kind === 'sheet' ? 'Sheet' : 'Page';
+  return Array.from({ length: n }, (_, i) => ({
+    orig: s ? s.pages[i][0] : `${unit} ${i + 1}`,
+    trans: s ? s.pages[i][1] : `${unit} ${i + 1}`,
+    sel: 'page', warn: null, version: 1, comments: [], draft: '',
+  }));
+}
+
+const bubbles = () => S.files.filter(f => f.el);
+function relayout() { bubbles().forEach((f, i) => { f.slot = i; placeBubble(f); }); }
+function makeBubble(f, i, from) {
+  const el = document.createElement('div');
+  el.className = 'bubble';
+  el.dataset.id = f.id;
+  el.innerHTML = `<div class="float" style="--fd:${(-Math.random() * 5).toFixed(2)}s">
+      <button class="bopen" type="button" data-open="${f.id}">
+        <span class="orb">
+          <svg class="prog" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="47"/><circle class="bar" cx="50" cy="50" r="47" pathLength="100"/></svg>
+          <span class="ficon" style="--tc:${TYPES[f.ext].tc}"><b>${TYPES[f.ext].tag}</b></span><span class="pct">0%</span>
+        </span>
+        <span class="blabel"><span class="bname">${esc(f.name)}</span><span class="bstat"></span></span>
+      </button>
+      <button class="bclear" type="button" data-clear="${f.id}" aria-label="Move ${esc(f.name)} to Your files" title="Move to Your files">${ico('x')}</button>
+    </div>`;
+  f.el = el;
+  $('#bubbles').append(el);
+  placeBubble(f);
+  if (from) {
+    const r = el.querySelector('.orb').getBoundingClientRect();
+    el.animate(spitFrames(from.x - r.left - r.width / 2, from.y - r.top - r.height / 2),
+      { duration: dur(900), delay: RM ? 0 : i * 160, easing: 'cubic-bezier(.3, .6, .4, 1)', fill: 'backwards' });
+  } else if (!RM) {
+    el.animate([{ transform: 'scale(.4)' }, { transform: 'none' }], { duration: 520, delay: i * 90, easing: 'cubic-bezier(.3, 1.4, .5, 1)', fill: 'backwards' });
+  }
+  renderBubble(f);
+}
+
+async function translate(target, force) {
+  const same = S.tummy.filter(it => it.lang === target);
+  if (!force && same.length) { S.pendingTarget = target; askSkip(same, target); return; }
+  S.phase = 'working';
+  S.batch++;
+  const items = S.tummy; S.tummy = [];
+  updateTummy();
+  const L = big();
+  speak(() => ({ say: `Ptoo! Here they come. Translating into ${target} now.`, sub: 'Tap any bubble to peek inside. Drop more files any time to start a new batch.' }));
+  setOpen(L, 1);
+  cheer(L);
+  const m = mouthCenter(L), base = bubbles().length;
+  items.forEach((it, i) => {
+    const f = {
+      ...it, target, batch: S.batch, createdAt: Date.now(), slot: base + i, progress: 0, status: 'working',
+      speed: .7 + Math.random() * .9, pages: makePages(it),
+    };
+    // Simulate the fit check finding problems in some files.
+    const warnCount = it.ext === 'pptx' ? 2 : (Math.random() < .3 ? 1 : 0);
+    f.pendingWarn = Math.min(warnCount, f.pages.length);
+    S.files.push(f);
+    makeBubble(f, i, m);
+  });
+  saveJobs();
+  refreshHistory();
+  await wait(400 + items.length * 160);
+  setOpen(L, 0);
+}
+
+// Files already in the target language: offer to skip them.
+function askSkip(same, target) {
+  const one = same.length === 1;
+  speak(() => ({
+    say: one ? `${same[0].name} is already in ${target}.` : `${same.length} of these are already in ${target}.`,
+    sub: `Want me to skip ${one ? 'it' : 'them'}? ${one ? 'It' : 'They'}'ll go to Your files as skipped.`,
+    extra: html(`<div class="row-actions"><button class="btn" type="button" data-act="skip-same">Skip ${one ? 'it' : 'them'}</button><button class="btn alt" type="button" data-act="keep-same">Translate anyway</button></div>`),
+  }));
+}
+function skipSame() {
+  const target = S.pendingTarget, same = S.tummy.filter(it => it.lang === target);
+  S.tummy = S.tummy.filter(it => it.lang !== target);
+  same.forEach(it => S.files.push({ ...it, target, batch: S.batch + 1, createdAt: Date.now(), status: 'skipped', progress: 0, pages: makePages(it), cleared: true }));
+  updateTummy();
+  saveJobs();
+  refreshHistory();
+  if (S.tummy.length) return translate(target, true);
+  S.batch++;
+  S.phase = 'greet';
+  speak(() => ({ say: 'Nothing left to translate!', sub: `I put ${same.length === 1 ? 'it' : 'them'} in Your files as skipped.`, extra: html('<div class="row-actions"><button class="btn alt" type="button" data-act="history">Your files</button></div>') }));
+}
+
+function renderBubble(f) {
+  if (!f.el) return;
+  const warns = f.pages.filter(p => p.warn).length;
+  const orb = f.el.querySelector('.orb');
+  orb.classList.toggle('done', f.status === 'done');
+  orb.querySelector('.bar').style.strokeDashoffset = String(100 - (f.status === 'done' ? 100 : f.progress));
+  orb.querySelector('.pct').textContent = f.status === 'done' ? 'Ready' : Math.floor(f.progress) + '%';
+  orb.querySelector('.badge')?.remove();
+  if (f.status === 'done') orb.insertAdjacentHTML('beforeend', warns ? `<span class="badge warn" title="${warns} fit warning${warns > 1 ? 's' : ''}">${warns}</span>` : '<span class="badge ok">✓</span>');
+  f.el.querySelector('.bstat').textContent = f.status === 'done'
+    ? (warns ? `Ready · ${warns} to check` : `Ready · in ${f.target}`)
+    : `${f.lang} → ${f.target}`;
+  f.el.querySelector('.bopen').setAttribute('aria-label', `${f.name}, ${f.status === 'done' ? 'translated, ready to preview' : Math.floor(f.progress) + '% translated'}`);
+}
+
+setInterval(() => {
+  const finished = [];
+  S.files.forEach(f => {
+    if (f.status !== 'working') return;
+    f.progress = Math.min(100, f.progress + (1.2 + Math.random() * 3.2) * f.speed);
+    if (f.progress >= 100) {
+      f.status = 'done';
+      for (let i = 0; i < f.pendingWarn; i++) f.pages[i].warn = 'b2';
+      finished.push(f);
+    }
+    renderBubble(f);
+    if (S.previewId === f.id) {
+      if (f.status === 'done') { renderPreview(); miniOpen(f); }
+      else { const s = $('#pv-status'); if (s) s.textContent = `Translating · ${Math.floor(f.progress)}%`; const pd = document.querySelectorAll('.pending-pct'); pd.forEach(n => n.textContent = Math.floor(f.progress) + '%'); }
+    }
+  });
+  finished.forEach(f => { const r = f.el?.querySelector('.orb').getBoundingClientRect(); if (r?.width) burst(r.left + r.width / 2, r.top + r.height / 2); });
+  if (finished.length) { saveJobs(); refreshHistory(); } else { updateHistoryProgress(); if (++tickN % 8 === 0 && S.files.some(x => x.status === 'working')) saveJobs(); }
+  if (!finished.length || S.phase !== 'working') return;
+  const f = finished[finished.length - 1];
+  const batchLeft = S.files.filter(x => x.batch === f.batch && x.status === 'working').length;
+  cheer(big());
+  if (S.previewId) return;
+  if (!batchLeft) speak(() => ({ say: 'All done! Tap a bubble to check my work.', sub: 'You can leave comments on any page and I\'ll fix it up.' }));
+  else {
+    const warns = f.pages.filter(p => p.warn).length;
+    speak(() => ({ say: `Your ${TYPES[f.ext].label} is ready!`, sub: warns ? `${f.name}: ${warns} spot${warns > 1 ? 's' : ''} where the text didn't quite fit. Tap it to take a look.` : `${f.name} is in ${f.target} now. ${batchLeft} more still cooking.` }));
+  }
+}, 380);
+
+/* ---------- Preview ---------- */
+const AR = { slide: 16 / 9, doc: 8.5 / 11, sheet: 16 / 10 };
+const unitOf = f => ({ slide: 'Slide', sheet: 'Sheet' })[TYPES[f.ext].kind] || 'Page';
+function seeded(seed) { let s = (seed * 7919) % 233280 || 1; return () => (s = (s * 9301 + 49297) % 233280) / 233280; }
+// Translations usually run longer than the source, so translated lines are drawn a little longer.
+function lineWidths(seed, n, stretch) {
+  const r = seeded(seed), out = Array.from({ length: n }, () => Math.min(100, (60 + r() * 38) * stretch));
+  if (n > 1) out[n - 1] *= .55;
+  return out;
+}
+function pageCard(f, p, pi, side) {
+  const kind = TYPES[f.ext].kind, trans = side !== 'orig', live = side !== 'thumb';
+  if (trans && f.status !== 'done') return `<div class="page ${kind} pending"><span>Translating... <span class="pending-pct">${Math.floor(f.progress)}%</span></span></div>`;
+  const stretch = trans ? 1.16 : 1, seed = pi * 11 + 5;
+  const blk = (id, inner, cls = '') => {
+    const c = `blk ${cls} ${live && p.sel === id ? 'sel' : ''} ${trans && p.warn === id ? 'warn' : ''}`;
+    if (!live) return `<div class="${c}">${inner}</div>`;
+    return trans
+      ? `<button type="button" class="${c}" data-page="${pi}" data-block="${id}" aria-label="Comment on ${BLOCK_NAMES[id]}">${inner}</button>`
+      : `<div class="${c}" data-page="${pi}" data-block="${id}">${inner}</div>`;
+  };
+  const lines = (n, k) => lineWidths(seed + k, n, stretch).map(w => `<i class="ln" style="width:${w.toFixed(0)}%"></i>`).join('');
+  const title = blk('title', esc(trans ? p.trans : p.orig), 'title');
+  if (kind === 'slide') {
+    const r = seeded(seed * 3);
+    const chart = `<div class="bars">${Array.from({ length: 6 }, () => `<i style="height:${(28 + r() * 68).toFixed(0)}%"></i>`).join('')}</div>`;
+    return `<div class="page slide">${title}<div class="sl-body">${blk('b1', `<div class="bul">${lines(4, 1)}</div>`)}${blk('b2', chart, 'chart')}</div></div>`;
+  }
+  if (kind === 'sheet') {
+    const tbl = `<div class="tbl">${Array.from({ length: 24 }, (_, i) => `<i${i < 4 ? ' class="h"' : ''}></i>`).join('')}</div>`;
+    return `<div class="page sheet">${title}${blk('b1', tbl)}${blk('b2', lines(2, 2))}</div>`;
+  }
+  return `<div class="page doc">${title}${blk('b1', lines(5, 1))}${blk('b2', lines(4, 2))}${blk('b3', lines(3, 3))}</div>`;
+}
+function renderPreview() {
+  const f = S.files.find(x => x.id === S.previewId);
+  if (!f) return;
+  const kind = TYPES[f.ext].kind, unit = unitOf(f), last = f.pages.length - 1;
+  const pi = Math.min(S.pvPage, last), p = f.pages[pi];
+  const sample = SAMPLES.some(s => s.name === f.name);
+  const pv = $('#preview');
+  const miniText = pv.querySelector('.mini-say')?.textContent || '';
+  const comments = p.comments.map(c => `<div class="comment">${esc(c.text)}<div class="meta ${c.status === 'done' ? 'done' : ''}">${c.status === 'done' ? `Fixed in version ${c.version} · about ${esc(c.about)}` : `<span class="dot"></span>Lenny is asking Gemma to fix ${esc(c.about)}...`}</div></div>`).join('');
+  const composer = f.status === 'done'
+    ? `<div class="composer"><div class="about">Commenting on <b>${BLOCK_NAMES[p.sel]}</b>. Click a box on the page to point at it.</div>
+       <textarea id="c-${f.id}-${pi}" data-draft="${pi}" placeholder="What should change? For example: make the title shorter so it fits on one line">${esc(p.draft)}</textarea>
+       <div class="row-actions"><button class="btn" type="button" data-send="${pi}">Ask Lenny to fix it</button></div></div>`
+    : `<div class="locked">You can comment once this ${unit.toLowerCase()} is translated.</div>`;
+  const origL = `Original · ${esc(f.lang)}`, transL = `Translated · ${esc(f.target)}${p.version > 1 ? ` · v${p.version}` : ''}`;
+  const view = S.pvMode === 'compare'
+    ? `<div class="cmp" style="--ar:${AR[kind]}; --x:${S.cmpX}%">
+        <div class="pgbox orig">${pageCard(f, p, pi, 'orig')}</div>
+        <div class="pgbox trans">${pageCard(f, p, pi, 'trans')}</div>
+        <div class="cmp-handle" role="slider" tabindex="0" aria-label="Compare the original with the translation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(S.cmpX)}"><span class="knob">${ico('sep')}</span></div>
+        <span class="cmp-tag l">${origL}</span><span class="cmp-tag r">${transL}</span>
+      </div>`
+    : `<div class="sbs">
+        <figure><figcaption>${origL}</figcaption><div class="pgbox">${pageCard(f, p, pi, 'orig')}</div></figure>
+        <figure><figcaption>${transL}</figcaption><div class="pgbox">${pageCard(f, p, pi, 'trans')}</div></figure>
+      </div>`;
+  const strip = f.pages.map((q, i) => `<button class="thumb" type="button" data-goto="${i}" aria-current="${i === pi ? 'page' : 'false'}" aria-label="${unit} ${i + 1}${q.warn ? ', text doesn\'t fit' : ''}">
+      <span class="pgbox">${pageCard(f, q, i, 'thumb')}</span>${unit} ${i + 1}${q.warn ? '<i class="wdot"></i>' : ''}${q.version > 1 ? `<i class="vdot">v${q.version}</i>` : ''}
+    </button>`).join('');
+  pv.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="pv-name">
+    <div class="pv-head">
+      <span class="tag" style="--tc:${TYPES[f.ext].tc}">${TYPES[f.ext].tag}</span>
+      <div class="pv-title"><h2 id="pv-name">${esc(f.name)}</h2><span><span id="pv-status">${f.status === 'done' ? 'Translated' : `Translating · ${Math.floor(f.progress)}%`}</span> · ${esc(f.lang)} → ${esc(f.target)}${sample && f.target !== 'English' ? ' · prototype shows English text' : ''}</span></div>
+      <div class="seg" role="group" aria-label="View"><button type="button" data-mode="compare" aria-pressed="${S.pvMode === 'compare'}">Compare</button><button type="button" data-mode="sbs" aria-pressed="${S.pvMode === 'sbs'}">Side by side</button></div>
+      <button class="btn" type="button" data-act="download" ${f.status === 'done' ? '' : 'disabled'}>Download</button>
+      <button class="ghost" type="button" data-act="close">Close</button>
+    </div>
+    <div class="pv-main">
+      <nav class="pv-strip" aria-label="${unit}s">${strip}</nav>
+      <div class="pv-stage">
+        ${view}
+        <div class="pv-nav">
+          <button class="icon-btn" type="button" data-goto="${pi - 1}" aria-label="Previous ${unit.toLowerCase()}" ${pi === 0 ? 'disabled' : ''}>${ico('left')}</button>
+          <span>${unit} ${pi + 1} of ${f.pages.length}</span>
+          <button class="icon-btn" type="button" data-goto="${pi + 1}" aria-label="Next ${unit.toLowerCase()}" ${pi === last ? 'disabled' : ''}>${ico('right')}</button>
+        </div>
+      </div>
+      <aside class="pv-notes" aria-label="Comments on ${unit.toLowerCase()} ${pi + 1}">
+        <div class="pv-lenny">${lennySVG('small')}<div class="mini-say" aria-live="polite">${esc(miniText)}</div></div>
+        <h3>${unit} ${pi + 1}${p.version > 1 ? ` <span class="ver">v${p.version}</span>` : ''}</h3>
+        <div class="discuss">${comments}${composer}</div>
+      </aside>
+    </div>
+  </div>`;
+  fitStage();
+  track(px, py);
+}
+// Size the page to the space available, like a PDF viewer's "fit page".
+function fitStage() {
+  const st = $('#preview .pv-stage'), f = S.files.find(x => x.id === S.previewId);
+  if (!st || !f) return;
+  const ar = AR[TYPES[f.ext].kind], narrow = matchMedia('(max-width: 899px)').matches;
+  const W = st.clientWidth - (narrow ? 24 : 48), H = (narrow ? innerHeight * .5 : st.clientHeight - 48) - 46;
+  if (S.pvMode === 'compare') {
+    st.querySelector('.cmp').style.width = Math.max(160, Math.min(W, H * ar)) + 'px';
+  } else {
+    const w = Math.max(110, Math.min((W - 20) / 2, (H - 26) * ar));
+    st.querySelectorAll('.sbs .pgbox').forEach(b => { b.style.width = w + 'px'; });
+  }
+}
+addEventListener('resize', () => { if (S.previewId) fitStage(); });
+function goPage(i) {
+  const f = S.files.find(x => x.id === S.previewId);
+  if (!f) return;
+  const n = Math.max(0, Math.min(f.pages.length - 1, i));
+  if (n === S.pvPage) return;
+  S.pvPage = n;
+  renderPreview();
+  $('#preview .thumb[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function setCompare(x) {
+  S.cmpX = Math.max(0, Math.min(100, x));
+  const c = $('#preview .cmp');
+  if (!c) return;
+  c.style.setProperty('--x', S.cmpX + '%');
+  c.querySelector('.cmp-handle').setAttribute('aria-valuenow', Math.round(S.cmpX));
+}
+function miniSay(text) {
+  const m = $('#preview .mini-say');
+  if (m) m.textContent = text;
+  cheer($('#preview .lenny'));
+}
+function miniOpen(f) {
+  const warns = f.pages.filter(p => p.warn).length;
+  if (f.status !== 'done') miniSay(`Still chewing on this one. You can look at the original while you wait.`);
+  else if (warns) miniSay(`Here it is! I marked ${warns} spot${warns > 1 ? 's' : ''} where the text didn't fit. Click a box and tell me what to change.`);
+  else miniSay('Here it is! Click any box on the right if you want me to change something.');
+}
+function openPreview(id) {
+  S.previewId = id;
+  const pf = S.files.find(x => x.id === id);
+  S.pvPage = Math.max(0, pf.pages.findIndex(q => q.warn));
+  S.pvMode = S.pvMode || 'compare';
+  S.cmpX = S.cmpX ?? 50;
+  if (pf.status === 'done' && !pf.openedAt) { pf.openedAt = Date.now(); saveJobs(); }
+  const pv = $('#preview');
+  pv.innerHTML = '';
+  pv.hidden = false;
+  renderPreview();
+  miniOpen(S.files.find(x => x.id === id));
+  pv.querySelector('[data-act="close"]').focus();
+}
+function closePreview() {
+  const id = S.previewId;
+  S.previewId = null;
+  $('#preview').hidden = true;
+  $('#preview').innerHTML = '';
+  S.files.find(x => x.id === id)?.el?.querySelector('.bopen')?.focus();
+}
+function sendComment(pi) {
+  const f = S.files.find(x => x.id === S.previewId);
+  const p = f.pages[pi];
+  const text = p.draft.trim();
+  if (!text) { miniSay('Tell me what to change first, then I\'ll get on it.'); document.getElementById(`c-${f.id}-${pi}`)?.focus(); return; }
+  const c = { text, about: BLOCK_NAMES[p.sel], block: p.sel, status: 'working' };
+  p.comments.push(c); p.draft = '';
+  renderPreview();
+  const unit = TYPES[f.ext].kind === 'slide' ? 'slide' : 'page';
+  miniSay(`Om nom, feedback! Asking Gemma to fix ${unit} ${pi + 1}...`);
+  setTimeout(() => {
+    p.version++;
+    c.status = 'done'; c.version = p.version;
+    if (p.warn && (c.block === p.warn || c.block === 'page')) p.warn = null;
+    renderBubble(f);
+    if (S.previewId === f.id) { renderPreview(); miniSay(`${unit[0].toUpperCase() + unit.slice(1)} ${pi + 1} is fixed. Take a look!`); }
+  }, RM ? 600 : 2600);
+}
+
+/* ---------- Events ---------- */
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600);
+}
+function lennySide() { const r = $('#lennyBtn').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 40 }; }
+
+document.addEventListener('click', e => {
+  if ((!menu.hidden || !umenu.hidden) && !e.target.closest('#lmenu, #lennyBtn, #umenu, #uchip')) closeMenu(false);
+  if (e.target.closest('#uchip')) { const open = umenu.hidden; closeMenu(false); if (open) openUMenu(); return; }
+  if (e.target.closest('.mi')) closeMenu(false);
+  if (e.target.id === 'preview') return closePreview();
+  const t = e.target.closest('[data-act],[data-target],[data-send],[data-block],[data-goto],[data-mode],[data-open],[data-clear],#lennyBtn');
+  if (!t) return;
+  if (t.id === 'lennyBtn') { boop(big()); return menu.hidden ? openMenu() : closeMenu(true); }
+  if (t.dataset.open) return openPreview(+t.dataset.open);
+  if (t.dataset.clear) return clearBubble(S.files.find(x => x.id === +t.dataset.clear));
+  if (t.dataset.target) return translate(t.dataset.target);
+  if (t.dataset.send != null) return sendComment(+t.dataset.send);
+  if (t.dataset.goto != null) return goPage(+t.dataset.goto);
+  if (t.dataset.mode) { S.pvMode = t.dataset.mode; return renderPreview(); }
+  if (t.dataset.block) {
+    const f = S.files.find(x => x.id === S.previewId), p = f.pages[+t.dataset.page];
+    p.sel = p.sel === t.dataset.block ? 'page' : t.dataset.block;
+    renderPreview();
+    document.getElementById(`c-${f.id}-${t.dataset.page}`)?.focus();
+    return;
+  }
+  const act = t.dataset.act;
+  if (act === 'pick') $('#picker').click();
+  else if (act === 'samples') {
+    const r = innerWidth < 760 ? { x: innerWidth / 2, y: innerHeight - 40 } : { x: 120, y: innerHeight - 80 };
+    feed(SAMPLES.map(s => ({ name: s.name, lang: s.lang })), r);
+  }
+  else if (act === 'done') { if (S.set.lang) translate(S.set.lang); else askTarget(); }
+  else if (act === 'ask') askTarget();
+  else if (act === 'settings') openSettings();
+  else if (act === 'theme') toggleTheme();
+  else if (act === 'history') openHistory();
+  else if (act === 'clear-done') bubbles().filter(f => f.status === 'done').forEach((f, i) => clearBubble(f, i));
+  else if (act === 'skip-same') skipSame();
+  else if (act === 'keep-same') translate(S.pendingTarget, true);
+  else if (act === 'signout') signOut();
+  else if (act === 'proto') toast('Prototype: file types come from the extension, languages are guessed from the file name or text, and translation is simulated.');
+  else if (act === 'restart') startOver();
+  else if (act === 'download-all') { bubbles().filter(f => f.status === 'done').forEach(f => { f.downloadedAt = Date.now(); }); saveJobs(); toast('In the real app, this downloads every finished file as one zip.'); }
+  else if (act === 'back') { S.phase = 'collect'; speak(() => ({ say: 'Sure, keep them coming!', sub: 'Drop more files on me, then tell me when you\'re done.', extra: html('<div class="row-actions"><button class="btn" type="button" data-act="done">That\'s everything</button></div>') })); }
+  else if (act === 'close') closePreview();
+  else if (act === 'forgot') { e.preventDefault(); signSay('No worries!', 'Ask your IT admin to reset it. I\'m not allowed near passwords.'); }
+  else if (act === 'sso') signSay('Almost!', 'Work account sign-in isn\'t in this prototype yet. Use any username for now.');
+  else if (act === 'access') { e.preventDefault(); signSay('Hi, new friend!', 'Ask your IT admin to add you, then come back and feed me documents.'); }
+  else if (act === 'home') e.preventDefault();
+  else if (act === 'download') { const f = S.files.find(x => x.id === S.previewId); if (f) { f.downloadedAt = Date.now(); saveJobs(); } toast('In the real app, this downloads the translated file.'); }
+});
+$('#preview').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.cmp-handle');
+  if (!h) return;
+  e.preventDefault();
+  const c = h.closest('.cmp'), move = ev => {
+    const r = c.getBoundingClientRect();
+    setCompare((ev.clientX - r.left) / r.width * 100);
+  };
+  h.setPointerCapture(e.pointerId);
+  h.focus();
+  c.classList.add('dragging');
+  h.addEventListener('pointermove', move);
+  h.addEventListener('pointerup', () => { h.removeEventListener('pointermove', move); c.classList.remove('dragging'); }, { once: true });
+});
+$('#preview').addEventListener('pointerover', e => {
+  const stage = $('#preview .pv-stage');
+  if (!stage) return;
+  const b = e.target.closest('.pv-stage [data-block]');
+  stage.querySelectorAll('.hl').forEach(n => n.classList.remove('hl'));
+  if (b) stage.querySelectorAll(`[data-block="${b.dataset.block}"]`).forEach(n => n.classList.add('hl'));
+});
+document.addEventListener('submit', e => {
+  if (e.target.dataset.act !== 'custom') return;
+  e.preventDefault();
+  const v = $('#customLang').value.trim();
+  if (!v) { $('#customLang').focus(); $('#customLang').placeholder = 'Type a language first'; return; }
+  translate(v.charAt(0).toUpperCase() + v.slice(1));
+});
+document.addEventListener('change', e => {
+  if (!e.target.dataset.fix) return;
+  const it = S.tummy.find(x => x.id === +e.target.dataset.fix);
+  if (it) it.lang = e.target.value;
+});
+document.addEventListener('input', e => {
+  if (e.target.dataset.draft == null) return;
+  const f = S.files.find(x => x.id === S.previewId);
+  f.pages[+e.target.dataset.draft].draft = e.target.value;
+});
+document.addEventListener('keydown', e => {
+  if (S.previewId && e.target.closest?.('.cmp-handle')) {
+    const step = e.shiftKey ? 10 : 4, k = { ArrowLeft: -step, ArrowRight: step, ArrowDown: -step, ArrowUp: step }[e.key];
+    if (k) { e.preventDefault(); setCompare(S.cmpX + k); return; }
+    if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); setCompare(e.key === 'Home' ? 0 : 100); return; }
+  }
+  if (S.previewId && sheetEl.hidden && !e.target.closest?.('textarea, input, select')) {
+    const d = { ArrowLeft: -1, ArrowRight: 1, PageUp: -1, PageDown: 1 }[e.key];
+    if (d) { e.preventDefault(); goPage(S.pvPage + d); return; }
+  }
+  if (e.key !== 'Escape') return;
+  if (!sheetEl.hidden) closeSettings();
+  else if (!menu.hidden || !umenu.hidden) closeMenu(true);
+  else if (S.previewId) closePreview();
+  else if (!hist.hidden) closeHistory();
+});
+$('#picker').addEventListener('change', e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (files.length) feed(files.map(f => ({ name: f.name, file: f })), lennySide());
+});
+function resetApp() {
+  S.files.forEach(f => { f.el?.remove(); f.el = null; });
+  Object.assign(S, { phase: 'greet', tummy: [], files: [], batch: 0, previewId: null, hq: '', hf: 'all', hconfirm: null });
+  $('#preview').hidden = true;
+  closeHistory();
+  updateTummy();
+}
+
+/* ---------- Sign in ---------- */
+$('#signLenny').innerHTML = lennySVG('big');
+const signL = () => $('#signLenny .lenny');
+function signSay(say, sub) {
+  const b = $('#signSpeech');
+  setSay(b, say, signL());
+  b.querySelectorAll('.sub').forEach(n => n.remove());
+  if (sub) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = sub; b.append(p); }
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+}
+const TICKLES = [['Hehe, that tickles!', 'Sign in and I\'ll show you what else I can do.'], ['Boop!', 'I\'m ready when you are.'], ['Hi hi!', 'Your username goes on the left.']];
+$('#signLenny').addEventListener('click', () => {
+  boop(signL());
+  const [a, b] = TICKLES[Math.floor(Math.random() * TICKLES.length)];
+  signSay(a, b);
+});
+const signIdle = () => signSay("Hi, I'm Lenny!", 'Sign in so I can start translating your documents.');
+const measure = document.createElement('canvas').getContext('2d');
+function lookAtCaret(input) {
+  // Eyes follow the text as it is typed.
+  const r = input.getBoundingClientRect(), cs = getComputedStyle(input);
+  measure.font = cs.font;
+  const w = measure.measureText(input.value.slice(0, input.selectionStart ?? input.value.length)).width;
+  track(r.left + parseFloat(cs.paddingLeft) + Math.min(w, r.width - 30), r.top + r.height / 2);
+}
+$('#user').addEventListener('focus', e => { signL().classList.remove('shy'); signSay('Enter your username'); lookAtCaret(e.target); });
+$('#user').addEventListener('input', e => lookAtCaret(e.target));
+$('#pass').addEventListener('focus', () => { signL().classList.add('shy'); signSay('Enter your password', "Don't worry, I won't peek."); });
+['user', 'pass'].forEach(id => document.getElementById(id).addEventListener('blur', () => setTimeout(() => {
+  if (['user', 'pass'].includes(document.activeElement?.id) || S.user) return;
+  signL().classList.remove('shy');
+  signIdle();
+}, 0)));
+$('#signForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const user = $('#user').value.trim(), pass = $('#pass').value;
+  if (!user) { signSay('I need your username first.'); $('#user').focus(); return; }
+  if (!pass) { signSay('And your password, please.'); $('#pass').focus(); return; }
+  S.user = user;
+  loadJobs();
+  $('#uname').textContent = user;
+  $('#uavatar').textContent = initials(user);
+  { const r = $('#signLenny').getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height * .35, 14); }
+  $('#pass').blur(); $('#user').blur();
+  signL().classList.remove('shy');
+  cheer(signL());
+  signSay(`Welcome, ${user}!`);
+  await wait(700);
+  enterApp();
+});
+
+// Lenny is one character across both screens: fly the visible instance to where the other one sits.
+function flyLenny(from, to) {
+  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+  from.style.visibility = 'hidden';
+  to.style.visibility = '';
+  to.style.transformOrigin = '0 0';
+  to.animate([
+    { transform: `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${a.width / b.width})` },
+    { transform: 'none' },
+  ], { duration: dur(1000), easing: 'cubic-bezier(.7, 0, .2, 1)' });
+}
+async function enterApp() {
+  const wrap = $('#lennyWrap');
+  $('#stage').hidden = false;
+  $('#appActions').hidden = false;
+  wrap.classList.add('arriving');
+  welcome();
+  document.body.classList.replace('mode-signin', 'mode-app');
+  flyLenny($('#signLenny'), $('#lennyBtn'));
+  await wait(1000);
+  $('#signin').hidden = true;
+  wrap.classList.remove('arriving');
+  speak(S.speech);
+  restoreBubbles();
+  track(px, py);
+}
+async function leaveApp() {
+  $('#signin').hidden = false;
+  void document.body.offsetWidth;
+  $('#appActions').hidden = true;
+  signL().classList.remove('shy');
+  signIdle();
+  document.body.classList.replace('mode-app', 'mode-signin');
+  flyLenny($('#lennyBtn'), $('#signLenny'));
+  await wait(1000);
+  $('#stage').hidden = true;
+  $('#lennyBtn').style.visibility = '';
+  $('#user').focus();
+}
+function signOut() {
+  doSaveJobs();
+  resetApp();
+  S.user = '';
+  $('#pass').value = '';
+  leaveApp();
+}
+
+// Native drag and drop from the desktop.
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+let dragDepth = 0;
+addEventListener('dragenter', e => {
+  if (!hasFiles(e) || S.previewId || !S.user) return;
+  e.preventDefault();
+  if (dragDepth++ === 0) {
+    S.dragging = true;
+    document.body.classList.add('dragging');
+    const lr = $('#lennyBtn').getBoundingClientRect();
+    $('#spot').style.setProperty('--lx', (lr.left + lr.width / 2) + 'px');
+    $('#spot').style.setProperty('--ly', (lr.top + lr.height / 2) + 'px');
+    speak(() => ({ say: 'Ooh, is that for me? Drop it in!' }), false);
+  }
+});
+addEventListener('dragover', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = S.previewId || !S.user ? 'none' : 'copy';
+  track(e.clientX, e.clientY);
+});
+function endDrag(restore) {
+  dragDepth = 0; S.dragging = false;
+  document.body.classList.remove('dragging');
+  setOpen(big(), 0);
+  if (restore && S.speech) speak(S.speech);
+}
+addEventListener('dragleave', e => { if (S.dragging && hasFiles(e) && --dragDepth <= 0) endDrag(true); });
+addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  endDrag(false);
+  if (S.previewId || !S.user) return;
+  const files = [...e.dataTransfer.files];
+  if (files.length) feed(files.map(f => ({ name: f.name, file: f })), { x: e.clientX, y: e.clientY });
+});
+
+signIdle();
+updateEyes();
+})();
+</script>

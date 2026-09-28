@@ -8,7 +8,7 @@ Translate plain text in both LLM and MT modes across all 12 directions between C
 
 ## Relevant Architecture
 
-- [Core component](../architecture/components/core.md) - public API, types, config, engine interface, error handling. **This plan implements that document; read it first.**
+- [Core component](../Architecture.md#core-api-reference) - public API, types, config, engine interface, error handling. **This plan implements that document; read it first.**
 - [ADR-003](../decisions/ADR-003-source-structure.md) - module locations and dependency rules
 - [ADR-005](../decisions/ADR-005-translation-quality-evaluation.md) - benchmark method, COMET isolation
 - [P0 plan](P0-project-foundation.md) - tooling this phase builds on
@@ -193,7 +193,7 @@ allowed_importers = doctranslator_core.engines.mt
 
 ### 4. Types and configuration
 
-Implement `types.py` and `config.py` exactly as specified in the core component doc (tables in Interfaces). Details:
+Implement `types.py` and `config.py` exactly as specified in the core section of `docs/Architecture.md` (tables in Interfaces). Details:
 
 - Enums are `enum.StrEnum`. Models use `pydantic.BaseModel` with `model_config = ConfigDict(frozen=True, extra="forbid")`.
 - `EngineConfig` is `Annotated[LlmEngineConfig | MtEngineConfig, Field(discriminator="mode")]`, so apps can validate a dict into the right type with `TypeAdapter(EngineConfig)`.
@@ -204,7 +204,7 @@ Implement `types.py` and `config.py` exactly as specified in the core component 
 
 ### 5. Engine interface and `Translator`
 
-`engines/base.py`: `TranslationEngine` exactly as in the core component doc.
+`engines/base.py`: `TranslationEngine` exactly as in the core section of `docs/Architecture.md`.
 
 `engines/__init__.py`: `create_engine(config: EngineConfig) -> TranslationEngine`, a `match` on `config.mode` that imports `engines.llm` or `engines.mt` inside the branch (so MT libraries load only for MT).
 
@@ -256,7 +256,7 @@ def user_message(segments: Sequence[str]) -> str:
 - `translate_batch`: chunk into `batch_size`; run chunks through `concurrent.futures.ThreadPoolExecutor(max_workers=config.max_concurrency)`; collect results in chunk order. The first exception from any chunk cancels the rest and propagates.
 - Per chunk, `_translate_chunk(chunk)`:
   1. Build the body: `{"model": ..., "temperature": ..., "messages": [{"role": "system", ...}, {"role": "user", ...}]}` plus `"response_format": {"type": "json_object"}` when `json_mode`.
-  2. `_post_with_retries(body)` per the Error Handling table in the core component doc. Backoff: `min(2 ** attempt, 8) * uniform(0.75, 1.25)` seconds; `Retry-After` (seconds form) overrides, capped at 30. Use an injectable `sleep` callable (default `time.sleep`) so tests don't wait.
+  2. `_post_with_retries(body)` per the Error Handling table in the core section of `docs/Architecture.md`. Backoff: `min(2 ** attempt, 8) * uniform(0.75, 1.25)` seconds; `Retry-After` (seconds form) overrides, capped at 30. Use an injectable `sleep` callable (default `time.sleep`) so tests don't wait.
   3. Parse `choices[0].message.content`: strip whitespace; if it starts with a Markdown code fence, remove the opening fence line (with optional `json` tag) and the closing fence; `json.loads`; require a dict with key `translations` holding a list of `str` of the same length as `chunk`.
   4. On parse or count failure: if `len(chunk) > 1`, split in half and recurse on each half, logging a `WARNING` (counts only); if `len(chunk) == 1`, raise `EngineResponseError("unusable response for a single segment")`.
 - `close()` closes the client.
@@ -410,10 +410,10 @@ Run logs and full outputs stay in `data/`. Nothing from `data/` is committed.
 
 In the same change set:
 
-- `docs/architecture/components/core.md`: update Status and anything that changed during implementation (e.g. `json_mode` default from step 1).
-- `docs/architecture/components/eval.md`: new, from the component template: purpose, commands, run directory format, baseline format, COMET isolation.
+- `docs/Architecture.md#core-api-reference`: update Status and anything that changed during implementation (e.g. `json_mode` default from step 1).
+- `docs/Architecture.md#evaluation-reference`: document purpose, commands, run directory format, baseline format, COMET isolation.
 - `docs/decisions/ADR-003-source-structure.md`: add `translator.py` to the core module table ("`Translator`: text-level translation over an engine; part of the public API via `__init__.py`").
-- `docs/Architecture.md`: link the core and eval component docs.
+- `docs/Architecture.md`: keep the overview and implemented status aligned with its core and evaluation sections.
 - `docs/Structure.md`: `scripts/convert_mt_model.py`, `apps/eval/baselines/`, `data/models/`.
 - `AGENTS.md`: how to run integration tests (`uv run pytest -m integration`; the LLM test needs the VPN).
 - `README.md`: open question on the MT model resolved (link ADR-006).
@@ -421,7 +421,7 @@ In the same change set:
 
 ## Interfaces
 
-Public API added in this phase: exactly the Public API, Types, and Configuration sections of the [core component doc](../architecture/components/core.md). Nothing else is exported from `doctranslator_core` or `doctranslator_core.types`.
+Public API added in this phase: exactly the Public API, Types, and Configuration sections of the [core API reference](../Architecture.md#core-api-reference). Nothing else is exported from `doctranslator_core` or `doctranslator_core.types`.
 
 Eval command-line interface: step 9, `cli.py` table.
 
@@ -443,7 +443,7 @@ All tests in step 10, passing under the six checks. Integration tests pass when 
 ## Completion Criteria
 
 - [x] Connectivity check done; JSON mode support and latency recorded (step 1).
-- [x] Both modes translate all 12 directions through `Translator`, exactly as specified in the core component doc (2026-09-27: two FLORES+ sentences per direction, each output non-empty and in the target script).
+- [x] Both modes translate all 12 directions through `Translator`, exactly as specified in the core section of `docs/Architecture.md` (2026-09-27: two FLORES+ sentences per direction, each output non-empty and in the target script).
 - [ ] All six checks pass locally and in CI, including the new import contracts and the core environment-variable ban; no test needs the VPN, a model, or network. (Local: passing, 87 tests. CI: runs when the branch reaches `main` or a pull request.)
 - [x] Integration tests pass on the VPN (LLM) and with a converted model (MT).
 - [x] FLORES+ downloaded at the pinned revision (all four languages).
@@ -451,6 +451,8 @@ All tests in step 10, passing under the six checks. Integration tests pass when 
 - [ ] Board item #9009 Closed; `docs/IMPLEMENTATION_PLAN.md` shows P1 Done.
 
 ### Deferred
+
+The [P1.1 operational draft](P1.1-baseline-capture.md) gives the capture sequence. Board #9009 was verified Active on 2026-09-27 and no CI run was found for `p1-engines-eval`; keep the two unchecked closure criteria above until reviewed-commit CI and board closure are verified. The handoff's claimed closure was premature.
 
 Moved out of P1 by the owner on 2026-09-27; tracked in `docs/IMPLEMENTATION_PLAN.md` under P1. They must be done **before the first change to the LLM prompt, the LLM model, or the MT model**, since that is when a regression check first matters:
 

@@ -1,125 +1,878 @@
 # Architecture
 
-<!--
-This document describes the architecture that currently exists or has been explicitly approved - not speculative ideas. Do not turn this into a brainstorming document; use docs/decisions/ for weighing options and docs/plans/ for work not yet done.
--->
+<!-- Keep all architecture descriptions, component details and Mermaid diagrams in this file.
+Link to headings rather than creating separate component or diagram documents.
+Accepted ADRs retain decision history; plans retain proposed contracts and implementation steps. -->
 
 ## Overview
 
-Document Translator translates PPTX, DOCX, XLSX, PDF, and TXT files between Chinese, English, Japanese, and Spanish while preserving layout, then checks that translated text still fits (see [README](../README.md) for product requirements).
+Document Translator is an internal document-processing system. A user submits a file through the web UI or an agent using MCP. The server creates a persistent job, reuses a compatible completed translation when possible, or dispatches the job to a worker. The worker runs one shared core pipeline: read the document through its format adapter, translate its text with SMALL-100 or the internal Gemma server, fit translated text against the original layout, and write a translated file in the original format. The server stores the result and makes it available to the submitting user.
 
-All translation behavior lives in one Python library, the **core**. Three surfaces expose it: a **CLI** that calls the core directly, and a **server** that runs translations as asynchronous jobs and exposes them through a REST API (used by the **web GUI**) and an MCP endpoint (used by agents on LLM platforms). The surfaces contain no translation logic; they only adapt their protocol to the core ([ADR-003](decisions/ADR-003-source-structure.md)).
+The CLI has two paths: local `translate` runs the core without a database or job queue; service commands submit through REST and share persistent jobs, cache and owned results with API/UI users ([ADR-010](decisions/ADR-010-shared-service-cli.md)). The evaluation app exercises the same translation engines on benchmark text. Translation, formatting and fit behavior belong to the core, never to the UI, CLI, REST routes or MCP tools.
 
-Status: approved design; not yet implemented.
+**Status:** text engines and evaluation are implemented. Document adapters, the document CLI, fit checking, jobs, UI and MCP are planned. Diagrams describe the accepted target responsibilities and flow, not a running end-to-end product. Details still under design are explicitly identified. The [roadmap](IMPLEMENTATION_PLAN.md) owns phase status; [accepted ADRs](decisions/README.md) take precedence over summaries here. [ADR-009](decisions/ADR-009-xlsx-preservation.md) and the P2 plans remain proposals.
+
+This single-file layout follows the sibling `Agentic_Project_Scaffold`. The [P2-P6 delivery handoff](plans/P2-P6-delivery-handoff.md) specifies the implementation sequence and release tests. The owner has approved the shared-service CLI, preserved XLSX sheet names, user-owned translation history and integration of the existing mock UI. Evidence-dependent technical decisions remain gated in the phase plans.
+
+### Reading Guide
+
+- [Main translation flow](#main-translation-flow): the user-facing path, including cache hits.
+- [Major components](#major-components): responsibilities and process boundaries.
+- [Users, batches and owned results](#users-batches-and-owned-results): authenticated submission, history, shared bytes and private access.
+- [Jobs, reuse and storage](#jobs-reuse-and-storage): durable work, lookup rules and result ownership.
+- [Core document pipeline](#core-document-pipeline): adapters, models and fit checking.
+- [File-specific flows](#file-specific-flows): TXT, PPTX, DOCX, XLSX and PDF.
+- [MCP visual review](#mcp-visual-review): optional review and private output versions.
+- [Design review and open decisions](#design-review-and-open-decisions): what is sound and what still needs resolution.
+- [Core API reference](#core-api-reference) and [evaluation reference](#evaluation-reference): the detailed implemented P1 contracts, consolidated from the former component files.
 
 ## Design Goals
 
-- **One source of truth for translation behavior.** Every surface produces identical output for the same document and options.
-- **Mechanically enforced boundaries.** Dependency rules are checked in CI, not left to convention.
-- **Extensibility by addition.** A new file format or translation mode is one new module in the core.
-- **Confidentiality.** Document content never leaves the company network.
-- **Portable hosting.** Moving from a laptop to a shared server is a configuration change.
+- One translation implementation for all surfaces, with import boundaries enforced in CI.
+- Preserve the source document, formatting and structure; expose failures rather than silently discard content.
+- Avoid unnecessary model work while ensuring that reuse reflects the requested languages, engine and output behavior.
+- Keep requests responsive and jobs recoverable when a worker or web process stops.
+- Keep document text inside company-controlled infrastructure, with verified TLS to the internal model server.
+- Start on one laptop and retain a path to a shared server without changing the translation pipeline.
 
 ## System Context
 
-- **Users** run the CLI locally or use the web GUI in a browser.
-- **LLM platform agents** (Open WebUI now, Copilot later) call the MCP endpoint.
-- **Internal LLM server** (OpenAI-compatible, API key auth) serves LLM translation mode.
-- **Local MT model** runs in-process on the host for MT translation mode.
+People use the web UI or CLI. Agents act for users through standard MCP over Streamable HTTP, initially from Open WebUI. Gemma runs on the company's OpenAI-compatible LLM server. SMALL-100 runs inside the worker or local CLI process through CTranslate2. Neither engine receives an Office file: it receives extracted text segments.
 
-## Major Components
+### Main Translation Flow
 
-### Core (`packages/core`, `doctranslator_core`)
-
-Responsibilities:
-- Read and write each document format, preserving formatting. All code specific to one file type lives in that format's package under `formats/` ([ADR-003](decisions/ADR-003-source-structure.md#format-packages)).
-- Translate text through a selected engine (LLM or MT mode).
-- Run the fit check and produce the fit report.
-- Render pages to images and apply document edits for visual review.
-- Expose all of the above through a single public API.
-
-### CLI (`apps/cli`, `doctranslator_cli`)
-
-Responsibilities:
-- Parse arguments and load configuration.
-- Call the core synchronously and report progress and the fit report.
-
-### Server (`apps/server`, `doctranslator_server`)
-
-One FastAPI web process serving REST and MCP ([ADR-001](decisions/ADR-001-mcp-server-deployment.md), [ADR-002](decisions/ADR-002-language-and-stack.md)), plus separate worker processes that run jobs ([ADR-008](decisions/ADR-008-job-execution-model.md)). On the laptop, `doctranslator-server serve --workers N` starts both.
-
-Responsibilities:
-- `jobs`: run translations as asynchronous jobs; the only server module that calls the core's pipeline. The `jobs` table is the queue: workers claim jobs with a lease, report progress through it, and a job whose worker dies is recovered when its lease expires ([ADR-008](decisions/ADR-008-job-execution-model.md)).
-- Translation reuse: a whole-document cache keyed by the input's hash and the core's output fingerprint, shared by all users. Each user's translated document is a chain of versions; edits add versions and never change cached output ([ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
-- `db`: job persistence in SQLite via SQLAlchemy, with Alembic migrations; used only by `jobs` and `auth`. Document files are immutable content-addressed blobs behind a storage interface, not database rows ([ADR-004](decisions/ADR-004-job-storage.md), [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
-- `api`: REST routes over `jobs`.
-- `mcp`: Streamable HTTP MCP tools over `jobs`.
-- `auth`: authentication for REST and MCP.
-- Serve the built web GUI.
-
-### Eval (`apps/eval`, `doctranslator_eval`)
-
-Responsibilities:
-- Benchmark translation engines on parallel sentences (FLORES+ and a domain set), scoring with COMET and chrF ([ADR-005](decisions/ADR-005-translation-quality-evaluation.md)).
-- Compare runs against committed baselines with paired bootstrap significance tests.
-- Uses only the core's public API; not a user-facing surface.
-
-### Web GUI (`apps/web`)
-
-Responsibilities:
-- React + TypeScript single-page app for uploading documents, choosing options, tracking jobs, and downloading results, using only the REST API.
-
-Per-component detail: [Core](architecture/components/core.md) (text translation; document sections added from P2), [Eval](architecture/components/eval.md). The server and web GUI docs are written in P5 and P6.
-
-## Component Interactions
+This diagram intentionally focuses on submission, reuse, translation and delivery. The worker's translation stages execute inside the shared core. Authentication and file-transfer contracts are explained below rather than expanded into additional boxes here.
 
 ```mermaid
 flowchart TD
-    user([User]) --> cli[CLI]
-    user --> web[Web GUI]
-    agent([LLM platform agent]) -->|MCP, Streamable HTTP| mcp
-    web -->|REST| api
-    subgraph server[Server process]
-        api[api] --> jobs[jobs]
-        mcp[mcp] --> jobs
-    end
-    cli --> core[Core public API]
-    jobs --> core
-    core -->|LLM mode| llm[(Internal LLM server)]
-    core -->|MT mode| mt[(Local MT model)]
+    U["User with a document"] --> UI["Web UI upload"]
+    U --> CLI["Service CLI or REST client"]
+    U --> MCP["Agent submits via MCP"]
+    UI --> JOB["Job service: validate request<br/>store original and create job"]
+    MCP --> JOB
+    CLI --> JOB
+    JOB --> CACHE{"Compatible completed result?<br/>Database lookup"}
+    CACHE -->|Hit| REUSE["Link stored result<br/>to the user's document"]
+    CACHE -->|Miss| QUEUE["Queued job in database"]
+    QUEUE --> WORKER["Worker claims job<br/>and rechecks cache"]
+    WORKER -->|Hit| REUSE
+    WORKER -->|Still a miss| READ["Format adapter reads document<br/>and preserves original layout"]
+    READ --> MODE{"Selected mode"}
+    MODE -->|MT| MT["Local SMALL-100"]
+    MODE -->|LLM| LLM["Internal Gemma server"]
+    MT --> APPLY["Validate translation<br/>and restore text into its structure"]
+    LLM --> APPLY
+    APPLY --> FIT["Fit check against original<br/>shrink when needed or report unresolved"]
+    FIT --> WRITE["Same format adapter applies size changes<br/>and writes the translated document"]
+    WRITE --> STORE["Store output and fit report<br/>commit result and complete job"]
+    STORE --> DOWNLOAD["Authorized result retrieval"]
+    REUSE --> DOWNLOAD
+    DOWNLOAD --> RESULT["User receives translated file"]
 ```
 
-Dependency rules (enforced by import-linter; full list in [ADR-003](decisions/ADR-003-source-structure.md#dependency-rules)):
+Important qualifications:
 
-- The core depends on no surface and no web, MCP, or CLI framework.
-- Surfaces import only the core's public API (`doctranslator_core`, `doctranslator_core.types`), never its internals such as engine or format classes.
-- In the server, only `jobs` calls the core's pipeline, only `jobs` and `auth` touch the database, and `api` and `mcp` never import each other.
-- The core has no database. Persistence exists only in the server.
+- A hit means the **same input bytes and output fingerprint**, not merely the same filename or some matching text. It reuses the already post-processed result and report, so no model or fit work is repeated.
+- `force_retranslate` bypasses both lookups. Concurrent misses can still perform duplicate work; the accepted design does not lock identical requests together.
+- The database stores job/cache metadata and blob references. Original documents, outputs and reports are files in blob storage, not database payloads.
+- A format adapter is a reader/writer with preserved document state. There is no agreed universal conversion to DOCX, PDF or plain text. PDF's strategy is still undecided.
+- The original text, styles and layout measurements must remain available throughout fitting. Fit never compares the translation with a source layout that has already been overwritten.
+- TXT bypasses fit because it has no fixed-size text containers. Document translation first arrives in P2; automatic fit arrives in P3, and PDF in P4. P2 output must say that fit has not run.
+- The MCP upload/download mechanism still needs a wire contract. The arrow above is a logical submission, not a claim that every MCP client can stream a file identically.
 
-## External Dependencies
+## Implementation Boundary
 
-- APIs: internal LLM server (OpenAI-compatible chat completions, Bearer API key, TLS from the internal CA).
-- Infrastructure: initially a single laptop on the company network hosting the server.
-- Third-party services: none. External cloud translation or LLM APIs are not permitted.
+| Area | Implemented | Planned |
+|------|-------------|---------|
+| Core | `Translator.translate_texts`, typed configuration, LLM and SMALL-100 engines, whitespace handling and per-call deduplication | Documents/adapters, document-wide reuse, detection, fingerprint and progress (P2); fit (P3); PDF (P4); rendering/edits (P7) |
+| Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
+| CLI | Package scaffold | Document translation command (P2) |
+| Server | Module scaffolds | Persistence, jobs/workers, auth and REST (P5); MCP (P7) |
+| Web | Design exploration | React application (P6) |
+
+P1 remains in progress pending delivery verification/closure. Its deferred baselines are separate from that closure. Local engine tests and the XLSX serialization experiment are not proof that the full document system is implemented.
+
+## Major Components
+
+### Users, Batches and Owned Results
+
+Every service request resolves an authenticated stable user ID before accessing data. Batches, jobs and documents belong to that user; no client-supplied owner ID can grant access. Multiple credentials or a later browser session can represent the same user. Authentication transport and operational defaults are specified for validation in the P5/P6 plans; they are not implemented yet.
+
+```mermaid
+flowchart LR
+    ADMIN["Administrator provisions user"] --> USER["Stable user identity"]
+    USER --> AUTH["Authenticate CLI / API / browser"]
+    AUTH --> SUBMIT["Create owned batch<br/>upload files one at a time"]
+    SUBMIT --> JOBS["One persistent job per accepted file"]
+    JOBS --> PROCESS["Cache lookup or worker pipeline"]
+    PROCESS --> DOC["User-owned document and version 0"]
+    DOC --> HISTORY["Owned history, status and fit report"]
+    HISTORY --> GET["Authorized file download"]
+    AUTH --> HISTORY
+```
+
+```mermaid
+flowchart TD
+    UA["User A"] --> DA["A's document and report references"]
+    UB["User B"] --> DB["B's document and report references"]
+    DA --> BLOB[("Immutable translated file / report blobs")]
+    DB --> BLOB
+    CACHE["Shared cache: exact input hash + fingerprint"] --> BLOB
+    CACHE -.->|hit creates own references| DA
+    CACHE -.->|hit creates own references| DB
+```
+
+A cache hit never transfers another user's job/document IDs or history. Files may share immutable bytes; authorization always follows the user's document/version references. Reports must remain tied to that version even when a forced translation replaces the cache entry. Disabling a user, revoking credentials, logout, document deletion and retention have explicit lifecycle tests in the service/UI plans.
+
+```mermaid
+flowchart LR
+    FILES["Paths / streaming manifest / UI selection"] --> BATCH["Owned open batch"]
+    BATCH --> UPLOAD["Bounded per-file upload"]
+    UPLOAD --> CHECK{"Accepted?"}
+    CHECK -->|Yes| JOB["Durable independent job"]
+    CHECK -->|Invalid| ERROR["Visible per-item error"]
+    CHECK -->|Capacity full| RETRY["Backoff and retry same identity"]
+    RETRY --> UPLOAD
+    JOB --> OUTPUT["Owned output + fit report"]
+    BATCH --> SEAL["Seal when submission finishes"]
+    OUTPUT --> SUMMARY["Per-file outcomes and downloads"]
+    ERROR --> SUMMARY
+```
+
+There is no fixed product-level total file-count ceiling. Per-file limits, bounded concurrent uploads, queue admission and storage capacity constrain resource use. A batch is a grouping of independent outcomes, not an all-or-nothing job or a second queue. Accepted jobs run while submission continues. Stable client submission IDs permit retries after an uncertain response without duplicating accepted jobs. One failure does not cancel successful siblings.
+
+### Core
+
+`packages/core` owns everything that determines the translated document: source/target language behavior, engine calls, formatting preservation, adapter orchestration, fit decisions and later rendering/edit operations. It accepts typed configuration and file inputs and returns results/reports. It does not load app settings, own users/jobs, query a database, maintain a persistent cache or configure logging handlers.
+
+The format-specific code describes and edits a document; the generic pipeline chooses the processing order; the generic fitter decides which size changes are needed. These responsibilities remain separate even though all execute in one worker process.
+
+| Module | Responsibility |
+|--------|----------------|
+| `translator.py`, `engines/` | Implemented text invariants, engine selection and model interaction |
+| `types.py`, `config.py` | Public types and validated configuration; no environment reads |
+| `document.py` | Planned neutral segments, inline structure, container descriptions and stable locations |
+| `pipeline.py` | Planned extract, deduplicate, translate, apply, fit and write sequence |
+| `formats/<format>/` | File-specific reading, writing, geometry, rendering and editing |
+| `formats/_ooxml/` | Shared low-level OOXML/package helpers; no generic translation policy |
+| `fit/` | Format-neutral measurement, font lookup and fit policy |
+| `render/` | Shared conversion/rasterization infrastructure used by format packages |
+
+`DocumentAdapter`, `LayoutSupport`, `RenderSupport` and `EditSupport` are separate capabilities, implemented only where applicable. Engines and formats never import one another. The [core API reference](#core-api-reference) retains the complete implemented text contract. Exact document API signatures remain in the [P2 draft](plans/P2-document-translation-and-cli.md) until approved.
+
+### Server
+
+`apps/server` owns persistent jobs, authenticated document ownership, storage, reuse and the REST/MCP protocols. A FastAPI web process serves REST, MCP and eventually the built web UI. Separate worker processes execute translation, and later render/edit jobs. The web process does not run translation or load the MT model for a request.
+
+| Server module | Owns | Does not own |
+|---------------|------|--------------|
+| `app.py` | Composition, routes, MCP mounting and database-session wiring | Translation and job execution |
+| `settings.py` | App configuration and public core config construction | Model inference |
+| `api/`, `mcp/` | REST/MCP request validation and response adaptation over `jobs/` | Direct database access or their own translation pipeline |
+| `auth/` | Identity and authorization policy, still to be designed | Formatting or fit behavior |
+| `jobs/` | Submission, lookup, queue transitions, workers, progress, result/version publication and storage coordination | File-format internals |
+| `db/` | SQLAlchemy models, sessions and repositories; Alembic owns schema changes | Document file contents |
+
+Only `jobs` calls the core pipeline; `settings` may construct public core configuration. Only `jobs`, `auth` and the composition root import `db`. REST and MCP never import each other. ORM objects stay behind job/auth boundaries; wire schemas are distinct from core and database models.
+
+### Web UI
+
+`apps/web` is planned as a React/TypeScript SPA using the REST API only. P6 audits the existing agent-built mock and integrates its useful features with real authenticated user history, upload/options/progress/download views and diagnostics/fit reports. Each feature receives a keep/rework/drop/add decision against backend capabilities; fake production data and simulated completion are removed. It does not select adapter internals, call models or access storage directly. The [P6 plan](plans/P6-web-ui-integration.md) covers artifact discovery, browser sessions, API gaps and browser acceptance. P7 rendering/visual edits are not implied by a mock preview/comment control.
+
+### CLI
+
+`apps/cli` has local `translate`, which calls the public core synchronously without persistent history/cache, and service commands, which submit/poll/download through REST using the user's credential. The service path shares durable jobs, batch history, cache and owned documents with API/UI users. It never imports server modules or accesses their database directly, and never silently falls back to local translation. Both paths own terminal progress, exit codes and output-path presentation; the core owns translation/fit. See [ADR-010](decisions/ADR-010-shared-service-cli.md) and [P5](plans/P5-server-and-service-cli.md).
+
+### Evaluation
+
+`apps/eval` owns benchmark datasets, scoring, statistical comparison and run/baseline records. It uses only the core's public text API and does not implement translation. COMET executes in an isolated environment so PyTorch and its older Python dependency do not enter the application runtime. See the [evaluation reference](#evaluation-reference) for its commands, settings, data formats and scoring contract.
+
+## Component Interactions
+
+### Runtime Boundaries
+
+Arrows below denote calls or data access, not permission for new Python imports. The accepted import rules remain in [ADR-003](decisions/ADR-003-source-structure.md) and `.importlinter`.
+
+```mermaid
+flowchart LR
+    WEB["Web UI"] -->|REST| API
+    CLI["Service CLI / API client"] -->|REST| API
+    AGENT["Agent platform"] -->|Streamable HTTP| MCP
+    subgraph SERVER["Web process"]
+        API["REST adapter"] --> JOBS["Job service"]
+        MCP["MCP adapter"] --> JOBS
+        AUTH["Authentication and ownership"] -.-> JOBS
+    end
+    JOBS -->|repositories| DB[("Job and result database")]
+    JOBS -->|storage interface| BLOB[("Immutable file blobs")]
+    subgraph WORK["Worker process"]
+        WORKER["Claim, heartbeat and publish"] --> CORE["Shared core pipeline"]
+        CORE --> FORMATS["Format capabilities"]
+        CORE --> FIT["Generic fit logic"]
+        CORE --> MT["SMALL-100 runtime"]
+    end
+    WORKER <-->|repositories| DB
+    WORKER <-->|storage interface| BLOB
+    CORE -->|text requests with TLS| GEMMA["Internal Gemma server"]
+    LOCAL["CLI process using its own core instance"] -.->|same public API and behavior| CORE
+    EVAL["Eval process using its own Translator"] -.->|same engine API| CORE
+```
+
+The dotted CLI/eval arrows indicate code reuse, not RPC to the worker. There is no message broker: the database jobs table is the durable queue. Workers poll and claim jobs through repositories. On the laptop, SQLite and local blobs are shared by the web/worker processes. Multiple hosts require PostgreSQL and shared blob storage first.
+
+### Submission and Cache Lookup
+
+The following sequence expands the two cache checks. It omits transient-error and cancellation branches, which are shown in the job lifecycle below.
+
+```mermaid
+sequenceDiagram
+    participant C as UI or MCP client
+    participant J as Job service
+    participant B as Blob storage
+    participant D as Database
+    participant W as Worker
+    participant P as Core pipeline
+    C->>J: Submit file, languages, mode and options
+    J->>J: Authenticate, validate and calculate input hash / fingerprint
+    J->>B: Store immutable original
+    J->>D: Lookup successful result by hash + fingerprint
+    alt Reusable result and no force flag
+        J->>D: Create completed job and user's document/version reference
+        J-->>C: Completed job ID
+    else Miss or force flag
+        J->>D: Create queued job
+        J-->>C: Job ID without waiting for translation
+        W->>D: Atomically claim job with a lease
+        W->>D: Recheck cache unless force flag is set
+        alt Another job completed while this one waited
+            W->>D: Publish existing result reference under current ownership
+        else Translation still needed
+            W->>B: Read original
+            W->>P: Translate document with options and progress callback
+            loop Between batches / while worker owns the job
+                P-->>W: Progress callback
+                W->>D: Progress and cancellation check; separate lease heartbeat
+            end
+            P-->>W: Output file, diagnostics and fit report
+            W->>B: Store immutable output/report blobs
+            W->>D: Fenced transaction: cache result, document version, succeeded
+        end
+    end
+    C->>J: Poll status and request result
+    J->>D: Check document ownership and result reference
+    J->>B: Read referenced output
+    J-->>C: Translated file and report
+```
+
+Submission-time fingerprinting must use configured immutable engine identity without loading a translation runtime. The existing `EngineInfo` does not yet supply the complete identity. The P2 draft now proposes a metadata-only fingerprint function; its identity preparation and worker verification contracts still need design validation. See [open decisions](#design-review-and-open-decisions). A worker reuses loaded engines between jobs but verifies it is executing the requested engine/configuration identity.
+
+## Jobs, Reuse and Storage
+
+### Reuse Rules
+
+| Layer | Scope | Rule |
+|-------|-------|------|
+| Text deduplication | Implemented within one text API call | Identical stripped inputs reach the engine once; whitespace is restored per occurrence |
+| Document deduplication | Accepted for P2 | Collect all segments first; deduplicate across all slides/paragraphs/sheets and pipeline batches, including formatting placeholders |
+| Whole-document cache | Accepted for P5 | Key is `(SHA-256(input bytes), output fingerprint)`; only complete successful core output is reusable |
+| Persistent segment reuse | Deferred | No reuse across near-identical/re-saved documents without a future ADR and evidence |
+
+The fingerprint represents every output-affecting choice: requested source (including `auto`), target, mode, model/prompt identity, relevant engine settings, fit policy and core version. Exact schema, model revision identity and font/measurement identity are still design work. API credentials and output paths are not output behavior. A new filename does not invalidate a byte-identical input; changing target language does. Re-saving an otherwise equivalent Office document may change ZIP bytes and legitimately miss this cache.
+
+Cached results include unresolved fit findings when the pipeline completed successfully; the report travels with the file. Partial/failed outputs and later user/agent edits are not cached. A cache hit gives the new user a document/version reference with their own ownership, never access to another user's private edit history. Two concurrent misses may both translate; the unique result key chooses the reusable entry. This is accepted duplicate work, not an exactly-once execution promise.
+
+### Job Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Submitted
+    Submitted --> Succeeded: reusable result
+    Submitted --> Queued: miss or force retranslate
+    Queued --> Running: conditional claim and lease
+    Queued --> Cancelled: cancel before claim
+    Running --> Succeeded: fenced publication of complete result
+    Running --> Queued: transient failure or expired lease with attempts left
+    Running --> Failed: permanent failure or attempts exhausted
+    Running --> Cancelled: cooperative cancellation before publication
+    Succeeded --> [*]
+    Failed --> [*]
+    Cancelled --> [*]
+```
+
+`Submitted` is a conceptual entry point, not an additional persisted status. The accepted job statuses are queued/running/succeeded/failed/cancelled. Attempts are counted at claim time. Workers heartbeat their leases independently of progress reports so a slow model batch cannot accidentally expire a healthy job. Cancellation is cooperative at pipeline batch boundaries; in-flight model requests can finish first. A worker that loses ownership must not publish a result. A process crash leaves unreferenced blobs eligible for cleanup, not a successful partial job.
+
+[ADR-008](decisions/ADR-008-job-execution-model.md) defines these rules, including retries and worker recovery. Exact fence predicates, attempt identity, race handling, intervals and defaults must be finalized in P5; its current worker-ID wording must not be treated as proof that every stale-completion race is resolved.
+
+### Storage and Document Ownership
+
+The database starts as SQLite with SQLAlchemy 2.0 synchronous sessions, WAL, foreign keys and a busy timeout. Alembic manages all schema changes. Application queries go through repositories rather than SQLite-specific SQL. Files use an interchangeable storage interface and immutable content hashes; the laptop implementation uses local disk. Backups must include a consistent database plus its referenced blobs.
+
+```mermaid
+flowchart LR
+    JOB["jobs<br/>state, options, progress, lease"] --> INPUT[("Original blob")]
+    JOB --> RESULT["translation_results<br/>input hash + fingerprint"]
+    DOC["documents<br/>owner and original reference"] --> INPUT
+    DOC --> RESULT
+    DOC --> V0["document_versions: version 0"]
+    RESULT --> OUT[("Translated blob")]
+    RESULT --> REPORT[("Fit report blob")]
+    V0 --> OUT
+    DOC --> V1["document_versions: version 1"]
+    V1 --> EDIT[("Edited blob")]
+    V1 -.->|parent| V0
+```
+
+This is a conceptual reference diagram, not a finalized database schema. Cache rows and user documents have independent retention policies. Delete a blob only when no job, result or document version references it. Expiring a cache entry cannot delete a user's translated file. Editing a document writes a new blob/version and never mutates a shared result. Defaults, authentication/ownership schemas and deletion races are P5 design work.
+
+## Core Document Pipeline
+
+### Format Adapter, Not Universal Converter
+
+Select a format package once after validating the input. It retains the original document/package state and maps between file structures and format-neutral text/container descriptions. It exposes separate capabilities for extraction/writeback, layout, rendering and edits. The engine sees only text; it neither understands ZIP parts nor writes the final file.
+
+```mermaid
+flowchart TD
+    SOURCE["Original input file"] --> ADAPTER["Select and open format adapter"]
+    ADAPTER --> SEGMENTS["Segments, inline structure<br/>and stable source locations"]
+    ADAPTER --> ORIGINAL["Preserved original text, styles<br/>container bounds and measured extent"]
+    SEGMENTS --> PREP["Detect or use explicit language<br/>protect tokens and deduplicate"]
+    PREP --> TRANSLATE["Translate unique text batches<br/>through the selected engine"]
+    TRANSLATE --> VALIDATE["Validate count, protected text<br/>and formatting correspondence"]
+    VALIDATE --> RESTORE["Adapter applies translated text<br/>to a working document"]
+    RESTORE --> LAYOUT["Adapter describes translated containers"]
+    ORIGINAL --> FIT["Generic fit policy"]
+    LAYOUT --> FIT
+    FIT --> CHANGES["Size adjustments and unresolved issues"]
+    CHANGES --> APPLY["Same adapter applies font changes"]
+    APPLY --> WRITE["Write and verify output<br/>without modifying the input"]
+    WRITE --> RESULT["Translated document plus report"]
+```
+
+TXT takes the same extraction/translation/writeback path but has no layout capability and bypasses the fit nodes. No post-fit redetection or generic second conversion is necessary. A format may need special serialization or rendering, but that stays inside its capability implementation. For PDF, whether conversion is part of that implementation remains undecided.
+
+The exact neutral document schema, paragraph segmentation, inline-token format, source detector and safe publication API are still proposed in [P2](plans/P2-document-translation-and-cli.md). The accepted requirements are preservation, document-wide reuse, explicit failures and an optional progress callback that can abort by raising. Tags that survive a model response are not sufficient evidence of correct emphasis placement. SMALL-100's current formatting strategy remains an open gate; stripping tags and assigning all output to the first run would violate preservation requirements.
+
+### Fit Check
+
+The fit baseline is the original document's measured rendering, using fonts and wrapping rather than character counts. For each supported fixed-size container, allowed space is the larger of its bounds and the original text's rendered extent. Original overflow is therefore not automatically corrected. Evaluate the translated text at its preserved initial size, shrink only when it exceeds that allowance, and stop at the configured floor. Report a remaining overflow instead of shrinking indefinitely.
+
+```mermaid
+flowchart TD
+    ORIGINAL["Measure original with its fonts,<br/>wrapping and container geometry"] --> ALLOW["Allowed space = larger of<br/>container bounds and original extent"]
+    TRANSLATED["Measure translated text<br/>at current font sizes"] --> CHECK{"Within allowed space?"}
+    ALLOW --> CHECK
+    CHECK -->|Yes| KEEP["Keep current sizes<br/>report any adjustment already made"]
+    CHECK -->|No| FLOOR{"Can sizes shrink further<br/>without going below the floor?"}
+    FLOOR -->|Yes| SHRINK["Reduce sizes under the fit policy"]
+    SHRINK --> TRANSLATED
+    FLOOR -->|No| ISSUE["Keep floor sizes<br/>record unresolved issue"]
+```
+
+The floor has both a relative-to-original limit and an absolute point-size limit. Exact defaults, step sizes, mixed-run scaling and measurement tolerances are not selected yet. Each container is independent; equalizing title sizes across slides is a non-goal. Existing overlaps are intentional design, not an instruction to move elements. The fitter changes font sizes within policy; it is not a general document-layout redesign engine. Missing fonts must produce an explicit accepted fallback/diagnostic, not fabricated measurement certainty.
+
+The report identifies stable locations, original/final sizes, adjustments and unresolved issues. Geometric fitting cannot guarantee attractive line breaks or resolve every overlap; optional agent visual review addresses the remaining human-visible problems. Font provisioning and the layout engine require the [P3.0 design work](plans/P3.0-fit-design-validation.md).
+
+## File-Specific Flows
+
+These describe required scope and adapter responsibilities. No format adapter is implemented yet. A named candidate library does not approve its save fidelity; preservation must be demonstrated on fixtures. Per-format diagrams reuse the same translation engines and generic fit policy rather than introduce independent pipelines.
+
+### TXT
+
+Plain text has structure but no font sizes or geometry. Preserve encoding policy, newline sequences, blank lines and whitespace while translating text units. The P2 draft proposes strict UTF-8 by default and non-empty physical lines as the initial segment unit; those details still need approval.
+
+```mermaid
+flowchart LR
+    IN["TXT input"] --> READ["Read text<br/>retain whitespace and line structure"]
+    READ --> CORE["Shared text translation<br/>and document deduplication"]
+    CORE --> WRITE["Restore structure<br/>write TXT"]
+    WRITE --> OUT["Translated TXT<br/>fit not applicable"]
+```
+
+No layout, render or edit capability is required for TXT. Do not claim a visual fit pass merely because no fit work applies. Numbers/URLs/protected text still follow the common translation rules.
+
+### PPTX
+
+Translate paragraphs in text boxes, placeholders, shapes, tables, nested groups and speaker notes. Preserve slide layout, run formatting and relationships. Paragraphs within a text frame are not individual formatting runs; splitting every run into an isolated translation can break sentence meaning. Candidate integration is python-pptx plus shared OOXML helpers where required, with the serializer decision gated on evidence.
+
+```mermaid
+flowchart TD
+    IN["PPTX package"] --> READ["PPTX adapter<br/>slides, groups, tables and notes"]
+    READ --> TEXT["Paragraphs and rich runs"]
+    READ --> BASE["Original slide-container geometry<br/>and text extent"]
+    TEXT --> CORE["Shared translation and inline validation"]
+    CORE --> RESTORE["Restore translated paragraphs<br/>into original slide structures"]
+    RESTORE --> FIT["Fit slide text containers<br/>including table cells"]
+    BASE --> FIT
+    FIT --> WRITE["Apply font changes<br/>preserve relationships and write PPTX"]
+    WRITE --> OUT["Translated PPTX and fit report"]
+```
+
+Fit covers the slide's fixed-size text containers; speaker-note translation does not justify inventing slide geometry for notes. Resolve inherited fonts, margins, paragraph spacing, bullets and wrapping before measuring. Group coordinates, table cells and placeholders must map back to stable locations. Rendering slides to images and visual edits arrive in P7; native open and preservation tests are required earlier.
+
+### DOCX
+
+Translate body paragraphs, tables (including nested tables), headers, footers and footnotes. Preserve paragraph styles, runs, numbering, relationships and inline structure. Shared/linked header/footer parts must not be translated repeatedly. Candidate integration is python-docx with OOXML access for content its object model does not expose.
+
+```mermaid
+flowchart TD
+    IN["DOCX package"] --> READ["DOCX adapter<br/>body, tables, headers, footers, footnotes"]
+    READ --> TEXT["Paragraphs and rich runs"]
+    READ --> BASE["Original fixed-container descriptions"]
+    TEXT --> CORE["Shared translation and inline validation"]
+    CORE --> RESTORE["Restore into original document structures"]
+    RESTORE --> KIND{"Fixed-size container?"}
+    KIND -->|Body text / natural reflow| WRITE["Preserve styles and write DOCX"]
+    KIND -->|Supported text box or fixed-width cell| FIT["Compare with original and fit"]
+    BASE --> FIT
+    FIT --> WRITE
+    WRITE --> OUT["Translated DOCX and fit report"]
+```
+
+Body text reflows naturally and is not globally shrunk to match the source pagination. The README limits fit to fixed elements such as text boxes and fixed-width table cells. Exact textbox extraction coverage, fields, tracked changes and unsupported text-bearing constructs must be settled in P2.0; they must not be silently lost or counted as translated. Footnote separators and generated fields are structural content, not ordinary prose.
+
+### XLSX
+
+Translate literal cell text while preserving formulas, numbers, dates, styles, relationships and workbook structure. The completed [XLSX experiment](experiments/xlsx-roundtrip/README.md) found that full openpyxl save removed a text-box shape and cleared formula caches in its fixtures. Targeted OOXML writes preserved those features. [ADR-009](decisions/ADR-009-xlsx-preservation.md) proposes the targeted writer; it is not yet accepted.
+
+```mermaid
+flowchart TD
+    IN["XLSX package"] --> READ["XLSX adapter resolves<br/>workbook and sheet relationships"]
+    READ --> TEXT["Literal shared / inline strings<br/>with rich-text runs"]
+    READ --> KEEP["Preserve formulas, numeric values,<br/>dates and untouched package parts"]
+    READ --> BASE["Original cell geometry, wrapping<br/>font properties and rendered extent"]
+    TEXT --> CORE["Shared translation and inline validation"]
+    CORE --> RESTORE["Restore literal text<br/>without turning strings into formulas"]
+    RESTORE --> FIT["Fit clipped cell text<br/>relative to original"]
+    BASE --> FIT
+    FIT --> WRITE["Apply cell font adjustments<br/>and write XLSX"]
+    KEEP --> WRITE
+    WRITE --> OUT["Translated XLSX and fit report"]
+```
+
+Shared strings may be referenced by many cells; retain their locations and rich formatting. A formula's string cache is not a literal text cell to translate. P3 must interpret row heights, column widths, merged cells, wrap settings and inherited fonts without unintentionally changing other cells that share a style.
+
+**Sheet names are preserved:** the owner explicitly chose cell-text translation with unchanged sheet names for this release. Renaming can break formulas, named ranges, charts and internal links. There is no rename option in this release; the README and ADR-009 record the amended requirement. The targeted writer still requires its native-open/recalculation validation.
+
+**Formula caches are a separate issue:** preserving cache bytes does not prove they remain correct when formulas depend on translated labels. The native recalculation policy still needs a decision. The experiment demonstrates structural preservation, not Excel rendering/recalculation correctness. Do not infer support for pivots, slicers, encrypted/signed workbooks or macros from those fixtures.
+
+### PDF
+
+Produce a translated PDF with page layout preserved as closely as practical. OCR is out of scope: text inside scanned images is not made translatable by this flow. P4 must select between editing text/layout in PDF and an intermediate editable representation followed by re-rendering. No universal converter or round-trip fidelity has been chosen.
+
+```mermaid
+flowchart TD
+    IN["PDF input"] --> READ["PDF adapter using the<br/>strategy selected in P4"]
+    READ --> TEXT["Extract supported text blocks<br/>and source locations"]
+    READ --> BASE["Original block geometry,<br/>fonts and rendered extent"]
+    TEXT --> CORE["Shared translation"]
+    CORE --> FIT["Fit translated blocks<br/>against original allowance"]
+    BASE --> FIT
+    FIT --> WRITE["Place text / reconstruct PDF<br/>under the selected strategy"]
+    WRITE --> OUT["Translated PDF and fit report"]
+```
+
+Font embedding, reading order, complex scripts, clipping and reconstruction artifacts are strategy-selection criteria. PyMuPDF is the anticipated format/render dependency within ADR-003's import boundaries, not evidence that the PDF algorithm is implemented. The adapter must distinguish unsupported/no-extractable-text content from an empty successful translation.
+
+## MCP Visual Review
+
+P7 adds an optional second quality layer after core translation. The same server exposes standard Streamable HTTP tools; platform-specific behavior stays outside the server. The platform agent sees rendered pages, prioritizes fit-report findings and requests supported document corrections. The server executes render/edit work as jobs and keeps version history.
+
+```mermaid
+sequenceDiagram
+    participant A as Agent acting for user
+    participant M as MCP over job service
+    participant W as Render / edit worker
+    participant V as Document versions and blobs
+    A->>M: Request rendered pages and fit report
+    M->>W: Queue render job for current version
+    W->>V: Read document; store rendered page images
+    W-->>M: Render result references
+    M-->>A: Page images and report
+    A->>A: Inspect overflow, overlap and readability
+    A->>M: Request edits based on version N
+    M->>W: Queue authorized edit job
+    W->>V: Write new blob; add version N+1 if N is still current
+    W-->>M: New version or conflict
+    M-->>A: Edit result
+    A->>M: Render again and verify
+```
+
+Edits never mutate the cached machine translation. A stale base version causes a conflict. Rendering is server-side so any compatible vision-capable client can inspect the pages. Headless LibreOffice followed by PDF rasterization is an anticipated approach, not an accepted rendering ADR. The MCP file-transfer contract, resource limits, supported edit operations and client-to-server network path must be defined before this flow is implemented.
+
+## External Dependencies and Deployment
+
+- Internal LLM endpoint: OpenAI-compatible chat completions with Bearer authentication and TLS verified through the host trust store. Gemma is the current configured model, not a hard-coded engine dependency.
+- Local MT: SMALL-100 converted to CTranslate2 with SentencePiece; no PyTorch or transformers in the runtime. Models are loaded by worker/CLI processes and reused.
+- Server: accepted FastAPI, SQLAlchemy, Alembic, SQLite/local blobs initially; PostgreSQL/shared blobs before multiple-host operation.
+- Office/PDF: dependencies remain inside the relevant format packages; shared rendering does not import format packages.
+- Initial hosting: one developer laptop on the internal network. Availability and worker capacity depend on that machine. `serve --workers N` is the accepted future convenience command, not an implemented entry point.
+- Enterprise platforms: require a reachable HTTPS host and decisions about authentication and Microsoft-tenant confidentiality. They cannot simply reach a private laptop because the protocol is MCP.
+- Eval-only external downloads: FLORES+ and COMET/model packages; no document content is sent to public translation services.
+
+See [Deployment](Deployment.md) for current local operation and future deployment work. No production service is presently deployed by this repository.
 
 ## Cross-Cutting Concerns
 
-- Authentication: shared by REST and MCP; not yet decided.
-- Authorization: not yet decided.
-- Observability: the core logs through standard `logging` without configuring handlers; apps configure logging. Jobs log per-phase timing and element counts.
-- Error Handling: not yet decided beyond the README requirement that partial failures are reported, never silently dropped.
-- Configuration: apps load configuration from their own sources (environment, files, arguments) and pass it to the core. The core never reads environment variables, files, or arguments.
-- Security: the LLM API key comes from configuration and is never committed.
+| Concern | Contract and ownership |
+|---------|------------------------|
+| Authentication / authorization | Server authenticates submissions and checks document/version ownership for status, downloads, render and edit; choice is still pending |
+| Configuration | Apps read arguments/environment/files/vault; core validates typed values and never reads app configuration itself |
+| Confidentiality | Text only reaches the configured internal model or local MT; logs omit source text, request bodies and credentials |
+| Observability | Core logs phase timing/counts without configuring handlers; workers persist progress; apps own logging setup |
+| Failure | Text errors use the core engine error types; document partial failure must be explicit; only complete output is publishable/cacheable |
+| Cancellation | Callback can abort between batches; clean up temporary output, and do not publish after cancellation or loss of job ownership |
+| Versioning | Core/model/prompt/output-policy identity governs cache validity; private edits create immutable user versions |
+| Verification | Unit/fake-engine tests, real-backend integration tests, native-file preservation checks and visual QA have distinct purposes |
 
-## Architectural Constraints
+All six repository checks remain required. Unit tests do not need VPN/models. Real-backend tests are explicitly marked and skips do not prove availability. The XLSX experiment's eight passing cases do not establish full Office compatibility. Visual/render acceptance is still required for format and fit work. Changes to prompts/models require the deferred [P1.1 baselines](plans/P1.1-baseline-capture.md) first.
 
-- Open WebUI and Copilot Studio support only Streamable HTTP for MCP.
-- Cloud platforms cannot reach the laptop host; Copilot integration requires a server with a stable HTTPS endpoint.
-- Text measurement for the fit check requires the documents' fonts or their metrics on the host.
+## Architectural Constraints and Known Tradeoffs
 
-## Known Tradeoffs
+1. The core remains independent of all surfaces, database access and app configuration. Apps import only `doctranslator_core` and its public `types`; format/engine internals stay private.
+2. Format packages do not import one another; shared OOXML operations are below them. Generic fit/render code does not import formats. Add library containment checks when those imports actually enter production code.
+3. The database queue avoids a broker and duplicate job-state systems. It requires correctly implemented claims, leases, recovery and fencing, which must be tested rather than assumed.
+4. Whole-document caching is conservative: exact bytes plus behavior fingerprint. It misses near-duplicate documents and allows concurrent duplicate work. Persistent segment reuse is deferred until evidence justifies it.
+5. The core release version invalidates reuse broadly. Immutable blobs share bytes efficiently while keeping user ownership and edit history separate.
+6. Geometric fit is necessary but insufficient for visual quality. Shrinking has a readability floor and does not fix all layout problems; unresolved findings are part of a successful result, not hidden errors.
+7. Models translate text, not native document structure. Formatting alignment and safe writeback are first-class requirements, especially for MT and rich text.
 
-- REST and MCP share one process, so they cannot scale or restart independently ([ADR-001](decisions/ADR-001-mcp-server-deployment.md)). Translation runs in separate workers, so it scales and fails independently of both ([ADR-008](decisions/ADR-008-job-execution-model.md)).
-- Workers find work by polling the jobs table instead of through a message broker: one source of truth and no extra service to operate, at the cost of about one small query per second per idle worker ([ADR-008](decisions/ADR-008-job-execution-model.md)).
-- The document cache reuses only byte-identical inputs, and every core release invalidates it. Near-identical documents are translated again until a segment cache is justified by measured hit rates ([ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md)).
-- The workspace layout adds per-package `pyproject.toml` files in exchange for explicit, enforced dependency boundaries ([ADR-003](decisions/ADR-003-source-structure.md)).
+## Design Review and Open Decisions
+
+The high-level upload -> lookup -> job -> worker -> adapter -> model -> fit -> write/store -> download flow is consistent with the accepted design. The separate worker and shared core are appropriate boundaries; the same adapter can read, describe layout and write without an extra generic conversion service. The remaining risks are in the contracts below, not a need for more top-level services.
+
+| Decision / gap | Why it matters | Work that resolves it |
+|----------------|----------------|----------------------|
+| Metadata-only fingerprinting | Cache lookup happens before dispatch; constructing today's MT `Translator` loads the model into the caller. A draft instance method alone is insufficient. Web and worker must agree on identity without web-process model loading. | P2.0/P2 API design, then P5 integration |
+| Complete output identity | Same-named model files, mutable remote deployments, detector changes and different fit fonts can change results. `EngineInfo` is not yet a sufficient fingerprint. | P2 identity contract; P3 font/measurement extension |
+| Formatting in both modes | Gemma's small tag spike is promising; SMALL-100 lost tags in 10/30 cases. First-run flattening loses required formatting. | P2.0 strategy and correspondence tests |
+| XLSX recalculation | Sheet names stay unchanged by owner decision; preserving formula caches is not the same as preserving their meaning after cell translation. | Finish proposed ADR-009 with native tests |
+| PPTX/DOCX serialization | Candidate libraries may not preserve unsupported structures; XLSX findings cannot establish their behavior. | P2.0 format-specific experiments |
+| Font measurement / shrink policy | Real shaping, wrapping and missing-font behavior determine whether fit measurements are trustworthy. | P3.0 ADR and native comparisons |
+| PDF read/write strategy | Reconstructing PDF text while preserving layout has different tradeoffs from Office package edits. | P4 strategy ADR |
+| Queue race and cancellation contract | Progress is not a lease heartbeat; stale attempts must never publish. Current ADR-008 needs exact predicates and tests. | P5.0 worker design |
+| Identity, retention and limits | Downloads/edits must be owned and uploads bounded before colleagues use the server. Shared-cache timing is an accepted signal that auth design must revisit. | P5.0 |
+| MCP transfer / rendering / edits | Logical file submission does not define transport, and vision review requires safely rendered pages and constrained edit operations. | P7, after P4/P5 and network verification |
+
+These are explicit gates, not hidden decisions for coders. The [delivery handoff](plans/P2-P6-delivery-handoff.md), [plan index](plans/README.md) and [roadmap](IMPLEMENTATION_PLAN.md) retain the implementation sequence. The owner's sheet-name and service-CLI decisions are incorporated; technical experiments and future phase implementations are still outstanding.
+
+## Core API Reference
+
+Status: text translation approved 2026-09-26 and implemented in P1. Document formats, fit check, and rendering remain unimplemented. The [P2 draft](plans/P2-document-translation-and-cli.md) proposes the next API and document contract; promote it here after approval, not before.
+
+### Purpose
+
+`doctranslator_core` (`packages/core`) owns everything that determines what a translation looks like. Every surface (CLI, server, eval) calls it through one public API, so the same input and options produce the same output everywhere ([ADR-003](decisions/ADR-003-source-structure.md)).
+
+### Responsibilities
+
+- Translate text between Chinese (Simplified), English, Japanese, and Spanish in all 12 directions.
+- Provide two translation modes behind one interface: LLM (internal LLM server) and MT (local machine translation model).
+- Guarantee text-level invariants shared by every surface: consistent translation of repeated strings, whitespace preservation, and pass-through of empty text.
+- Later phases: document formats (P2), fit check (P3), rendering and edits (P7).
+
+### Boundaries
+
+This component owns:
+- Language and mode definitions, engine configuration types and their validation.
+- The engine interface and both engine implementations, including prompts and model-specific conventions.
+- Retries, batching, and concurrency toward the LLM server; model loading and inference for MT.
+
+This component does NOT own:
+- Reading configuration from anywhere (environment, `.env`, files, OS vault, arguments). Apps load values and pass typed config in.
+- Logging setup, progress display, or command-line handling.
+- Benchmark datasets, scoring, or evaluation (that is `apps/eval`).
+- Persistence of any kind.
+
+### Interfaces
+
+#### Public API
+
+Everything below is importable from `doctranslator_core` (the only module apps may import besides `doctranslator_core.types`).
+
+```python
+from doctranslator_core import Translator, LlmEngineConfig, MtEngineConfig
+from doctranslator_core.types import Language
+
+config = LlmEngineConfig(base_url=..., api_key=..., model="gemma-4-31b-it")
+with Translator(config) as translator:
+    out: list[str] = translator.translate_texts(
+        ["你好，世界"], source=Language.ZH, target=Language.EN
+    )
+```
+
+`Translator(config: EngineConfig)`
+: Creates the engine for `config.mode`. Construction is cheap for LLM mode; for MT mode it loads the model, which can take seconds, so a `Translator` is meant to be created once and reused for many calls. It is a context manager; `close()` releases the HTTP client or model. Not thread-safe; use one `Translator` per thread.
+
+`Translator.translate_texts(texts: Sequence[str], *, source: Language, target: Language) -> list[str]`
+: Returns one translation per input, in input order. Guarantees:
+  - `len(result) == len(texts)`.
+  - Inputs that are empty or whitespace-only are returned unchanged and never sent to the engine.
+  - Leading and trailing whitespace of each input is removed before translation and re-applied to its output unchanged.
+  - Identical inputs (after stripping) are translated once and receive identical outputs within a call.
+  - `source == target` raises `ValueError`.
+  - Any failure raises a `TranslationError` subclass; partial results are never returned.
+
+`Translator.engine_info -> EngineInfo`
+: Identifies what produced the translations, for recording alongside results: mode, model identifier, prompt version (LLM) or model family and compute settings (MT).
+
+#### Types (`doctranslator_core.types`)
+
+| Type | Definition |
+|------|------------|
+| `Language` | `StrEnum`: `ZH = "zh"` (Simplified Chinese), `EN = "en"`, `JA = "ja"`, `ES = "es"`. |
+| `TranslationMode` | `StrEnum`: `LLM = "llm"`, `MT = "mt"`. |
+| `EngineInfo` | Frozen Pydantic model: `mode: TranslationMode`, `model: str`, `details: dict[str, str]` (e.g. `prompt_version`, `model_family`, `device`, `compute_type`). |
+| `TranslationError` | Base exception for all translation failures. |
+| `EngineUnavailableError(TranslationError)` | The engine cannot be reached or loaded: connection failure, DNS failure, timeout after retries, model directory missing. |
+| `EngineAuthenticationError(TranslationError)` | The LLM server rejected the credentials (HTTP 401/403). Never retried. |
+| `EngineResponseError(TranslationError)` | The engine answered but the answer is unusable: malformed output that still fails after the recovery strategy, or a non-retryable HTTP error. |
+
+Error messages never include API keys or full request bodies.
+
+#### Configuration (`doctranslator_core.config`, re-exported from `doctranslator_core`)
+
+Frozen Pydantic models. Apps construct them from their own configuration sources. `EngineConfig = LlmEngineConfig | MtEngineConfig`, discriminated by `mode`.
+
+`LlmEngineConfig`
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `mode` | `Literal[TranslationMode.LLM]` | `LLM` | Discriminator. |
+| `base_url` | `HttpUrl` | required | OpenAI-compatible API root, e.g. `https://host:port/v1`. |
+| `api_key` | `SecretStr` | required | Bearer token. Never logged or included in errors. |
+| `model` | `str` | required | Model name on the server. |
+| `timeout_s` | `float` | `120.0` | Per-request timeout. |
+| `max_retries` | `int` | `3` | Retries for retryable failures (see Error Handling). |
+| `batch_size` | `int` | `16` | Segments per request. |
+| `max_concurrency` | `int` | `4` | Concurrent requests per `translate_texts` call. |
+| `temperature` | `float` | `0.0` | Sampling temperature; `0.0` for reproducible output. |
+| `json_mode` | `bool` | `True` | Send `response_format: {"type": "json_object"}`. Disable for servers that reject it. The internal server accepts it (verified 2026-09-27). |
+
+`MtEngineConfig`
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `mode` | `Literal[TranslationMode.MT]` | `MT` | Discriminator. |
+| `model_dir` | `Path` | required | Directory of a CTranslate2-converted model, including its tokenizer files. |
+| `model_family` | `Literal["small100"]` | required | Selects tokenizer and language-token conventions (see MT engine). The only family is SMALL-100 ([ADR-006](decisions/ADR-006-mt-model-selection.md)); another model is added as a new family. |
+| `device` | `Literal["cpu", "cuda", "auto"]` | `"auto"` | `auto` uses CUDA when available. |
+| `compute_type` | `str` | `"default"` | CTranslate2 compute type (e.g. `int8`, `int8_float16`); `default` keeps the converted precision. |
+| `beam_size` | `int` | `4` | Beam search width. Decoding is deterministic. |
+| `max_batch_size` | `int` | `32` | Segments per inference batch. |
+| `cpu_threads` | `int` | `0` | CPU threads; `0` lets CTranslate2 decide. |
+
+### Dependencies
+
+Depends on:
+- `pydantic` (types and config), `httpx` (LLM client), `truststore` (OS certificate store, so the internal CA is trusted without disabling verification).
+- Optional extra `[mt]`: `ctranslate2`, `sentencepiece`. No `transformers` or PyTorch at runtime.
+
+Used by: `doctranslator_cli`, `doctranslator_server` (`jobs`, `settings`), `doctranslator_eval`.
+
+### Internal Architecture
+
+| Module | Role |
+|--------|------|
+| `__init__.py` | Public API: re-exports `Translator`, config types. |
+| `types.py` | Public types above. |
+| `config.py` | Config models above. |
+| `translator.py` | `Translator`: text-level invariants (whitespace, dedupe, pass-through, ordering), delegates to an engine. |
+| `engines/base.py` | `TranslationEngine` abstract base class. |
+| `engines/__init__.py` | `create_engine(config) -> TranslationEngine`, mapping `TranslationMode` to an engine class. |
+| `engines/llm.py` | `LlmEngine`. |
+| `engines/llm_prompts.py` | Versioned prompt templates. |
+| `engines/mt.py` | `MtEngine`, the SMALL-100 conventions, and `MtRuntime` (the loaded model and tokenizer, injectable for tests). |
+
+#### Engine interface
+
+```python
+class TranslationEngine(ABC):
+    @property
+    @abstractmethod
+    def info(self) -> EngineInfo: ...
+
+    @abstractmethod
+    def translate_batch(
+        self, texts: Sequence[str], source: Language, target: Language
+    ) -> list[str]:
+        """Translate non-empty, stripped, unique texts. Same length and order as input."""
+
+    def close(self) -> None:
+        """Release resources. Default: nothing to release."""
+```
+
+`Translator` guarantees engines only ever receive non-empty, stripped, deduplicated text, so engines don't re-implement those rules.
+
+#### LLM engine
+
+- One `httpx.Client` per engine, with `verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)` and `Authorization: Bearer <key>`.
+- Splits input into chunks of `batch_size` and sends up to `max_concurrency` chunks at a time (thread pool), reassembling in order.
+- Each chunk is one `POST {base_url}/chat/completions` with a system prompt and a user message containing `{"segments": [...]}`; the model must answer `{"translations": [...]}` with the same count.
+- Response parsing tolerates Markdown code fences around the JSON. If the JSON is invalid or the count differs, the chunk is split in half and each half retried, recursively, down to single segments. A single segment that still fails raises `EngineResponseError`.
+- `PROMPT_VERSION` in `llm_prompts.py` identifies the prompt. Any change to prompt wording or structure bumps it, because translation quality baselines are tied to it (ADR-005).
+
+#### MT engine
+
+- Loads a `ctranslate2.Translator` from `model_dir` (`model.bin`) and a `sentencepiece.SentencePieceProcessor` from `model_dir/sentencepiece.bpe.model`. SMALL-100's SentencePiece model is identical to M2M100's, so no model-specific tokenizer code is needed, and no code shipped with a model is ever executed ([ADR-006](decisions/ADR-006-mt-model-selection.md)).
+- SMALL-100 conditions on the target language only. Each source is `__<target>__`, then the SentencePiece pieces, then `</s>`; there is no target prefix. Language tokens use the `Language` values (`zh`, `en`, `ja`, `es`).
+- Output pieces are decoded with SentencePiece after dropping special tokens (`<s>`, `</s>`, `<pad>`, `<unk>`) and language tokens.
+- Translates in batches of `max_batch_size` with the configured beam size. `device = "auto"` resolves to `cuda` when CTranslate2 sees a CUDA device, else `cpu`.
+- Neither library ships complete type information: the engine declares `Protocol`s for exactly the calls it makes and casts once at load time.
+
+### Error Handling
+
+| Condition | Behavior |
+|-----------|----------|
+| Connection error, DNS failure, timeout | Retry with exponential backoff (1 s, 2 s, 4 s; ±25% jitter) up to `max_retries`, then `EngineUnavailableError`. |
+| HTTP 429, 500, 502, 503, 504 | Retry as above; honor `Retry-After` when present (capped at 30 s). Then `EngineResponseError`. |
+| HTTP 401, 403 | `EngineAuthenticationError` immediately. |
+| Other HTTP 4xx | `EngineResponseError` immediately (includes status code, not body). |
+| Unusable model output | Split-and-retry as described above, then `EngineResponseError`. |
+| MT model directory missing or unloadable | `EngineUnavailableError` at `Translator` construction. |
+| `[mt]` extra not installed | `EngineUnavailableError` at `Translator` construction, naming the extra to install. |
+
+### Security Considerations
+
+- API keys are `SecretStr` and never appear in logs, exceptions, `EngineInfo`, or reprs.
+- TLS verification is always on; trust comes from the OS certificate store.
+- The core sends document text only to the configured LLM server.
+
+### Observability
+
+Loggers are named after modules (`doctranslator_core.engines.llm`, ...). The core logs at `DEBUG` per request (chunk size, duration, retry attempts) and at `WARNING` for retries and split-and-retry recoveries. It never logs segment text or credentials. Apps configure handlers and levels.
+
+### Testing Strategy
+
+- `Translator` invariants: tested with a fake engine.
+- LLM engine: tested against `httpx.MockTransport` (success, retries, `Retry-After`, auth failure, malformed JSON, count mismatch and splitting, code-fenced JSON). No test contacts a real server.
+- MT engine: SMALL-100 conventions tested with a fake CTranslate2 translator and tokenizer injected through `MtRuntime`. Tests that load real models are marked `integration` and skipped by default.
+
+### Known Limitations
+
+- Source language auto-detection is not part of the text API; it arrives with documents in P2.
+- LLM output determinism depends on the server honoring `temperature = 0`.
+- Deduplication is scoped to one `translate_texts` call. It is not yet document-wide (ADR-007).
+- `EngineInfo` is descriptive metadata, not yet a complete cache fingerprint. LLM endpoint/batching and MT artifact identity need explicit treatment before P2 exposes a fingerprint.
+- Formatting tags are not structurally validated by the text API. A saved exploratory run kept all tags in 30/30 Gemma cases and 20/30 SMALL-100 cases; this is feasibility evidence, not a fidelity guarantee. See the [P2 draft](plans/P2-document-translation-and-cli.md).
+- Document geometry, format capabilities, diagnostics and progress callbacks have no implemented public API yet. Placeholder files do not provide these capabilities.
+
+## Evaluation Reference
+
+Status: implemented in P1 (2026-09-27). Full baselines have not been committed. The owner deferred them until before the first prompt or model change; [P1.1](plans/P1.1-baseline-capture.md) describes that work.
+
+### Purpose
+
+`doctranslator_eval` (`apps/eval`) measures translation quality: it translates a fixed set of parallel sentences through the core's public API and scores the output with COMET and chrF against reference translations ([ADR-005](decisions/ADR-005-translation-quality-evaluation.md)). It is a development tool, not a user-facing surface.
+
+### Responsibilities
+
+- Download FLORES+ at a pinned revision and load domain sets.
+- Run a benchmark for one engine configuration over any subset of the 12 directions, recording everything needed to reproduce and interpret it.
+- Score runs: COMET per segment and chrF per direction.
+- Compare two runs or baselines with a paired bootstrap, and flag a zh-en regression.
+- Write committed baselines that contain scores and segment ids, never text.
+
+### Boundaries
+
+This component owns:
+- Benchmark datasets, run directories, scoring, comparison, and baselines.
+- Its own configuration loading (environment, `.env`, OS vault).
+
+This component does NOT own:
+- Translation. It calls `Translator` from the core's public API only (ADR-003 rule 2).
+- COMET itself, which runs in an isolated environment (below).
+
+### Interfaces
+
+#### Command line
+
+`uv run doctranslator-eval <command>`, from the repository root (paths and `.env` resolve from there).
+
+| Command | Behavior |
+|---------|----------|
+| `download-flores` | Download FLORES+ devtest for the four languages at the pinned revision; skip files already present. |
+| `run --mode llm\|mt [--dataset flores\|domain:<path>] [--directions all\|zh-en,...] [--limit N]` | Run a benchmark and print a summary. MT mode also takes `--mt-model-dir PATH` (required), `--mt-family small100`, `--device`, `--compute-type`, `--beam-size`, `--cpu-threads`. |
+| `score <run_dir>` | Score a translated run again, e.g. after a COMET failure, without translating again. |
+| `compare <a> <b>` | Compare `b` against `a`; each is a run directory or a baseline file. Exit code 1 on a zh-en regression. |
+| `baseline set <run_dir> [--baselines-dir DIR]` | Write `apps/eval/baselines/<mode>.json` from a complete run made from a clean working tree without `--limit`. |
+
+Expected failures (missing settings or data, COMET failure, unsuitable baseline run, engine errors) print one `error:` line and exit with code 2.
+
+#### Configuration
+
+`EvalSettings` (pydantic-settings), prefix `DOCTRANSLATOR_`, reading the environment and then `.env`; empty values count as unset.
+
+| Variable | Use |
+|----------|-----|
+| `DOCTRANSLATOR_LLM_BASE_URL`, `DOCTRANSLATOR_LLM_MODEL` | LLM mode. |
+| `DOCTRANSLATOR_LLM_API_KEY` | LLM mode. Falls back to the OS vault: service `doctranslator`, username `DOCTRANSLATOR_LLM_API_KEY`. |
+| `DOCTRANSLATOR_DATA_DIR` | Data directory (default `data`). |
+| `HF_TOKEN` | Downloading FLORES+ (gated dataset). |
+
+### Data Model
+
+#### Datasets
+
+- FLORES+ `devtest` at revision `5fec6c13f9e5a4db2f745d4ec0d7c9721ddc4f06`, in `<data_dir>/benchmarks/flores_plus/<revision>/devtest/<code>.jsonl` (`cmn_Hans`, `eng_Latn`, `jpn_Jpan`, `spa_Latn`). Rows are joined across languages by `id`; ids must match exactly.
+- Domain sets: JSONL rows `{"id", "source_lang", "target_lang", "source", "reference"}`, filtered by direction; duplicate ids are rejected. Identified in manifests by the file's sha256.
+
+#### Run directory
+
+`<data_dir>/eval/runs/<run_id>/`, with `run_id = <UTC yyyymmddTHHMMSSZ>-<mode>-<model slug>`:
+
+| File | Content |
+|------|---------|
+| `manifest.json` | Run id, time, status, error, git commit and dirty flag, dataset and revision, `EngineInfo`, engine configuration (never the API key), hardware, directions, limit, COMET settings, chrF signature. |
+| `translations/<direction>.jsonl` | `id`, `source`, `reference`, `hypothesis` per segment. |
+| `timing.json` | Per direction: seconds, segments, segments per second, peak resident memory (MB). |
+| `scores.json` | Per direction: `n`, mean COMET, corpus chrF. |
+| `segment_scores/<direction>.json` | `{segment id: COMET}`. |
+
+Status moves `running` -> `translated` -> `complete`. A translation failure sets `failed` and keeps completed directions. A scoring failure leaves the run `translated` with the error recorded; `score` retries it.
+
+#### Baselines
+
+`apps/eval/baselines/<mode>.json` (committed): run id, time, dataset, `EngineInfo`, engine configuration, hardware, COMET settings, chrF signature, per-direction `n`/COMET/chrF, and per-segment COMET keyed by segment id. No source, reference, or hypothesis text (tested).
+
+### Internal Architecture
+
+| Module | Role |
+|--------|------|
+| `cli.py` | Typer commands; `main()` sets UTF-8 console output and logging, then runs the app. |
+| `settings.py` | `EvalSettings` and the vault fallback. |
+| `datasets.py` | `Direction`, `ALL_DIRECTIONS` (zh-en first), `Segment`, FLORES+ download and loading, domain sets. |
+| `runs.py` | Run directory models and file I/O, run ids, git state. |
+| `hardware.py` | `HardwareInfo` (OS, CPU name, cores, RAM, engine device) and `PeakMemory`. |
+| `runner.py` | `run_benchmark` (one `Translator` for the whole run), `score_run`, summary table. |
+| `scoring.py` | chrF (sacrebleu defaults) and the COMET adapter. |
+| `compare.py` | Paired bootstrap comparison and its table. |
+| `baselines.py` | Baseline creation, validation, and loading. |
+
+#### COMET isolation
+
+COMET (`unbabel-comet` 2.2.7, model `Unbabel/wmt22-comet-da`) needs PyTorch and an older Python, so it never enters the workspace. `scoring.comet` writes sources, references, and hypotheses to a temporary directory, one segment per line with line breaks inside segments replaced by spaces, and runs `uv tool run --python 3.11 --from unbabel-comet==2.2.7 --with "setuptools<81" comet-score ... --gpus 0 --quiet --only_system --to_json` (COMET 2.2.7's torchmetrics imports `pkg_resources`, which setuptools 81 removed; its pinned `jsonargparse` 3.13.1 calls a private argparse method whose signature changed in recent Python 3.12 patch releases, so it runs on 3.11). All directions of a run are scored in one call, so the model loads once. A count mismatch in the output is an error. The first call downloads PyTorch and the model (about 2.5 GB) into the uv and Hugging Face caches.
+
+#### Comparison
+
+For each direction present in both inputs, over the segment ids they share: `delta = mean(b) - mean(a)` of per-segment COMET, with a 95% percentile interval from 1,000 paired bootstrap resamples (`random.Random(0)`). The verdict is `better` if the interval is above zero, `worse` if below, otherwise no significant difference. chrF deltas are reported without a test. A regression is a `worse` zh-en.
+
+### Dependencies
+
+Depends on:
+- `doctranslator-core[mt]` (public API only), `pydantic-settings`, `keyring`, `huggingface-hub`, `sacrebleu`, `psutil`, `typer`.
+- `uv` on PATH for COMET; network access for the first COMET run and for FLORES+.
+
+Used by: developers, and the deferred P1 step 11 baseline work tracked by P1.1.
+
+### Security Considerations
+
+- The LLM API key is never written to a run directory or baseline (tested); the manifest stores the engine configuration without it.
+- Baselines are committed and contain no dataset text. Run directories contain text and stay in the gitignored data directory, since domain sets may be confidential.
+
+### Observability
+
+Commands log at `INFO` to stderr: run start, and per direction the segment count and time. HTTP request logging from `httpx` is limited to warnings.
+
+### Testing Strategy
+
+All tests run without network, models, or COMET: the runner uses a fake `Translator` and a stubbed COMET, the COMET adapter uses a fake `comet-score` that writes the verified output shape, and settings tests isolate the environment, `.env`, and the OS vault.

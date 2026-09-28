@@ -16,7 +16,7 @@ The output of a useful translator is not "the translated text"; it is a document
 
 A document translation system with one shared translation core and three ways to use it, delivered in this order:
 
-1. **CLI** - a local command-line tool that translates a file and writes a translated copy in the same format.
+1. **CLI and API** - a local translation command plus a shared persistent service for batch submission, history, cached results, fit reports and downloads. The service CLI is an HTTP client of the same REST API used by the web UI.
 2. **Web GUI** - a browser interface where users upload a document, choose languages, and download the result.
 3. **MCP server** - exposes translation as tools for agents on LLM platforms. A user uploads a file in chat; the agent submits a translation job, monitors it until completion, then uses its vision capabilities to inspect rendered pages of the output for visual problems (text overflow, overlapping elements, clipped or unreadable text) and edits the document to fix them. Open WebUI is the first platform, used as a development and test client; enterprise platforms such as Microsoft Copilot are the long-term targets.
 
@@ -59,7 +59,7 @@ All three surfaces use the same core, so a file translates identically no matter
 |--------|-------------|
 | PPTX | Translate text in text boxes, placeholders, tables, grouped shapes, and speaker notes. Preserve slide layout and run-level formatting. |
 | DOCX | Translate body text, tables, headers, footers, and footnotes. Preserve styles and run-level formatting. |
-| XLSX | Translate cell text and sheet names. Never alter formulas, numbers, or dates. |
+| XLSX | Translate literal cell text. Preserve sheet names, formulas, numbers, dates and formatting. |
 | PDF | Produce a translated PDF that preserves page layout as closely as practical. |
 | TXT | Translate plain text, preserving line and paragraph structure. |
 
@@ -109,9 +109,13 @@ Per format:
 
 *Layer 2 - visual review (MCP flow only).* The MCP server renders output pages to images and exposes them through MCP tools. The platform's agent inspects them, prioritizing pages listed in the fit report, and checks for problems the geometric check cannot judge: awkward line breaks, text that fits but reads as cramped, and unresolved issues from layer 1. It applies fixes through MCP tools. Rendering happens on the server so the review works with any agent that has vision, regardless of platform.
 
-**Jobs (web GUI and MCP server)**
+**Users and jobs (service CLI, REST, web GUI and later MCP)**
 
 - Translation runs as an asynchronous job: submit, check status and progress, retrieve result.
+- Every accepted file is an independent job owned by an authenticated user. Batches, document history, output files and reports are tied to that stable user identity; users can only access their own resources.
+- The service CLI and REST API share one job/cache/storage service. Long mixed-format batches use bounded per-file uploads and recoverable submission IDs, with no fixed total batch-count ceiling; resource limits and admission backpressure are explicit.
+- The local synchronous CLI remains available without persistent job history or document-cache reuse.
+- P6 audits the existing mock UI, preserves useful features and integrates real authenticated backend data; simulated production results are not acceptable.
 - Failed jobs report a clear reason; a partial failure (e.g. one unparseable element) does not silently drop content.
 
 ### Non-Functional
@@ -168,12 +172,18 @@ The detailed roadmap lives in the [Implementation Plan](docs/IMPLEMENTATION_PLAN
 
 Text translation works in both modes: LLM mode through the internal LLM server (Gemma) and MT mode through SMALL-100, which runs locally ([ADR-006](docs/decisions/ADR-006-mt-model-selection.md)). The translation quality benchmark (`apps/eval`) is in place. Document formats and the CLI are next (P2).
 
+P1 still has delivery verification/closure work recorded in its plan. Full quality baselines were explicitly deferred and must be captured before any prompt or model change. P2 is in design: its [draft plan](docs/plans/P2-document-translation-and-cli.md) and [XLSX experiment](docs/experiments/xlsx-roundtrip/README.md) distinguish proposed behavior from approved requirements. No document translation command, fit check, running web service, or MCP endpoint exists yet.
+
+## Delivery Handoff
+
+The [P2-P6 handoff](docs/plans/P2-P6-delivery-handoff.md) is the execution entry point for completing the five-format backend and integrating the existing mock web GUI. It includes the user/ownership flow, technical design gates, phase tasks, CLI/API contracts and backend/browser release matrices. It describes required work, not completed functionality.
+
 ## Documentation
 
 - [Architecture](docs/Architecture.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Repository Structure](docs/Structure.md)
-- [Architecture Components](docs/architecture/components/)
+- [Architecture Diagrams and Main Flow](docs/Architecture.md#main-translation-flow)
 - [Implementation Plans](docs/plans/)
 - [Architecture Decisions](docs/decisions/)
 - [Deployment](docs/Deployment.md)

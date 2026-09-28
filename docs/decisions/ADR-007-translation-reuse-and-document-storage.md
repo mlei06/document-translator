@@ -71,7 +71,7 @@ The pipeline collects every translatable segment of a document before translatin
 - **Scope.** One cache shared by all users. Anyone submitting the exact bytes already holds the document, so a hit reveals no content. It does reveal, through an immediate result, that someone translated the same file before; this is accepted for an internal tool and recorded for the authentication ADR.
 - **Bypass.** Submissions accept a `force_retranslate` option. It skips the lookup, translates, and replaces the cache entry for that key.
 - **Duplicate work.** Two identical submissions in flight at the same time may both translate. The unique key keeps the first result; the second worker's pre-translation lookup catches most cases. No locking.
-- **Surfaces.** The server only. The CLI has no database and does not use the cache.
+- **Surfaces.** The server owns the cache. Under [ADR-010](ADR-010-shared-service-cli.md), service CLI commands use it through REST; local synchronous `translate` has no database and does not use it.
 
 ### Layer 3: persistent segment cache (deferred)
 

@@ -36,15 +36,15 @@ Reusable libraries.
 
 ### `/packages/core`
 
-`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`.
+`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Only the text API, types/config and engines are implemented; document, pipeline, format, fit and render files are scaffolds.
 
 ## `/apps`
 
 Deployable surfaces, each a distribution depending on the core. They never import each other.
 
-- `cli/` - `doctranslator_cli`: command-line interface.
-- `server/` - `doctranslator_server`: a web process serving the REST API and the MCP endpoint, plus worker processes that run jobs (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`).
-- `eval/` - `doctranslator_eval`: translation quality benchmark (ADR-005, [component doc](architecture/components/eval.md)). `baselines/` holds the committed baseline scores per mode (created by P1 step 11).
+- `cli/` - `doctranslator_cli`: package scaffold for the P2 command-line interface.
+- `server/` - `doctranslator_server`: scaffolds for the future REST/MCP web process and workers (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`). No service is runnable yet.
+- `eval/` - `doctranslator_eval`: implemented translation quality benchmark (ADR-005, [evaluation reference](Architecture.md#evaluation-reference)). `baselines/` is the planned location for committed scores; full baselines are still deferred.
 
 Each package and app has its own `tests/` directory next to `src/`.
 
@@ -62,9 +62,9 @@ Development, migration, deployment, and maintenance scripts.
 
 Project documentation. See `docs/Architecture.md` for what each document is for.
 
-### `/docs/architecture`
+### `/docs/Architecture.md`
 
-System architecture documentation: `components/` (per-component detail) and `diagrams/` (Mermaid diagrams).
+The single architecture document: system context, component responsibilities and boundaries, interfaces, dependencies, inline Mermaid diagrams, file-specific flows, cross-cutting concerns, constraints and tradeoffs. Core and evaluation reference material is included in sections of this file. Link to its headings instead of creating separate component or diagram documents. ADRs retain decision history and plans retain implementation tasks and proposals.
 
 ### `/docs/plans`
 
@@ -76,7 +76,11 @@ Architecture Decision Records (ADRs).
 
 ### `/docs/design`
 
-Visual design exploration and source assets gathered ahead of the phase that implements them (for example `web-gui/` for P6). Exploration, not decided architecture.
+Visual design exploration and source assets gathered ahead of the phase that implements them (for example `web-gui/` for P6). Exploration, not decided architecture. `web-gui/prototype/` holds the runnable single-file mock UI (`lenny.html` plus web-sized assets) that P6 audits and ports; it is not production code and has no build or tests.
+
+### `/docs/experiments`
+
+Small design experiments and their evidence, separate from production code. `xlsx-roundtrip/spike.py` is an isolated, dependency-pinned script comparing two XLSX write strategies. Its disposable workbooks and machine-readable results live in gitignored `data/experiments/xlsx-roundtrip/`; the report and script are tracked here. These scripts are outside the production test/typecheck paths and are verified separately using their documented commands.
 
 ## `/.agents`
 

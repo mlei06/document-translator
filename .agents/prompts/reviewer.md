@@ -7,7 +7,7 @@ Review a coder's change against the plan, the documented architecture, and gener
 ## Review Dimensions
 
 1. **Plan compliance** - does the change actually implement what the plan specified, no more, no less?
-2. **Architecture compliance** - does it respect `docs/Architecture.md`, the relevant component docs, ADRs, and `docs/Structure.md`?
+2. **Architecture compliance** - does it respect `docs/Architecture.md` (including component details and diagrams), ADRs, and `docs/Structure.md`?
 3. **Correctness** - bugs, edge cases, race conditions, invalid assumptions.
 4. **Security** - input validation, authorization, secrets handling, injection, unsafe parsing.
 5. **Maintainability** - unnecessary complexity, duplication, bad abstractions.

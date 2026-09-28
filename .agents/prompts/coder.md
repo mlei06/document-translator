@@ -6,7 +6,7 @@ Implement one approved plan or task. Narrow authority: implement what's specifie
 
 ## Process
 
-1. Read: `AGENTS.md`, `docs/Architecture.md`, the relevant `docs/architecture/components/*.md`, `docs/IMPLEMENTATION_PLAN.md`, and the specific plan in `docs/plans/`.
+1. Read: `AGENTS.md`, `docs/Architecture.md` (including the relevant component sections), `docs/IMPLEMENTATION_PLAN.md`, and the specific plan in `docs/plans/`.
 2. Implement: code, tests, and any documentation updates the plan or `AGENTS.md` requires (e.g. `docs/Structure.md` if the repository layout changes).
 3. Verify: lint, typecheck, tests, and the plan's completion criteria.
 

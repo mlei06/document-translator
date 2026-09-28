@@ -7,7 +7,7 @@
 ## Relevant Architecture
 
 - `docs/Architecture.md`
-- `docs/architecture/components/<component>.md`
+<!-- Link to relevant headings within docs/Architecture.md rather than separate component files. -->
 
 ## Dependencies
 

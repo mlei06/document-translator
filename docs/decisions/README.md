@@ -3,3 +3,20 @@
 Lightweight ADRs for decisions that are significant and hard to reverse (choice of datastore, auth strategy, major framework, etc.). Number sequentially: `ADR-001-<short-name>.md`, `ADR-002-...`. Start each from [`ADR-000-template.md`](ADR-000-template.md).
 
 An ADR exists so that an agent working on this months later understands a decision was intentional, instead of "fixing" it back to whatever seems locally simpler.
+
+## Index
+
+| ADR | State |
+|-----|-------|
+| [001 MCP deployment](ADR-001-mcp-server-deployment.md) | Accepted |
+| [002 language and stack](ADR-002-language-and-stack.md) | Accepted |
+| [003 source structure](ADR-003-source-structure.md) | Accepted |
+| [004 job storage](ADR-004-job-storage.md) | Accepted |
+| [005 quality evaluation](ADR-005-translation-quality-evaluation.md) | Accepted |
+| [006 MT selection](ADR-006-mt-model-selection.md) | Accepted; full quality baseline deferred |
+| [007 reuse and document storage](ADR-007-translation-reuse-and-document-storage.md) | Accepted |
+| [008 job execution](ADR-008-job-execution-model.md) | Accepted |
+| [009 XLSX preservation](ADR-009-xlsx-preservation.md) | Writer/recalculation proposed; owner approved preserving sheet names |
+| [010 shared service CLI](ADR-010-shared-service-cli.md) | Accepted by owner; implementation pending |
+
+Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

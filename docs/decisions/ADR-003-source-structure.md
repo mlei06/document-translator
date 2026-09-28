@@ -166,11 +166,11 @@ Tests mirror this layout (`packages/core/tests/formats/pptx/`, ...), with sample
 - The abstract base classes and their implementations are internal. Apps choose a mode through `TranslationMode` and a format through the input file; they never import or instantiate an engine or format class.
 - The core has no database and no persistence beyond the files it is asked to read and write.
 
-The method signatures of the abstract base classes and the fields of `document.py` are designed in the core component doc, not here.
+The method signatures of the abstract base classes and the fields of `document.py` are designed in the core section of `docs/Architecture.md`, not here.
 
 ### CLI (`doctranslator_cli`)
 
-Parses arguments, loads configuration, calls the core's public API synchronously, and prints progress and the fit report. No translation, layout, or format logic.
+Local `translate` parses arguments, loads configuration, calls the core's public API synchronously, and prints progress and the fit report. ADR-010 adds service commands that call REST over HTTP for shared jobs/cache/persistence, without importing server modules. Neither path contains translation, layout or format logic.
 
 ### Server (`doctranslator_server`)
 

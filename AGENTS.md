@@ -12,7 +12,7 @@ When sources disagree, resolve in this order, and say explicitly which you are f
 
 1. The user's current, explicit instruction
 2. Accepted architecture decisions (`docs/decisions/`)
-3. Architecture documentation (`docs/Architecture.md`, `docs/architecture/`)
+3. Architecture documentation (`docs/Architecture.md`)
 4. The current implementation plan (`docs/IMPLEMENTATION_PLAN.md`)
 5. The detailed task plan for the work at hand (`docs/plans/`)
 6. Existing code
@@ -21,10 +21,11 @@ If documented architecture and existing code disagree, do not assume either is c
 
 ## Canonical Documentation
 
-- Architecture: `docs/Architecture.md`, `docs/architecture/components/`, `docs/architecture/diagrams/`
+- Architecture: `docs/Architecture.md` (all component details and diagrams live in this file)
 - Repository structure: `docs/Structure.md`
 - Implementation roadmap: `docs/IMPLEMENTATION_PLAN.md`
 - Detailed task plans: `docs/plans/`
+- P2-P6 execution entry point: `docs/plans/P2-P6-delivery-handoff.md` (shared-service CLI/API, user ownership, all formats/fit, then existing web UI integration)
 - Architecture decisions: `docs/decisions/`
 
 ## Core Rules
