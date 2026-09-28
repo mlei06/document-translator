@@ -18,8 +18,12 @@ from typing import Protocol
 
 from doctranslator_core.config import DocumentLimits
 from doctranslator_core.detect import detect_source
-from doctranslator_core.document import Paragraph
+from doctranslator_core.document import LayoutContainer, Paragraph
+from doctranslator_core.fit.fitter import fit_container
+from doctranslator_core.fit.fonts import FontLibrary
 from doctranslator_core.formats import DocumentAdapter, detect_format, open_adapter
+from doctranslator_core.formats.base import LayoutSupport
+from doctranslator_core.identity import STRATEGIES
 from doctranslator_core.inline import (
     Encoded,
     Inline,
@@ -45,8 +49,11 @@ from doctranslator_core.types import (
     DocumentTranslationResult,
     EngineInfo,
     EngineResponseError,
+    FitEntry,
+    FitOptions,
     FitReport,
     FitStatus,
+    FontManifest,
     InvalidDocumentError,
     Language,
     OutputPathError,
@@ -113,6 +120,7 @@ def translate_document(
     options: DocumentTranslationOptions,
     fingerprint: str,
     limits: DocumentLimits,
+    fonts: FontManifest | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> DocumentTranslationResult:
     """Translate ``input_path`` into a new file at ``output_path`` (see the Document API)."""
@@ -143,13 +151,23 @@ def translate_document(
             source = options.source
         if source is None or source == options.target:
             diagnostics.append(_NO_TEXT if source is None else _ALREADY_TARGET)
+            originals = _containers(adapter)
+            fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
             report(ProgressPhase.WRITE, 0, 1)
             _publish_copy(input_path, output_path, report)
             counts = SegmentCounts(
                 segments=len(paragraphs), passed_through=len(paragraphs), unique_inputs=0
             )
             return _result(
-                output_path, fmt, options, source, translator, fingerprint, counts, diagnostics
+                output_path,
+                fmt,
+                options,
+                source,
+                translator,
+                fingerprint,
+                counts,
+                diagnostics,
+                fit_report,
             )
 
         units: dict[str, _Unit] = {}
@@ -170,10 +188,10 @@ def translate_document(
             list(units.values()), translate, options.target, report, diagnostics
         )
         translate_s = time.perf_counter() - started - extract_s
+        originals = _containers(adapter)
         for paragraph_id, nodes in results.items():
             adapter.apply(paragraph_id, nodes, options.target)
-        report(ProgressPhase.FIT, 0, 1)
-        report(ProgressPhase.FIT, 1, 1)
+        fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
         _write_verify_publish(adapter, output_path, fmt, limits, options, report)
         diagnostics.extend(adapter.diagnostics)
         logger.info(
@@ -195,7 +213,15 @@ def translate_document(
             formatting_fallbacks=fallbacks,
         )
         return _result(
-            output_path, fmt, options, source, translator, fingerprint, counts, diagnostics
+            output_path,
+            fmt,
+            options,
+            source,
+            translator,
+            fingerprint,
+            counts,
+            diagnostics,
+            fit_report,
         )
     finally:
         adapter.close()
@@ -420,6 +446,79 @@ def _publish_copy(input_path: Path, output_path: Path, report: _Report) -> None:
             temporary.unlink()
 
 
+def _containers(adapter: DocumentAdapter) -> list[LayoutContainer] | None:
+    """The original fit baseline, described before any translation is applied."""
+    return adapter.layout_containers() if isinstance(adapter, LayoutSupport) else None
+
+
+def _fit(
+    adapter: DocumentAdapter,
+    originals: list[LayoutContainer] | None,
+    options: FitOptions,
+    fonts: FontManifest | None,
+    fmt: DocumentFormat,
+    report: _Report,
+) -> FitReport:
+    """Fit every container against its original and apply the chosen sizes (ADR-012)."""
+    if originals is None or not isinstance(adapter, LayoutSupport):
+        return FitReport(
+            format=fmt,
+            status=FitStatus.NOT_APPLICABLE,
+            measurement="none",
+            font_manifest=None,
+            options=options,
+        )
+    translated = {c.id: c for c in adapter.layout_containers()}
+    library = FontLibrary(fonts) if fonts is not None else None
+    entries: list[FitEntry] = []
+    unchanged = adjusted = unresolved = 0
+    report(ProgressPhase.FIT, 0, len(originals))
+    for index, original in enumerate(originals):
+        current = translated[original.id]
+        if _same_text(original, current):
+            unchanged += 1  # untranslated text cannot introduce new overflow
+        else:
+            outcome = fit_container(original, current, options, library)
+            if outcome.sizes is not None:
+                adapter.apply_run_sizes(original.id, outcome.sizes)
+            if outcome.entry is not None:
+                entries.append(outcome.entry)
+            if outcome.status == "unchanged":
+                unchanged += 1
+            elif outcome.status == "adjusted":
+                adjusted += 1
+            else:
+                unresolved += 1
+        report(ProgressPhase.FIT, index + 1, len(originals))
+    if not originals:
+        status = FitStatus.NOT_APPLICABLE
+    elif unresolved:
+        status = FitStatus.UNRESOLVED
+    elif adjusted:
+        status = FitStatus.ADJUSTED
+    else:
+        status = FitStatus.PASSED
+    return FitReport(
+        format=fmt,
+        status=status,
+        measurement=STRATEGIES["measure"],
+        font_manifest=fonts.digest if fonts is not None else None,
+        options=options,
+        inspected=len(originals),
+        unchanged=unchanged,
+        adjusted=adjusted,
+        unresolved=unresolved,
+        entries=entries,
+    )
+
+
+def _same_text(original: LayoutContainer, current: LayoutContainer) -> bool:
+    def texts(container: LayoutContainer) -> list[str]:
+        return ["".join(r.text for r in p.runs) for p in container.paragraphs]
+
+    return texts(original) == texts(current)
+
+
 def _result(
     output_path: Path,
     fmt: DocumentFormat,
@@ -429,8 +528,8 @@ def _result(
     fingerprint: str,
     counts: SegmentCounts,
     diagnostics: list[DocumentDiagnostic],
+    fit_report: FitReport,
 ) -> DocumentTranslationResult:
-    status = FitStatus.NOT_APPLICABLE if fmt is DocumentFormat.TXT else FitStatus.NOT_RUN
     return DocumentTranslationResult(
         output_path=output_path,
         format=fmt,
@@ -441,11 +540,5 @@ def _result(
         fingerprint=fingerprint,
         counts=counts,
         diagnostics=diagnostics,
-        fit_report=FitReport(
-            format=fmt,
-            status=status,
-            measurement="none",
-            font_manifest=None,
-            options=options.fit,
-        ),
+        fit_report=fit_report,
     )

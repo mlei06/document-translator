@@ -103,12 +103,19 @@ class FontFace(BaseModel):
     family: str
     """Family name as documents reference it (name ID 1, or 16 when present)."""
     names: tuple[str, ...]
-    """Every family name the face answers to, including localized names (e.g. 微软雅黑)."""
+    """Family (name ID 1) and full (ID 4) names in every language, e.g. 微软雅黑."""
+    typographic_names: tuple[str, ...] = ()
+    """Typographic family names (ID 16) not already in ``names``; matched only as a fallback."""
     bold: bool
     italic: bool
+    weight: int = 400
+    """OS/2 weight class; picks Regular over Light/Medium faces of one typographic family."""
     path: Path
     index: int = 0
     sha256: str
+    file_size: int = 0
+    mtime_ns: int = 0
+    """Size and modification time let a rebuild skip unchanged files; not part of the digest."""
 
 
 class FontManifest(BaseModel):
@@ -121,7 +128,17 @@ class FontManifest(BaseModel):
     @property
     def digest(self) -> str:
         entries = sorted(
-            (f.family, f.bold, f.italic, f.index, f.sha256, sorted(f.names)) for f in self.faces
+            (
+                f.family,
+                f.bold,
+                f.italic,
+                f.weight,
+                f.index,
+                f.sha256,
+                sorted(f.names),
+                sorted(f.typographic_names),
+            )
+            for f in self.faces
         )
         canonical = json.dumps(entries, ensure_ascii=False)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

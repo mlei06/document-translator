@@ -2,6 +2,8 @@
 # requires-python = ">=3.14"
 # dependencies = ["pypdfium2==5.13.0", "pillow==12.1.1"]
 # ///
+# pyright: reportMissingImports=false, reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false, reportUnknownArgumentType=false
 """Rasterize PDF pages to PNG for visual inspection of native-application exports.
 
 Usage (from the repository root):

@@ -7,10 +7,12 @@ from pathlib import Path
 from lxml import etree
 
 from doctranslator_core.config import DocumentLimits
-from doctranslator_core.document import Paragraph
+from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats._ooxml.runs import StyleTable, clean_text
-from doctranslator_core.formats.base import DocumentAdapter
+from doctranslator_core.formats.base import DocumentAdapter, LayoutSupport
+from doctranslator_core.formats.pptx.layout import PptxLayout
+from doctranslator_core.formats.pptx.model import Container
 from doctranslator_core.inline import Inline, Keep, Obj, Text, Wrap
 from doctranslator_core.types import (
     DiagnosticSeverity,
@@ -33,29 +35,13 @@ _TABLE_URI = "http://schemas.openxmlformats.org/drawingml/2006/table"
 
 
 @dataclass
-class Container:
-    """A text body: a shape, a table cell or a notes body. Used by layout (fit) support."""
-
-    key: int
-    part: str
-    kind: str
-    """``shape``, ``placeholder``, ``table-cell`` or ``notes``."""
-    location: str
-    element: Element
-    """The ``p:sp`` shape, or the ``a:tc`` cell for tables."""
-    tx_body: Element
-    slide_index: int | None
-    """1-based slide index, ``None`` for layouts, masters and notes."""
-
-
-@dataclass
 class _ParagraphRef:
     part: str
     element: Element
     container: int
 
 
-class PptxAdapter(DocumentAdapter):
+class PptxAdapter(DocumentAdapter, LayoutSupport):
     format = DocumentFormat.PPTX
 
     def __init__(self, path: Path, limits: DocumentLimits) -> None:
@@ -73,6 +59,7 @@ class PptxAdapter(DocumentAdapter):
         self._diagrams = 0
         try:
             self._scan()
+            self._layout = PptxLayout(self.package)
         except BaseException:
             self.package.close()
             raise
@@ -277,6 +264,13 @@ class PptxAdapter(DocumentAdapter):
                 return [self._objects[k]]
             case Wrap(children=children):
                 return [e for child in children for e in self._render(child, target)]
+
+    def layout_containers(self) -> list[LayoutContainer]:
+        return self._layout.containers(self.containers)
+
+    def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
+        self._layout.apply_sizes(container_id, sizes)
+        self.package.mark_modified(self.containers[int(container_id)].part)
 
     def save(self, path: Path) -> None:
         self.package.save(path)

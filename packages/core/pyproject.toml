@@ -4,11 +4,13 @@ version = "0.1.0"
 description = "Translation core: formats, engines, fit check, rendering."
 requires-python = ">=3.14"
 dependencies = [
+    "fonttools>=4.60",
     "httpx",
     "lingua-language-detector>=2.2,<2.3",
     "lxml>=6.1",
     "pydantic",
     "truststore",
+    "uharfbuzz>=0.50",
 ]
 
 [project.optional-dependencies]

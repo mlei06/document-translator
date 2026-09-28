@@ -141,15 +141,15 @@ def test_progress_is_reported_in_phase_order(tmp_path: Path) -> None:
         ProgressPhase.EXTRACT,
         ProgressPhase.TRANSLATE,
         ProgressPhase.TRANSLATE,
-        ProgressPhase.FIT,
-        ProgressPhase.FIT,
         ProgressPhase.WRITE,
         ProgressPhase.WRITE,
-    ]
+    ]  # TXT has no fixed-size containers, so there is no fit phase
     assert (events[3].done, events[3].total) == (2, 2)
 
 
-@pytest.mark.parametrize("phase", list(ProgressPhase))
+@pytest.mark.parametrize(
+    "phase", [ProgressPhase.EXTRACT, ProgressPhase.TRANSLATE, ProgressPhase.WRITE]
+)
 def test_cancellation_leaves_no_output_or_temporary_files(
     tmp_path: Path, phase: ProgressPhase
 ) -> None:

@@ -1,4 +1,4 @@
-"""Local-CLI acceptance run with real engines: every fixture format through ``doctranslator translate``.
+"""Local-CLI acceptance with real engines: every fixture format through ``doctranslator translate``.
 
 Usage (from the repository root, with LLM settings in the environment or .env and
 DOCTRANSLATOR_MT_MODEL_DIR set):
@@ -29,7 +29,7 @@ FIXTURES = {
     "xlsx": Path("tests/fixtures/xlsx/features-shared.xlsx"),
 }
 TXT_SAMPLE = (
-    "季度业务回顾\r\n\r\n销售额增长了百分之十二，利润率保持稳定。\r\n"
+    "季度业务回顾\r\n\r\n销售额增长了百分之十二，利润率保持稳定。\r\n"  # noqa: RUF001 - Chinese
     "  详情请访问 https://intranet.example.com/q3 或联系支持团队。\r\n12,345\r\n"
 )
 CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿]")
@@ -76,14 +76,27 @@ def main() -> None:
             else:
                 shutil.copyfile(fixture, source)
             before = sha(source)
-            command = [sys.executable, "-c", "from doctranslator_cli.main import main; main()",
-                       "translate", str(source), "--to", args.to, "--from", "zh",
-                       "--mode", mode, "--json"]
+            command = [
+                sys.executable,
+                "-c",
+                "from doctranslator_cli.main import main; main()",
+                "translate",
+                str(source),
+                "--to",
+                args.to,
+                "--from",
+                "zh",
+                "--mode",
+                mode,
+                "--json",
+            ]
             completed = subprocess.run(  # noqa: S603 - fixed interpreter and arguments
                 command, capture_output=True, text=True, encoding="utf-8", check=False
             )
             row: dict[str, object] = {
-                "format": fmt, "mode": mode, "exit": completed.returncode,
+                "format": fmt,
+                "mode": mode,
+                "exit": completed.returncode,
                 "input_unchanged": sha(source) == before,
             }
             if completed.returncode == 0:
@@ -103,8 +116,9 @@ def main() -> None:
                 row["stderr"] = completed.stderr[-2000:]
             rows.append(row)
             print(json.dumps({k: row[k] for k in ("format", "mode", "exit")}), flush=True)
-    (args.out / "summary.json").write_text(json.dumps(rows, indent=2, ensure_ascii=False),
-                                           encoding="utf-8")
+    (args.out / "summary.json").write_text(
+        json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

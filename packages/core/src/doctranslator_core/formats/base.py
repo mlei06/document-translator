@@ -4,11 +4,27 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pathlib import Path
 
-from doctranslator_core.document import Paragraph
+from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.inline import Inline
 from doctranslator_core.types import DocumentDiagnostic, DocumentFormat, Language
 
-__all__ = ["DocumentAdapter"]
+__all__ = ["DocumentAdapter", "LayoutSupport"]
+
+
+class LayoutSupport(ABC):
+    """Fixed-size text containers for the fit check, and applying the sizes it chooses.
+
+    ``layout_containers`` describes the document's current state: called before translation it
+    gives the original baseline, after ``apply`` the translated layout, with the same ids. Which
+    containers are reported expresses the format's fit scope (ADR-003): reflowing body text is
+    never a container. Sizes are points, per paragraph and run as described.
+    """
+
+    @abstractmethod
+    def layout_containers(self) -> list[LayoutContainer]: ...
+
+    @abstractmethod
+    def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None: ...
 
 
 class DocumentAdapter(ABC):
