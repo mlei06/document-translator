@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-26)
+Accepted (2026-09-26). Amended by [ADR-007](ADR-007-translation-reuse-and-document-storage.md) (file storage and retention) and [ADR-008](ADR-008-job-execution-model.md) (worker processes sharing the database on one host).
 
 ## Context
 
@@ -52,7 +52,7 @@ The standard migration tool for SQLAlchemy, with autogeneration from models and 
 
 Rules:
 
-1. **Documents are files, not rows.** Uploaded inputs, translated outputs, rendered page images, and fit reports are stored on disk in the data directory. The database stores job metadata and paths relative to the data directory, never file contents.
+1. **Documents are files, not rows.** Uploaded inputs, translated outputs, rendered page images, and fit reports are stored as files, never in the database. The database stores job metadata and file references, never file contents. Files are immutable content-addressed blobs behind a storage interface and are referenced by hash ([ADR-007](ADR-007-translation-reuse-and-document-storage.md)); the first implementation keeps them in the data directory.
 2. **All schema changes go through Alembic migrations.** The server never calls `create_all()` outside tests. Migrations use Alembic batch mode so they work on SQLite.
 3. **SQLite is configured on every connection:** WAL journal mode (readers don't block the writer) and `foreign_keys=ON`.
 4. **No SQLite-specific SQL in application code.** Queries go through SQLAlchemy constructs in `db/repositories/`, so moving to PostgreSQL is a connection URL change plus a migration run.
@@ -60,7 +60,7 @@ Rules:
 
 ## Consequences
 
-- The server runs as a single process against one SQLite file. Running multiple server replicas requires moving to PostgreSQL first, which supersedes this ADR.
+- The web process and its worker processes ([ADR-008](ADR-008-job-execution-model.md)) share one SQLite file on one host. Every connection also sets a busy timeout, so a writer waits briefly for the lock instead of failing. Running processes on more than one host (web replicas or remote workers) requires moving to PostgreSQL and shared blob storage first, which supersedes this ADR.
 - Backing up the server means copying the data directory (database file and document files together) while the server is stopped, or using SQLite's online backup API.
-- Stored documents grow without bound unless cleaned up. A retention policy for job files is needed before the server is shared with coworkers.
+- Stored documents grow without bound unless cleaned up. A retention policy for job files is needed before the server is shared with coworkers; its rules are in [ADR-007](ADR-007-translation-reuse-and-document-storage.md#retention).
 - Tests can run against a temporary SQLite file or in-memory database, with no external services.
