@@ -557,7 +557,7 @@ These are explicit gates, not hidden decisions for coders. The [delivery handoff
 
 ## Core API Reference
 
-Status: text translation approved 2026-09-26 and implemented in P1. Document formats, fit check, and rendering remain unimplemented. The [P2 draft](plans/P2-document-translation-and-cli.md) proposes the next API and document contract; promote it here after approval, not before.
+Status: text translation approved 2026-09-26 and implemented in P1. The document API below was accepted 2026-09-28 from the P2.0 evidence ([ADR-011](decisions/ADR-011-document-translation-contract.md), [ADR-009](decisions/ADR-009-xlsx-preservation.md)); the [implementation boundary](#implementation-boundary) says what is built. Fit (P3) and PDF (P4) extend it as specified in their sections. Rendering and edits (P7) remain unspecified.
 
 ### Purpose
 
@@ -660,6 +660,86 @@ Frozen Pydantic models. Apps construct them from their own configuration sources
 | `beam_size` | `int` | `4` | Beam search width. Decoding is deterministic. |
 | `max_batch_size` | `int` | `32` | Segments per inference batch. |
 | `cpu_threads` | `int` | `0` | CPU threads; `0` lets CTranslate2 decide. |
+
+`LlmEngineConfig.deployment_revision: str = ""` is the operator's declared revision of the model served under `model`; change it when the server's model changes under an unchanged name. It is part of the output identity, never sent to the server.
+
+`DocumentLimits` (frozen, re-exported): `max_package_bytes` 1 GiB (uncompressed Office package), `max_entry_bytes` 128 MiB, `max_entries` 20,000, `max_compression_ratio` 1,000, `max_text_bytes` 100 MiB (TXT and PDF input size), `max_segments` 200,000. Exceeding one raises `DocumentLimitError` before any engine call.
+
+#### Document API
+
+Accepted 2026-09-28 ([ADR-011](decisions/ADR-011-document-translation-contract.md)). All names are importable from `doctranslator_core` (functions, `Translator`, configuration) and `doctranslator_core.types` (types, errors).
+
+```python
+from doctranslator_core import Translator, prepare_identity, output_fingerprint, inspect_document
+from doctranslator_core.types import DocumentTranslationOptions, Language
+
+identity = prepare_identity(config)                 # no model load, no network
+options = DocumentTranslationOptions(source="auto", target=Language.EN)
+fingerprint = output_fingerprint(identity, options, fonts)   # server cache key part
+fmt = inspect_document(path)                          # sniff + validate without translating
+
+with Translator(config, fonts=fonts) as translator:
+    if translator.identity != identity:
+        raise IdentityMismatchError(...)              # worker check (ADR-011 section 6)
+    result = translator.translate_document(path, out_path, options=options, on_progress=callback)
+```
+
+`Translator(config, *, fonts: FontManifest | None = None)`
+: `fonts` is the provisioned font manifest used by fit measurement (P3). Without it, applicable containers are reported unresolved (`font_unavailable`).
+
+`Translator.identity -> TranslationIdentity`
+: The loaded engine's output identity; equal to `prepare_identity(config)` for the same configuration.
+
+`Translator.translate_document(input_path: Path, output_path: Path, *, options: DocumentTranslationOptions, on_progress: Callable[[TranslationProgress], None] | None = None) -> DocumentTranslationResult`
+: Translates one file into a new file of the same format. Guarantees:
+  - The input is never modified. `output_path` must not exist, must not be the input (also via links) and its directory must exist; otherwise `OutputPathError` before any work.
+  - The whole document is extracted before translation; each unique engine input (ADR-011 section 1) reaches the engine once, however the work is batched (64 unique inputs per progress step).
+  - `on_progress` is called after extraction, after every translation batch, before fitting and before writing. If it raises, the run stops, temporary files are removed and the exception propagates unchanged; nothing is published.
+  - Output is written to a temporary file beside `output_path`, reopened and structurally verified, then published atomically without overwriting. A failure never leaves a partial output.
+  - Failures raise `TranslationError` subclasses: engine errors unchanged, `DocumentError` subclasses for the document (`UnsupportedDocumentError`, `InvalidDocumentError`, `DocumentLimitError`, `SourceLanguageAmbiguousError`, `NoExtractableTextError`, `OutputPathError`). Messages contain no document text.
+  - A document without translatable text, or whose detected source equals the target, is copied unchanged with a `no_translatable_text` / `already_target_language` diagnostic.
+
+`prepare_identity(config: EngineConfig) -> TranslationIdentity`
+: Metadata-only identity. LLM details: `base_url`, `deployment_revision`, `prompt_version`, `temperature`, `json_mode`, `batch_size`. MT details: `model_family`, `artifact_sha256` (SHA-256 over the sorted names and contents of every regular file in `model_dir`), resolved `device`, `compute_type`, `beam_size`, `max_batch_size`. Hashing the MT model takes about a second; callers prepare an identity once per configuration, not per request. Raises `EngineUnavailableError` if the MT model directory is missing.
+
+`output_fingerprint(identity: TranslationIdentity, options: DocumentTranslationOptions, fonts: FontManifest | None = None) -> str`
+: SHA-256 hex of canonical JSON (sorted keys, schema 1): `core_version` (the `doctranslator-core` distribution version), `strategies` (inline, detection, protection, each format writer, fit policy and measurement versions), `identity`, `options` (source, target, protected terms, TXT encoding, fit options) and `font_manifest` (digest or `null`). Never contains credentials, paths or callbacks.
+
+`inspect_document(path: Path, *, limits: DocumentLimits | None = None) -> DocumentFormat`
+: Identifies the format from content and extension (they must agree) and applies the package/size limits and protection checks, without parsing text. Raises the same `DocumentError` subclasses as translation. Used by the server to reject files at submission.
+
+Document types (`doctranslator_core.types`, all frozen Pydantic models):
+
+| Type | Fields |
+|------|--------|
+| `DocumentFormat` | `txt`, `pptx`, `docx`, `xlsx`, `pdf` |
+| `DocumentTranslationOptions` | `source: Language \| "auto"` (default `auto`), `target: Language`, `protected_terms: tuple[str, ...]`, `txt_encoding: str \| None`, `fit: FitOptions` |
+| `FitOptions` | `min_scale` 0.7 (0.3-1.0), `min_size_pt` 8.0 (1-72) |
+| `TranslationProgress` | `phase: extract \| translate \| fit \| write`, `done`, `total` |
+| `DocumentDiagnostic` | `code`, `severity: info \| warning`, `message`, `location`, `count` |
+| `SegmentCounts` | `segments`, `passed_through`, `unique_inputs`, `formatting_fallbacks` |
+| `DocumentTranslationResult` | `output_path`, `format`, `source_requested`, `source_resolved`, `target`, `engine: EngineInfo`, `fingerprint`, `counts`, `diagnostics`, `fit_report: FitReport`; property `fit_status` |
+| `TranslationIdentity` | `mode`, `model`, `details: dict[str, str]`; property `digest` |
+| `FitReport`, `FitEntry`, `FitStatus`, `Extent` | See [Fit Check](#fit-check); `fit_status` is `not_applicable` for TXT and for documents without applicable containers |
+
+Stable locations are strings built from part and structure, never Python object identities: `slide 3 / shape "Title 1" (id 2) / paragraph 1`, `document body / table 1 / row 2 / cell 1 / paragraph 1`, `sheet "数据" / A1`, `line 12`. Sheet names appear as they are (they are preserved, not translated).
+
+#### Document pipeline internals
+
+| Module | Role |
+|--------|------|
+| `inline.py` | `Text`/`Keep`/`Obj`/`Wrap` nodes, `encode`, `validate`, `decode`, whitespace normalization, `project`, `segmented_pieces`/`join_segmented` (ADR-011 sections 1-2) |
+| `protect.py` | URL/email/path/protected-term/tag-like `Keep` spans and segment pass-through rules (ADR-011 section 3) |
+| `detect.py` | Source detection `detect-v1` with lingua 2.2.0 (ADR-011 section 4) |
+| `identity.py` | `prepare_identity`, `output_fingerprint`, strategy version constants |
+| `document.py` | `Paragraph(id, location, nodes)` and the layout container types used by fit (P3) |
+| `pipeline.py` | Extract, detect, protect/encode, deduplicate, translate in batches with validation/projection/fallback, apply, fit, write-verify-publish |
+| `formats/base.py` | `DocumentAdapter` ABC: `paragraphs()`, `apply(paragraph_id, nodes, target)`, `save(path)`, `diagnostics`, `close()`; `LayoutSupport` ABC (P3) |
+| `formats/__init__.py` | `detect_format(path)`, `open_adapter(format, path, limits)` |
+| `formats/_ooxml/` | Safe ZIP reading with limits, secure lxml parsing, relationship resolution, targeted part writer |
+| `formats/<format>/` | Format adapters (TXT, PPTX, DOCX, XLSX; PDF in P4) |
+
+An adapter reads the file once and keeps its own parsed state. `paragraphs()` returns every translatable paragraph in document order with inline nodes whose style ids and object keys only the adapter interprets. `apply` replaces a paragraph's content: the adapter writes one run per `Text`/`Keep` with the style's saved properties, re-inserts the original object elements by identity and rebuilds wrappers. `save` writes the package, changing only parts that were modified.
 
 ### Dependencies
 

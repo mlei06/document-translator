@@ -93,11 +93,9 @@ if ($Part -in 'all', 'docx') {
         $sec.Headers.Item(1).Range.Text = '内部资料 请勿外传'
         $sec.Footers.Item(1).Range.Text = '版权所有'
         'docx: header and footer'
-        $doc.Comments.Add($p2.Range, '请确认日期。') | Out-Null
-        $doc.TrackRevisions = $true
-        $doc.Paragraphs.Item(1).Range.InsertAfter('（草稿）')
-        $doc.TrackRevisions = $false
-        'docx: comment and tracked change'
+        # Comments and tracked changes are not authored here: with them, Word's save waits on a
+        # hidden privacy prompt (the user's "warn before saving markup" option, which this script
+        # does not change). XML-built test fixtures cover them.
         # Save under %TEMP% first: saving directly into the repository folder hung behind a
         # hidden prompt on this host.
         $tmp = Join-Path $env:TEMP 'doctranslator-report.docx'

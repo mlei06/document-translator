@@ -9,9 +9,11 @@ repair, optionally exports a PDF next to -OutDir for visual inspection, and for 
 values of formula cells after Excel's load-time recalculation. Prints one JSON object per file:
 {file, app, version, build, ok, error, pdf, formulas}. Exit code 1 if any file failed to open.
 
-Opening with repair disabled makes a file that needs repair fail instead of being silently fixed:
-Word OpenAndRepair=false, Excel CorruptLoad=xlNormalLoad, PowerPoint throws on corrupt content.
-Excel is opened with UpdateLinks=0 so external links are never refreshed.
+A file that needs repair fails instead of being silently fixed: Word opens with OpenAndRepair=false,
+PowerPoint throws on corrupt content, and Excel's open either fails or yields a "[Repaired]" workbook,
+which is reported as a failure (verified with a truncated-XML workbook). Excel is opened with
+UpdateLinks=0 so external links are never refreshed. Word's PDF export hangs on some hosts (a hidden
+prompt); use -NoPdf there.
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File scripts/native_office_check.ps1 -OutDir data/native out.pptx out.docx
@@ -59,15 +61,17 @@ foreach ($file in $Files) {
             }
             'docx' {
                 # FileName, ConfirmConversions, ReadOnly, AddToRecentFiles, ..., OpenAndRepair (arg 13)
-                $m = [Type]::Missing
+                $m = [Reflection.Missing]::Value
                 $doc = $app.Documents.Open($path, $false, $true, $false, $m, $m, $m, $m, $m, $m, $m, $false, $false)
                 if ($pdf) { $doc.ExportAsFixedFormat($pdf, 17); $record.pdf = $pdf }  # wdExportFormatPDF
                 $doc.Close(0)
             }
             'xlsx' {
-                # FileName, UpdateLinks=0, ReadOnly, ..., CorruptLoad (arg 15) = xlNormalLoad (0)
-                $m = [Type]::Missing
-                $book = $app.Workbooks.Open($path, 0, $true, $m, $m, $m, $m, $m, $m, $m, $m, $m, $false, $m, 0)
+                # FileName, UpdateLinks=0, ReadOnly. Passing CorruptLoad (arg 15) through PowerShell
+                # makes Workbooks.Open fail for valid files, so a repaired open is detected by the
+                # "[Repaired]" suffix Excel gives the workbook (verified with a corrupted file).
+                $book = $app.Workbooks.Open($path, 0, $true)
+                if ($book.Name -match 'Repaired') { $book.Close($false); throw "Excel repaired the workbook ($($book.Name))" }
                 $values = @()
                 foreach ($sheet in $book.Worksheets) {
                     $used = $sheet.UsedRange

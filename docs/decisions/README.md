@@ -16,7 +16,8 @@ An ADR exists so that an agent working on this months later understands a decisi
 | [006 MT selection](ADR-006-mt-model-selection.md) | Accepted; full quality baseline deferred |
 | [007 reuse and document storage](ADR-007-translation-reuse-and-document-storage.md) | Accepted |
 | [008 job execution](ADR-008-job-execution-model.md) | Accepted |
-| [009 XLSX preservation](ADR-009-xlsx-preservation.md) | Writer/recalculation proposed; owner approved preserving sheet names |
+| [009 XLSX preservation](ADR-009-xlsx-preservation.md) | Accepted (sheet names preserved; recalculation on open) |
 | [010 shared service CLI](ADR-010-shared-service-cli.md) | Accepted by owner; implementation pending |
+| [011 document translation contract](ADR-011-document-translation-contract.md) | Accepted (formatting, writers, detection, identity) |
 
 Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

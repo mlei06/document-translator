@@ -17,7 +17,7 @@ from doctranslator_core.types import Language
 
 pytestmark = pytest.mark.integration
 
-SOURCES = ["你好，世界", "谢谢"]  # noqa: RUF001 - real Chinese punctuation
+SOURCES = ["你好，世界", "谢谢"]
 _CJK = re.compile(r"[一-鿿]")  # U+4E00 to U+9FFF, CJK Unified Ideographs
 
 

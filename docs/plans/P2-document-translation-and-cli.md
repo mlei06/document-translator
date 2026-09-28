@@ -1,6 +1,6 @@
 # P2 - Document Translation and CLI
 
-Status: Draft for architecture review (2026-09-27), not approved for implementation. Board: [Feature #9010](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9010), New until the first implementation plan is approved. The existing roadmap/README remain authoritative where this draft proposes a change.
+Status: Approved for implementation 2026-09-28 in the architect role under the P2-P6 handoff. The P2.0 gates are resolved in [ADR-011](../decisions/ADR-011-document-translation-contract.md) and [ADR-009](../decisions/ADR-009-xlsx-preservation.md); the exact contract is in the [core API reference](../Architecture.md#document-api), which supersedes the proposals below where they differ (notably: targeted OOXML writers for PPTX/DOCX, `DocumentLimits`, `inspect_document`, `deployment_revision`). Board: [Feature #9010](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9010), Active.
 
 The [P2-P6 handoff](P2-P6-delivery-handoff.md) governs the full release. P2 builds local `translate`; P5 adds service CLI and persistent batches. Technical decisions are resolved in the architect role before coder handoff.
 
