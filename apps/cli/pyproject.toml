@@ -1,9 +1,19 @@
 [project]
 name = "doctranslator-cli"
 version = "0.1.0"
-description = "Command-line interface."
+description = "Command-line interface: local translation and the shared-service client."
 requires-python = ">=3.14"
-dependencies = ["doctranslator-core"]
+dependencies = [
+    "doctranslator-core[mt]",
+    "httpx",
+    "keyring",
+    "pydantic-settings",
+    "truststore",
+    "typer",
+]
+
+[project.scripts]
+doctranslator = "doctranslator_cli.main:main"
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]

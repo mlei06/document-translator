@@ -67,7 +67,7 @@ def test_per_span_fallback_keeps_formatting_and_is_reported(tmp_path: Path) -> N
         limits=DocumentLimits(),
     )
     assert result.counts.formatting_fallbacks >= 1
-    assert bold_texts(tmp_path / "out.pptx") == ["Revenue "]
+    assert bold_texts(tmp_path / "out.pptx") == ["Revenue"]  # the joining space is not bold
     fallback = [d for d in result.diagnostics if d.code == "formatting_fallback"]
     assert fallback and fallback[0].location is not None
     assert fallback[0].location.startswith("slide 2 / shape")

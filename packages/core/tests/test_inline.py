@@ -104,6 +104,22 @@ def test_whitespace_inside_tags_moves_outside() -> None:
     assert normalize_tag_whitespace("the <g1>report </g1>is") == "the <g1>report</g1> is"
 
 
+def test_edge_whitespace_matches_the_source() -> None:
+    # SMALL-100 put a space inside the opening tag at the paragraph start (seen in native render)
+    assert normalize_tag_whitespace("<g1> sales</g1> grew", "<g1>销售额</g1>增长") == (
+        "<g1>sales</g1> grew"
+    )
+    assert normalize_tag_whitespace("<g1>x </g1>", "  <g1>甲</g1> ") == "  <g1>x</g1> "
+
+
+def test_segmented_fallback_spaces_after_sentence_punctuation() -> None:
+    nodes = [Text("请见", BASE), Text("内部网", BOLD), Text("站", BASE)]
+    rebuilt = join_segmented(
+        nodes, {"请见": "See", "内部网": "the internal network.", "站": "Stations"}, Language.EN
+    )
+    assert plain_text(rebuilt) == "See the internal network. Stations"
+
+
 def test_projection_recovers_a_lost_tag() -> None:
     encoded = encode([Text("请", BASE), Text("立即", BOLD), Text("提交季度报告。", BASE)])
     assert strip_paired_tags(encoded.text) == "请立即提交季度报告。"
@@ -150,8 +166,8 @@ def test_segmented_fallback_keeps_every_style() -> None:
     )
     assert rebuilt == [
         Text("Please ", BASE),
-        Text("immediately ", BOLD),
-        Text("submit", BASE),
+        Text("immediately", BOLD),  # the joining space goes on the plain side, never bold
+        Text(" submit", BASE),
         Obj(2),
         Text("report", ITALIC),
     ]

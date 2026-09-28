@@ -245,7 +245,7 @@ def _translate_units(
             for occ in unit.occurrences:
                 results[occ.paragraph.id] = decode(occ.encoded, unit.output)
             continue
-        normalized = normalize_tag_whitespace(unit.output)
+        normalized = normalize_tag_whitespace(unit.output, unit.text)
         if validate(representative, normalized) is None:
             for occ in unit.occurrences:
                 results[occ.paragraph.id] = decode(occ.encoded, normalized)
@@ -280,7 +280,7 @@ def _project(
         if projected is None:
             remaining.append(unit)
             continue
-        normalized = normalize_tag_whitespace(projected)
+        normalized = normalize_tag_whitespace(projected, unit.text)
         for occ in unit.occurrences:
             results[occ.paragraph.id] = decode(occ.encoded, normalized)
     return remaining

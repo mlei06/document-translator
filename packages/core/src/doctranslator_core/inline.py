@@ -21,6 +21,7 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 from doctranslator_core.types import Language
 
@@ -295,8 +296,12 @@ _OPEN_WS = re.compile(r"(<g\d+>)(\s+)")
 _CLOSE_WS = re.compile(r"(\s+)(</g\d+>)")
 
 
-def normalize_tag_whitespace(output: str) -> str:
-    """Move whitespace just inside paired tags to outside them, then collapse doubled spaces."""
+def normalize_tag_whitespace(output: str, source: str | None = None) -> str:
+    """Move whitespace just inside paired tags to outside them, then collapse doubled spaces.
+
+    With ``source`` (the engine input), leading and trailing whitespace is made to match it, so
+    whitespace an engine put inside a tag at the paragraph's edge does not become a stray space.
+    """
     previous = None
     text = output
     while previous != text:
@@ -304,6 +309,11 @@ def normalize_tag_whitespace(output: str) -> str:
         text = _OPEN_WS.sub(lambda m: m.group(2) + m.group(1), text)
         text = _CLOSE_WS.sub(lambda m: m.group(2) + m.group(1), text)
     text = re.sub(r"(?<=\S) {2,}(?=\S)", " ", text)
+    if source is not None:
+        core = text.strip()
+        leading = source[: len(source) - len(source.lstrip())]
+        trailing = source[len(source.rstrip()) :]
+        text = leading + core + trailing
     return text
 
 
@@ -456,6 +466,9 @@ def _is_cjk(ch: str) -> bool:
     )
 
 
+_SENTENCE_PUNCTUATION = ".,;:!?)]"
+
+
 def join_segmented(
     nodes: Sequence[Inline], translations: dict[str, str], target: Language
 ) -> list[Inline]:
@@ -463,45 +476,48 @@ def join_segmented(
 
     ``translations`` maps each piece from ``segmented_pieces`` to its translation. At a boundary
     between two text leaves (translated or kept), English/Spanish targets get one space when neither
-    side has whitespace and both sides are letters or digits; for Chinese/Japanese targets
-    whitespace between two CJK characters is removed. Objects (tabs, breaks) are boundaries that
-    are never padded.
+    side has whitespace, the left side ends in a letter, digit or sentence punctuation and the right
+    side starts with a letter or digit. The space goes on the plain (dominant-style, unwrapped)
+    side, so it is never underlined or linked. For Chinese/Japanese targets whitespace between two
+    CJK characters is removed. Objects (tabs, breaks) are boundaries that are never padded.
     """
     normalized = _normalize(nodes)
-    leaves: list[str | None] = []  # translated text per Text/Keep leaf; None for objects
+    base = _dominant_style(normalized)
+    leaves: list[_Leaf] = []
 
-    def collect(items: Sequence[Inline]) -> None:
+    def collect(items: Sequence[Inline], wrapped: bool) -> None:
         for node in items:
             match node:
-                case Text(text=t):
-                    leaves.append(translations.get(t, t))
+                case Text(text=t, style=s):
+                    leaves.append(_Leaf(translations.get(t, t), False, s == base and not wrapped))
                 case Keep(text=t):
-                    leaves.append(t)
+                    leaves.append(_Leaf(t, True, False))
                 case Obj():
-                    leaves.append(None)
+                    leaves.append(_Leaf(None, True, False))
                 case Wrap(children=children):
-                    collect(children)
+                    collect(children, True)
 
-    collect(normalized)
+    collect(normalized, False)
     latin_target = target in (Language.EN, Language.ES)
-    kept = _kept_leaf_indexes(normalized)
-    for i in range(len(leaves) - 1):
-        a, b = leaves[i], leaves[i + 1]
+    for left, right in pairwise(leaves):
+        a, b = left.text, right.text
         if not a or not b:
             continue
         if latin_target:
-            if not a[-1].isspace() and not b[0].isspace() and a[-1].isalnum() and b[0].isalnum():
-                if i in kept and i + 1 not in kept:
-                    leaves[i + 1] = " " + b
-                else:
-                    leaves[i] = a + " "
+            joins = a[-1].isalnum() or a[-1] in _SENTENCE_PUNCTUATION
+            if a[-1].isspace() or b[0].isspace() or not joins or not b[0].isalnum():
+                continue
+            if right.plain or (left.kept and not right.kept):
+                right.text = " " + b
+            else:
+                left.text = a + " "
         else:
-            left, right = a.rstrip(), b.lstrip()
-            if left and right and _is_cjk(left[-1]) and _is_cjk(right[0]):
-                if i not in kept:
-                    leaves[i] = left
-                if i + 1 not in kept:
-                    leaves[i + 1] = right
+            stripped_a, stripped_b = a.rstrip(), b.lstrip()
+            if stripped_a and stripped_b and _is_cjk(stripped_a[-1]) and _is_cjk(stripped_b[0]):
+                if not left.kept:
+                    left.text = stripped_a
+                if not right.kept:
+                    right.text = stripped_b
 
     values = iter(leaves)
 
@@ -510,7 +526,7 @@ def join_segmented(
         for node in items:
             match node:
                 case Text(style=s):
-                    out.append(Text(next(values) or "", s))
+                    out.append(Text(next(values).text or "", s))
                 case Keep() | Obj():
                     next(values)
                     out.append(node)
@@ -521,21 +537,11 @@ def join_segmented(
     return _normalize(rebuild(normalized))
 
 
-def _kept_leaf_indexes(nodes: Sequence[Inline]) -> set[int]:
-    kept: set[int] = set()
-    counter = 0
-
-    def visit(items: Sequence[Inline]) -> None:
-        nonlocal counter
-        for node in items:
-            match node:
-                case Wrap(children=children):
-                    visit(children)
-                case Keep():
-                    kept.add(counter)
-                    counter += 1
-                case _:
-                    counter += 1
-
-    visit(nodes)
-    return kept
+@dataclass(slots=True)
+class _Leaf:
+    text: str | None
+    """Translated (or kept) text; ``None`` for objects."""
+    kept: bool
+    """Never modified: kept text and objects."""
+    plain: bool
+    """Dominant-style text outside any wrapper, where inserted spaces belong."""

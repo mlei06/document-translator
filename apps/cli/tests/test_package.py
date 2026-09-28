@@ -2,6 +2,9 @@ import importlib
 
 MODULES = [
     "doctranslator_cli",
+    "doctranslator_cli.console",
+    "doctranslator_cli.main",
+    "doctranslator_cli.settings",
 ]
 
 
