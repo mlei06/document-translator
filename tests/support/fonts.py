@@ -40,15 +40,29 @@ def _write(path: Path) -> None:
     for start, end in _CJK_RANGES:
         cmap.update({code: "cjk" for code in range(start, end + 1)})
     builder.setupCharacterMap(cmap)
-    builder.setupGlyf({".notdef": _box(500), "latin": _box(500), "space": TTGlyphPen(None).glyph(),
-                       "cjk": _box(1000)})
-    builder.setupHorizontalMetrics({".notdef": (500, 50), "latin": (500, 50), "space": (500, 0),
-                                    "cjk": (1000, 50)})
+    builder.setupGlyf(
+        {
+            ".notdef": _box(500),
+            "latin": _box(500),
+            "space": TTGlyphPen(None).glyph(),
+            "cjk": _box(1000),
+        }
+    )
+    builder.setupHorizontalMetrics(
+        {".notdef": (500, 50), "latin": (500, 50), "space": (500, 0), "cjk": (1000, 50)}
+    )
     builder.setupHorizontalHeader(ascent=800, descent=-200, lineGap=0)
     builder.setupNameTable({"familyName": TEST_FONT, "styleName": "Regular"})
-    builder.setupOS2(sTypoAscender=800, sTypoDescender=-200, sTypoLineGap=0, usWinAscent=800,
-                     usWinDescent=200, usWeightClass=400, fsSelection=0x40,
-                     ulCodePageRange1=0x1)
+    builder.setupOS2(
+        sTypoAscender=800,
+        sTypoDescender=-200,
+        sTypoLineGap=0,
+        usWinAscent=800,
+        usWinDescent=200,
+        usWeightClass=400,
+        fsSelection=0x40,
+        ulCodePageRange1=0x1,
+    )
     builder.setupPost()
     builder.save(str(path))
 

@@ -101,7 +101,7 @@ class XlsxLayout:
         digit_px = round(7 * self._default_size() / 11)
         for name, part in self._sheets:
             root = self._package.xml(part)
-            widths, default_width = _column_widths(root)
+            widths, default_width = _column_widths(root, digit_px)
             rows = {int(r.get("r", "0")): r for r in root.iter(qn("s:row"))}
             default_row = _default_row_height(root)
             occupied = {
@@ -317,7 +317,8 @@ def _chars_to_pt(chars: float, digit_px: int) -> float:
     return pixels * PX_TO_PT
 
 
-def _column_widths(sheet: Element) -> tuple[dict[int, float], float]:
+def _column_widths(sheet: Element, digit_px: int) -> tuple[dict[int, float], float]:
+    """Column widths in stored width units (characters including the 5 px cell padding)."""
     widths: dict[int, float] = {}
     cols = sheet.find(qn("s:cols"))
     for col in cols.findall(qn("s:col")) if cols is not None else []:
@@ -327,7 +328,8 @@ def _column_widths(sheet: Element) -> tuple[dict[int, float], float]:
         for index in range(int(col.get("min", "1")), int(col.get("max", "1")) + 1):
             widths[index] = float(width)
     format_pr = sheet.find(qn("s:sheetFormatPr"))
-    default = DEFAULT_COLUMN_CHARS
+    # Without a declared default, a column shows 8.43 digits plus 5 px padding (64 px at 7 px).
+    default = (DEFAULT_COLUMN_CHARS * digit_px + 5) / digit_px
     if format_pr is not None and format_pr.get("defaultColWidth"):
         default = float(format_pr.get("defaultColWidth", DEFAULT_COLUMN_CHARS))
     return widths, default

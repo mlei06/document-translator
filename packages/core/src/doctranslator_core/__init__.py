@@ -6,6 +6,7 @@ Apps import only from this module and ``doctranslator_core.types`` (ADR-003).
 from pathlib import Path
 
 from doctranslator_core.config import DocumentLimits, EngineConfig, LlmEngineConfig, MtEngineConfig
+from doctranslator_core.fit.fonts import build_font_manifest
 from doctranslator_core.formats import detect_format as _detect_format
 from doctranslator_core.identity import output_fingerprint, prepare_identity
 from doctranslator_core.translator import Translator
@@ -17,6 +18,7 @@ __all__ = [
     "LlmEngineConfig",
     "MtEngineConfig",
     "Translator",
+    "build_font_manifest",
     "inspect_document",
     "output_fingerprint",
     "prepare_identity",

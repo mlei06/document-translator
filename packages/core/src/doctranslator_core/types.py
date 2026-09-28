@@ -294,6 +294,8 @@ class DocumentTranslationResult(BaseModel):
     counts: SegmentCounts
     diagnostics: list[DocumentDiagnostic]
     fit_report: FitReport
+    timings_s: dict[str, float] = {}
+    """Seconds per phase (extract, translate, fit, write); not part of the cached report."""
 
     @property
     def fit_status(self) -> FitStatus:

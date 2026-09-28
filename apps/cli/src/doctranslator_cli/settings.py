@@ -3,6 +3,7 @@
 Command-line options override all of these. The core never reads configuration itself (ADR-003).
 """
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -40,6 +41,15 @@ class CliSettings(BaseSettings):
     mt_compute_type: str = "default"
     mt_beam_size: int = 4
     mt_cpu_threads: int = 0
+    font_dirs: str | None = None
+    """Font directories for fit measurement, separated by the OS path separator."""
+
+    def font_directories(self) -> list[Path]:
+        from doctranslator_cli.fonts import default_font_directories
+
+        if not self.font_dirs:
+            return default_font_directories()
+        return [Path(p) for p in self.font_dirs.split(os.pathsep) if p]
 
     def secret(self, name: str, value: SecretStr | None) -> SecretStr | None:
         """``value`` from the environment/``.env``, else the OS vault entry ``name``."""

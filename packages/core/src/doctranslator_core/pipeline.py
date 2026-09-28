@@ -152,7 +152,9 @@ def translate_document(
         if source is None or source == options.target:
             diagnostics.append(_NO_TEXT if source is None else _ALREADY_TARGET)
             originals = _containers(adapter)
+            fit_started = time.perf_counter()
             fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
+            fit_s = time.perf_counter() - fit_started
             report(ProgressPhase.WRITE, 0, 1)
             _publish_copy(input_path, output_path, report)
             counts = SegmentCounts(
@@ -168,6 +170,7 @@ def translate_document(
                 counts,
                 diagnostics,
                 fit_report,
+                {"extract": extract_s, "fit": fit_s},
             )
 
         units: dict[str, _Unit] = {}
@@ -191,12 +194,17 @@ def translate_document(
         originals = _containers(adapter)
         for paragraph_id, nodes in results.items():
             adapter.apply(paragraph_id, nodes, options.target)
+        fit_started = time.perf_counter()
         fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
+        fit_s = time.perf_counter() - fit_started
+        write_started = time.perf_counter()
         _write_verify_publish(adapter, output_path, fmt, limits, options, report)
+        write_s = time.perf_counter() - write_started
         diagnostics.extend(adapter.diagnostics)
         logger.info(
             "translated %s: %d paragraphs, %d unique inputs, %d passed through, "
-            "%d formatting fallbacks; extract %.2f s, translate %.2f s, total %.2f s",
+            "%d formatting fallbacks; extract %.2f s, translate %.2f s, fit %.2f s, "
+            "write %.2f s, total %.2f s",
             fmt.value,
             len(paragraphs),
             len(units),
@@ -204,6 +212,8 @@ def translate_document(
             fallbacks,
             extract_s,
             translate_s,
+            fit_s,
+            write_s,
             time.perf_counter() - started,
         )
         counts = SegmentCounts(
@@ -222,6 +232,7 @@ def translate_document(
             counts,
             diagnostics,
             fit_report,
+            {"extract": extract_s, "translate": translate_s, "fit": fit_s, "write": write_s},
         )
     finally:
         adapter.close()
@@ -551,6 +562,7 @@ def _result(
     counts: SegmentCounts,
     diagnostics: list[DocumentDiagnostic],
     fit_report: FitReport,
+    timings: dict[str, float],
 ) -> DocumentTranslationResult:
     return DocumentTranslationResult(
         output_path=output_path,
@@ -563,4 +575,5 @@ def _result(
         counts=counts,
         diagnostics=diagnostics,
         fit_report=fit_report,
+        timings_s={k: round(v, 3) for k, v in timings.items()},
     )

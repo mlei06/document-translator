@@ -14,6 +14,7 @@ from typing import Annotated, Literal, NoReturn
 import typer
 
 from doctranslator_cli.console import ProgressPrinter
+from doctranslator_cli.fonts import load_font_manifest
 from doctranslator_cli.settings import SettingsError, load_settings
 from doctranslator_core import Translator
 from doctranslator_core.types import (
@@ -111,8 +112,9 @@ def translate(
         _fail(EXIT_INVALID, "--from and --to are the same language")
     target_path = output or input_path.with_name(f"{input_path.stem}.{to.value}{input_path.suffix}")
     printer = ProgressPrinter(sys.stderr)
+    fonts = load_font_manifest(settings.font_directories())
     try:
-        with Translator(engine) as translator:
+        with Translator(engine, fonts=fonts) as translator:
             result = translator.translate_document(
                 input_path, target_path, options=options, on_progress=printer
             )
@@ -186,4 +188,5 @@ def main() -> None:
             reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("fontTools").setLevel(logging.ERROR)  # noisy about font timestamps
     app()
