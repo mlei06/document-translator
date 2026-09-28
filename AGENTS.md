@@ -50,6 +50,8 @@ uv run lint-imports
 uv run pytest
 ```
 
+`uv run pytest` skips tests marked `integration`, which need real backends. Run them with `uv run pytest -m integration`: the LLM test needs the company VPN and the `DOCTRANSLATOR_LLM_*` variables set in the environment, and the MT test needs `DOCTRANSLATOR_TEST_MT_MODEL_DIR` pointing at a converted SMALL-100 model (e.g. `data/models/alirezamsh--small100-ct2-int8`). Each is skipped when its settings are missing.
+
 An import contract failure means code is in the wrong place (see `docs/decisions/ADR-003-source-structure.md`). Fix it by moving the code, not by editing `.importlinter`.
 
 ## Agent Roles

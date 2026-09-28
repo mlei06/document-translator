@@ -52,10 +52,17 @@ select = [
     "PTH",      # use pathlib
     "RUF",      # ruff-specific
     "S",        # bandit security checks
+    "TID",      # tidy imports, incl. the banned APIs below
 ]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.environ".msg = "The core never reads the environment (ADR-003). Apps pass configuration in."
+"os.getenv".msg = "The core never reads the environment (ADR-003). Apps pass configuration in."
+
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101"]  # assert is how pytest works
+"**/tests/**" = ["S101", "S311", "TID251"]  # pytest asserts; synthetic random data; env access
+"apps/**" = ["TID251"]              # apps load configuration; only the core is banned
+"scripts/**" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = [
@@ -80,6 +87,12 @@ testpaths = [
     "apps/eval/tests",
     "tests",
 ]
-addopts = ["--import-mode=importlib", "-ra", "--strict-markers", "--strict-config"]
+addopts = [
+    "--import-mode=importlib", "-ra", "--strict-markers", "--strict-config",
+    "-m", "not integration",
+]
+markers = [
+    "integration: needs the LLM server, a downloaded model, or network access; run with -m integration",
+]
 xfail_strict = true
 filterwarnings = ["error"]

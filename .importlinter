@@ -22,6 +22,11 @@ forbidden_modules =
     click
     sqlalchemy
     alembic
+    pydantic_settings
+    keyring
+    dotenv
+    psutil
+    sacrebleu
 
 [importlinter:contract:core-internals-private]
 name = ADR-003 rule 2: apps import only the core public API
@@ -48,10 +53,13 @@ type = protected
 protected_modules = doctranslator_core
 as_packages = False
 allowed_importers =
-    doctranslator_core
+    doctranslator_core.**
     doctranslator_cli
+    doctranslator_cli.**
     doctranslator_eval
+    doctranslator_eval.**
     doctranslator_server.jobs
+    doctranslator_server.jobs.**
     doctranslator_server.settings
 
 [importlinter:contract:api-mcp-independent]
@@ -94,3 +102,23 @@ source_modules =
     doctranslator_core.fit
     doctranslator_core.render
 forbidden_modules = doctranslator_core.formats
+
+[importlinter:contract:llm-libraries-contained]
+name = ADR-003 core rule: HTTP and TLS libraries only in engines.llm (apps may use them)
+type = protected
+protected_modules =
+    httpx
+    truststore
+allowed_importers =
+    doctranslator_core.engines.llm
+    doctranslator_cli
+    doctranslator_server
+    doctranslator_eval
+
+[importlinter:contract:mt-libraries-contained]
+name = ADR-003 core rule: MT runtime libraries only in engines.mt
+type = protected
+protected_modules =
+    ctranslate2
+    sentencepiece
+allowed_importers = doctranslator_core.engines.mt

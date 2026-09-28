@@ -5,6 +5,10 @@ MODULES = [
     "doctranslator_core.config",
     "doctranslator_core.document",
     "doctranslator_core.engines",
+    "doctranslator_core.engines.base",
+    "doctranslator_core.engines.llm",
+    "doctranslator_core.engines.llm_prompts",
+    "doctranslator_core.engines.mt",
     "doctranslator_core.fit",
     "doctranslator_core.formats",
     "doctranslator_core.formats._ooxml",
@@ -16,6 +20,7 @@ MODULES = [
     "doctranslator_core.formats.xlsx",
     "doctranslator_core.pipeline",
     "doctranslator_core.render",
+    "doctranslator_core.translator",
     "doctranslator_core.types",
 ]
 
