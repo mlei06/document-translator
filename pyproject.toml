@@ -60,7 +60,7 @@ select = [
 "os.getenv".msg = "The core never reads the environment (ADR-003). Apps pass configuration in."
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S311", "TID251"]  # pytest asserts; synthetic random data; env access
+"**/tests/**" = ["S101", "S311", "TID251", "RUF001"]  # asserts; random data; env; CJK punctuation
 "apps/**" = ["TID251"]              # apps load configuration; only the core is banned
 "scripts/**" = ["TID251"]
 
