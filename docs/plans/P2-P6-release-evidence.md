@@ -6,25 +6,30 @@ Evidence for the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md). Every row 
 
 Branch: `release/p2-p6` (baseline commit `57a7671`, "Add P2-P6 release plans and design material").
 
-**Current phase and step:** Step 0 - baseline review and P1.1 baseline capture; P2.0 design validation next.
+**Current phase and step:** P3.0 - fit measurement/font design (font module drafted in `fit/fonts.py`, not yet committed or wired). P2 is implemented; its closure waits on P3 (fit) because `fit_status=not_run` is a P2-interim value only.
 
 **Done**
 
-- Read AGENTS.md, README, Architecture, Structure, all ADRs, roadmap, handoff and every phase plan; inspected existing code (P1 engines/eval implemented; document, pipeline, formats, fit, render, CLI and server are empty scaffolds).
-- Baseline checks on `57a7671`: all six root checks pass (87 passed, 2 integration deselected). Real-backend integration tests pass: LLM (`gemma-4-31b-it` over VPN) and MT (SMALL-100 CT2 int8), 2 passed.
-- Environment inventory: Windows 11 Pro 26200, Python 3.14.7, uv 0.12.6, Node 24.19.0, npm 11.17.0, Microsoft Office 16 (Word, Excel, PowerPoint) for native evidence, Edge and Chrome for browser runs, Azure DevOps CLI authenticated.
+- Read all governing documents; inspected existing code (P1 engines/eval implemented; everything else scaffolds).
+- Baseline checks on `57a7671`: six root checks pass (87 passed); real LLM and MT integration tests pass.
+- P2.0 complete: formatting, PPTX/DOCX writer, XLSX recalculation and detection experiments under `docs/experiments/`; ADR-011 and ADR-009 accepted; Document API in Architecture (`ea17aae`).
+- P2 implemented (`6c46841`, `68c67d6`): document API, detection, protection, tags/projection/per-span fallback, targeted OOXML adapters for PPTX/DOCX/XLSX, TXT adapter, local `doctranslator translate` CLI; 165 tests; six checks pass.
+- P2 real-engine local acceptance (`scripts/acceptance_local.py`, `data/acceptance/p2/local/summary.json`): all four formats x both engines exit 0, inputs unchanged, only reported out-of-scope parts keep source text; all six Office outputs open natively (Office 16 build 20326, `data/acceptance/p2/local/native.jsonl`). Two MT visual defects found in PowerPoint renders were fixed with regression tests.
 
 **Next**
 
-- P1.1 full FLORES+ runs for both engines from an isolated worktree of `57a7671` (running in the background).
-- P2.0 design gates: formatting strategy experiment (both engines, 12 directions), OOXML writer evidence, XLSX recalculation in native Excel, detector selection, identity/fingerprint contract.
+- P3.0: measurement module (HarfBuzz + fontTools), PPTX/DOCX/XLSX layout descriptions, native comparison against PowerPoint/Word/Excel, ADR-012, then P3 implementation.
+- P1.1: MT run translated (`data/eval/runs/20260928T055619Z-mt-...`); COMET scoring and the LLM run are running as a detached process (log `scratchpad/baselines3.log`, see blockers). The first LLM run failed with HTTP 429 while the formatting experiment used the same server.
 
-**Open blockers**
+**Open blockers and environment limits**
 
 | Blocker | Missing item | Rows blocked |
 |---------|--------------|--------------|
 | CI | Pipelines run only on `main` and pull requests; this branch has not been pushed (the owner asked for no push/PR). | CI evidence for every row and phase closure |
 | Second machine | No second internal machine available to this session | R14 |
+| Word save/export | Word on this host opens documents but hangs on any save or PDF export (a hidden prompt, likely a policy such as mandatory sensitivity labels; this session has no interactive desktop). PowerPoint and Excel export fine. | DOCX visual renders (native open works and is recorded) |
+
+Notes for a fresh session: background shells die with the session, so long jobs are started with `Start-Process` (detached). `scripts/native_office_check.ps1` needs one Office app at a time; Office automation takes about a minute per application start here.
 
 ## Environment
 

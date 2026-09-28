@@ -18,6 +18,7 @@ prompt); use -NoPdf there.
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File scripts/native_office_check.ps1 -OutDir data/native out.pptx out.docx
 #>
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string] $OutDir = '',
     [switch] $NoPdf,
