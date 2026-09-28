@@ -14,6 +14,8 @@ D0 may start with the working core. D1/D2 release requires P2-P5: all five forma
 
 ## D0 - Desktop Packaging and Local Host Design
 
+The [D0 runtime contract](D0-desktop-runtime-contract.md) defines the bounded packaging experiment and proposed integration requirements for the desktop, P5 and model owners. Keep Python for the translation/backend layer and use a native desktop shell. Tauri remains a candidate pending a compiled shell and installer acceptance; the CLI packaging probe alone does not complete D0.
+
 Run one bounded proof of installation on a clean Windows machine using the existing Python runtime and an actual supported model. Record a desktop packaging ADR covering:
 
 - Desktop toolkit and installer, signed binaries, supported Windows versions/CPU architectures, runtime and native-dependency packaging. Reuse web components where practical without putting translation in the UI.

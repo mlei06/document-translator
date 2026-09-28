@@ -90,7 +90,7 @@ Important qualifications:
 
 ### Shared runtime, separate installations
 
-The desktop is an installed application with file/folder drag/drop, not merely a browser shortcut. It launches a per-user local host/worker using the same job, cache and storage implementation as the company service. The desktop calls REST and may launch packaged executables; it does not import server internals or build a second queue. Translation stays in the Python core. The desktop toolkit/installer remain D0 decisions; existing React UI components may be reused.
+The desktop is an installed application with file/folder drag/drop, not merely a browser shortcut. It launches a per-user local host/worker using the same job, cache and storage implementation as the company service. The desktop calls REST and may launch packaged executables; it does not import server internals or build a second queue. Translation stays in the Python core. The approved language boundary is a native desktop shell around the Python backend, with inference replaceable independently. The desktop toolkit/installer remain D0 decisions; existing React UI components may be reused. The [D0 runtime contract](plans/D0-desktop-runtime-contract.md) records proposed bootstrap and packaging details for validation, not an implemented local-service API.
 
 ```mermaid
 flowchart LR
