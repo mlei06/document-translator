@@ -41,6 +41,10 @@ class CliSettings(BaseSettings):
     mt_cpu_threads: int = 0
     font_dirs: str | None = None
     """Font directories for fit measurement, separated by the OS path separator."""
+    server_url: str | None = None
+    """The shared service for service commands, e.g. ``https://translator.example.internal``."""
+    api_key: SecretStr | None = None
+    """Service credential (``DOCTRANSLATOR_API_KEY`` or the OS vault); never a CLI argument."""
 
     def font_directories(self) -> list[Path]:
         from doctranslator_cli.fonts import default_font_directories
@@ -63,6 +67,19 @@ class CliSettings(BaseSettings):
         except KeyringError:
             return None
         return SecretStr(stored) if stored else None
+
+    def service(self, server: str | None = None) -> tuple[str, SecretStr]:
+        """The service URL (``--server`` overrides the setting) and credential."""
+        url = server or self.server_url
+        key = self.secret("DOCTRANSLATOR_API_KEY", self.api_key)
+        missing = [
+            name
+            for name, value in (("DOCTRANSLATOR_SERVER_URL", url), ("DOCTRANSLATOR_API_KEY", key))
+            if not value
+        ]
+        if missing or url is None or key is None:
+            raise SettingsError(f"service commands need: {', '.join(missing)}")
+        return url, key
 
     def engine_config(self, mode: TranslationMode) -> EngineConfig:
         match mode:

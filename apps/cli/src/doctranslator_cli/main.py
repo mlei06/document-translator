@@ -13,6 +13,7 @@ from typing import Annotated, Literal, NoReturn
 
 import typer
 
+from doctranslator_cli.commands import register
 from doctranslator_cli.console import ProgressPrinter
 from doctranslator_cli.fonts import load_font_manifest
 from doctranslator_cli.settings import SettingsError, load_settings
@@ -38,7 +39,11 @@ EXIT_INTERRUPTED = 130
 
 app = typer.Typer(
     name="doctranslator",
-    help="Translate documents (TXT, PPTX, DOCX, XLSX) inside the company network.",
+    help=(
+        "Translate documents (TXT, PPTX, DOCX, XLSX, PDF) inside the company network: locally "
+        "with `translate`, or through the shared service with `submit`, `batches`, `jobs` and "
+        "`download`."
+    ),
     no_args_is_help=True,
     add_completion=False,
     pretty_exceptions_enable=False,
@@ -48,6 +53,9 @@ app = typer.Typer(
 @app.callback()
 def _root() -> None:
     """Document Translator."""
+
+
+register(app)
 
 
 def _languages() -> str:
