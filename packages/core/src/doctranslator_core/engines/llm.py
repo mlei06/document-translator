@@ -6,7 +6,7 @@ import random
 import ssl
 import time
 from collections.abc import Callable, Sequence
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from typing import cast
 
 import httpx
@@ -15,6 +15,11 @@ import truststore
 from doctranslator_core.config import LlmEngineConfig
 from doctranslator_core.engines.base import TranslationEngine
 from doctranslator_core.engines.llm_prompts import PROMPT_VERSION, system_prompt, user_message
+from doctranslator_core.engines.translation_prompts import (
+    PROMPT_VERSIONS,
+    hy_mt2_messages,
+    translategemma_prompt,
+)
 from doctranslator_core.types import (
     EngineAuthenticationError,
     EngineInfo,
@@ -56,6 +61,10 @@ class LlmEngine(TranslationEngine):
 
     @property
     def info(self) -> EngineInfo:
+        if self._config.translation_profile != "generic":
+            details = dict(self.identity.details)
+            del details["base_url"]
+            return EngineInfo(mode=TranslationMode.LLM, model=self._config.model, details=details)
         return EngineInfo(
             mode=TranslationMode.LLM,
             model=self._config.model,
@@ -72,6 +81,8 @@ class LlmEngine(TranslationEngine):
     def translate_batch(
         self, texts: Sequence[str], source: Language, target: Language
     ) -> list[str]:
+        if self._config.translation_profile != "generic":
+            return self._translate_native(texts, source, target)
         system = system_prompt(source, target)
         size = self._config.batch_size
         chunks = [texts[i : i + size] for i in range(0, len(texts), size)]
@@ -89,6 +100,67 @@ class LlmEngine(TranslationEngine):
 
     def close(self) -> None:
         self._client.close()
+
+    def _translate_native(
+        self, texts: Sequence[str], source: Language, target: Language
+    ) -> list[str]:
+        """Keep only one pending future per worker, regardless of document size."""
+        if not texts:
+            return []
+        workers = min(self._config.max_concurrency, len(texts))
+        results = [""] * len(texts)
+        indexed = iter(enumerate(texts))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            pending = {
+                pool.submit(self._complete_native, text, source, target): index
+                for index, text in (next(indexed) for _ in range(workers))
+            }
+            try:
+                while pending:
+                    completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+                    # Inspect every completed request before scheduling replacement work.
+                    for future in completed:
+                        results[pending.pop(future)] = future.result()
+                    for _ in completed:
+                        item = next(indexed, None)
+                        if item is not None:
+                            index, text = item
+                            pending[pool.submit(self._complete_native, text, source, target)] = (
+                                index
+                            )
+            finally:
+                for future in pending:
+                    future.cancel()
+        return results
+
+    def _complete_native(self, text: str, source: Language, target: Language) -> str:
+        config = self._config
+        profile = config.translation_profile
+        if profile == "generic":
+            raise AssertionError("native completion requires a specialized profile")
+        body: dict[str, object] = {
+            "model": config.model,
+            "temperature": config.temperature,
+            "max_tokens": config.max_output_tokens,
+            "top_p": config.top_p,
+            "top_k": config.top_k,
+            "seed": config.seed,
+        }
+        if config.server_backend == "llamacpp":
+            body["repeat_penalty"] = config.repetition_penalty
+            body["min_p"] = 0.0
+        else:
+            body["repetition_penalty"] = config.repetition_penalty
+        if profile == "translategemma":
+            prompt = translategemma_prompt(text, source, target)
+            if config.server_backend == "llamacpp":
+                # llama.cpp completions tokenize with add_special=True, adding BOS themselves.
+                prompt = prompt.removeprefix("<bos>")
+            body["prompt"] = prompt
+            body["stop"] = ["<end_of_turn>", "<eos>"]
+            return _raw_content(self._post_with_retries(body, 1, endpoint="completions"))
+        body["messages"] = hy_mt2_messages(text, target)
+        return _native_content(self._post_with_retries(body, 1))
 
     def _translate_chunk(self, chunk: Sequence[str], system: str) -> list[str]:
         translations = _parse_translations(self._complete(chunk, system), len(chunk))
@@ -116,13 +188,15 @@ class LlmEngine(TranslationEngine):
             body["response_format"] = {"type": "json_object"}
         return _message_content(self._post_with_retries(body, len(chunk)))
 
-    def _post_with_retries(self, body: dict[str, object], segments: int) -> httpx.Response:
+    def _post_with_retries(
+        self, body: dict[str, object], segments: int, *, endpoint: str = "chat/completions"
+    ) -> httpx.Response:
         max_retries = self._config.max_retries
         for attempt in range(max_retries + 1):
             started = time.perf_counter()
             retry_after: float | None = None
             try:
-                response = self._client.post("chat/completions", json=body)
+                response = self._client.post(endpoint, json=body)
             except httpx.TransportError as exc:
                 failure: TranslationError = EngineUnavailableError(
                     f"LLM server unreachable ({type(exc).__name__})"
@@ -158,6 +232,28 @@ class LlmEngine(TranslationEngine):
 
 def prepare_identity(config: LlmEngineConfig) -> TranslationIdentity:
     """The LLM engine's output identity from configuration alone (no network)."""
+    if config.translation_profile != "generic":
+        return TranslationIdentity(
+            mode=TranslationMode.LLM,
+            model=config.model,
+            details={
+                "base_url": str(config.base_url).rstrip("/"),
+                "deployment_revision": config.deployment_revision,
+                "translation_profile": config.translation_profile,
+                "server_backend": config.server_backend,
+                "prompt_version": PROMPT_VERSIONS[config.translation_profile],
+                "temperature": repr(config.temperature),
+                "json_mode": "false",
+                "batch_size": "1",
+                "max_concurrency": str(config.max_concurrency),
+                "max_output_tokens": str(config.max_output_tokens),
+                "top_p": repr(config.top_p),
+                "top_k": str(config.top_k),
+                "repetition_penalty": repr(config.repetition_penalty),
+                "seed": str(config.seed),
+                **({"min_p": "0.0"} if config.server_backend == "llamacpp" else {}),
+            },
+        )
     return TranslationIdentity(
         mode=TranslationMode.LLM,
         model=config.model,
@@ -203,6 +299,44 @@ def _message_content(response: httpx.Response) -> str | None:
         raise EngineResponseError("LLM server response has no message")
     content = cast(dict[str, object], message).get("content")
     return content if isinstance(content, str) else None
+
+
+def _native_content(response: httpx.Response) -> str:
+    """A native completion must be a complete, non-refused plain-text answer."""
+    content = _message_content(response)
+    payload = cast(dict[str, object], response.json())
+    first = cast(dict[str, object], cast(list[object], payload["choices"])[0])
+    message = cast(dict[str, object], first["message"])
+    if first.get("finish_reason") != "stop":
+        raise EngineResponseError("specialized translation did not finish normally")
+    if message.get("refusal") or message.get("tool_calls") or message.get("function_call"):
+        raise EngineResponseError("specialized translation returned a refusal or tool call")
+    if not isinstance(content, str) or not content.strip():
+        raise EngineResponseError("specialized translation returned no text")
+    return content
+
+
+def _raw_content(response: httpx.Response) -> str:
+    """Strict OpenAI text-completion response for the pre-rendered Gemma prompt."""
+    try:
+        payload: object = response.json()
+    except ValueError as exc:
+        raise EngineResponseError("LLM server returned a response that is not JSON") from exc
+    choices = cast(dict[str, object], payload).get("choices") if isinstance(payload, dict) else None
+    if not isinstance(choices, list) or not choices:
+        raise EngineResponseError("LLM server response has no choices")
+    choice: object = cast(list[object], choices)[0]
+    if not isinstance(choice, dict):
+        raise EngineResponseError("LLM server response has no completion")
+    first = cast(dict[str, object], choice)
+    if first.get("finish_reason") != "stop":
+        raise EngineResponseError("specialized translation did not finish normally")
+    if first.get("refusal"):
+        raise EngineResponseError("specialized translation returned a refusal")
+    text = first.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise EngineResponseError("specialized translation returned no text")
+    return text
 
 
 def _parse_translations(content: str | None, expected: int) -> list[str] | None:

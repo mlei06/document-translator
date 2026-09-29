@@ -89,3 +89,13 @@ Small design experiments and their evidence, separate from production code. `xls
 Agent role prompts (`prompts/`) and reusable skills (`skills/`). See `AGENTS.md`.
 
 `skills/azure-devops/SKILL.md` covers Azure DevOps CLI access, publishing a local Git codebase to a repository in an existing project, and managing board work items that track the implementation plan.
+
+### Additional model experiments
+
+Optional TranslateGemma and HY-MT2 profiles share the LLM HTTP engine; model-native
+prompt construction lives in `engines/translation_prompts.py` and stays separate
+from the existing generic JSON-batch prompt. `scripts/local_translation_model.ps1`
+starts/stops pinned local CUDA servers and creates ignored per-model configuration.
+`docs/experiments/translation-profiles/` holds the operation guide and reproducible
+FLORES subset benchmark. Downloaded runtimes, GGUF files, local API keys, logs and
+raw benchmark output stay in ignored `data/`.

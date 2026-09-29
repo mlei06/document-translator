@@ -1,6 +1,7 @@
 """Eval configuration: environment first (``DOCTRANSLATOR_*``, ``.env``), then the OS vault."""
 
 from pathlib import Path
+from typing import Literal
 
 import keyring
 from keyring.errors import KeyringError
@@ -27,6 +28,16 @@ class EvalSettings(BaseSettings):
     llm_base_url: HttpUrl | None = None
     llm_api_key: SecretStr | None = None
     llm_model: str | None = None
+    llm_deployment_revision: str = ""
+    llm_translation_profile: Literal["generic", "translategemma", "hy-mt2"] = "generic"
+    llm_server_backend: Literal["openai", "llamacpp"] = "openai"
+    llm_max_concurrency: int = Field(default=4, ge=1)
+    llm_temperature: float = Field(default=0.0, ge=0, le=2)
+    llm_max_output_tokens: int = Field(default=2048, ge=1)
+    llm_top_p: float = Field(default=1.0, gt=0, le=1)
+    llm_top_k: int = Field(default=0, ge=0)
+    llm_repetition_penalty: float = Field(default=1.0, gt=0)
+    llm_seed: int = Field(default=0, ge=0)
     data_dir: Path = Path("data")
     hf_token: SecretStr | None = Field(default=None, validation_alias="HF_TOKEN")
 
@@ -53,4 +64,18 @@ class EvalSettings(BaseSettings):
                 if value is None
             ]
             raise SettingsError(f"LLM mode needs these settings: {', '.join(missing)}")
-        return LlmEngineConfig(base_url=base_url, api_key=api_key, model=model)
+        return LlmEngineConfig(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            deployment_revision=self.llm_deployment_revision,
+            translation_profile=self.llm_translation_profile,
+            server_backend=self.llm_server_backend,
+            max_concurrency=self.llm_max_concurrency,
+            temperature=self.llm_temperature,
+            max_output_tokens=self.llm_max_output_tokens,
+            top_p=self.llm_top_p,
+            top_k=self.llm_top_k,
+            repetition_penalty=self.llm_repetition_penalty,
+            seed=self.llm_seed,
+        )

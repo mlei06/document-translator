@@ -1,9 +1,9 @@
 """Configuration types and validation. Never reads the environment."""
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
 
 from doctranslator_core.types import TranslationMode
 
@@ -27,11 +27,26 @@ class LlmEngineConfig(BaseModel):
     max_concurrency: int = Field(default=4, ge=1)
     """Concurrent requests per ``translate_texts`` call."""
     temperature: float = Field(default=0.0, ge=0, le=2)
+    translation_profile: Literal["generic", "translategemma", "hy-mt2"] = "generic"
+    """Specialized profiles send one segment using the model's native prompt contract."""
+    server_backend: Literal["openai", "llamacpp"] = "openai"
+    """Specialized decoding wire format; llama.cpp uses ``repeat_penalty``."""
+    max_output_tokens: int = Field(default=2048, ge=1)
+    top_p: float = Field(default=1.0, gt=0, le=1)
+    top_k: int = Field(default=0, ge=0)
+    repetition_penalty: float = Field(default=1.0, gt=0)
+    seed: int = Field(default=0, ge=0)
     json_mode: bool = True
     """Send ``response_format: {"type": "json_object"}``. Disable for servers that reject it."""
     deployment_revision: str = ""
     """The operator's declared revision of the model served as ``model``. Part of the output
     identity (ADR-011); change it when the server's model changes under an unchanged name."""
+
+    @model_validator(mode="after")
+    def require_profile_revision(self) -> Self:
+        if self.translation_profile != "generic" and not self.deployment_revision.strip():
+            raise ValueError("specialized translation profiles require deployment_revision")
+        return self
 
 
 class MtEngineConfig(BaseModel):

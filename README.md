@@ -182,3 +182,12 @@ The [P2-P6 handoff](docs/plans/P2-P6-delivery-handoff.md) is the execution entry
 - [Architecture Decisions](docs/decisions/)
 - [Deployment](docs/Deployment.md)
 - [Agent Instructions](AGENTS.md)
+
+## Optional local translation models
+
+TranslateGemma and HY-MT2 can be selected as optional LLM profiles through a local
+OpenAI-compatible inference server. The existing generic LLM and SMALL-100 defaults
+are unchanged. See the [local model guide](docs/experiments/translation-profiles/README.md)
+for verified artifacts, launcher commands, configuration and measured limitations.
+These experimental profiles are not accepted replacements for the current defaults;
+full baseline validation remains required before promotion.

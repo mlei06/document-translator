@@ -1034,3 +1034,48 @@ Commands log at `INFO` to stderr: run start, and per direction the segment count
 ### Testing Strategy
 
 All tests run without network, models, or COMET: the runner uses a fake `Translator` and a stubbed COMET, the COMET adapter uses a fake `comet-score` that writes the verified output shape, and settings tests isolate the environment, `.env`, and the OS vault.
+
+## Optional specialized translation profiles (P1.2)
+
+The owner requested additive TranslateGemma and HY-MT2 integration on 2026-09-28.
+The generic LLM profile and SMALL-100 defaults remain unchanged. See
+[implementation scope](plans/P1.2-specialized-translation-models.md) and
+[local experiment and operation guide](experiments/translation-profiles/README.md).
+
+`LlmEngineConfig.translation_profile` selects `generic` (default), `translategemma`
+or `hy-mt2`. The specialized profiles use the existing HTTP/TLS engine with one
+segment per request and bounded concurrent requests. HY-MT2 uses its translation
+instruction through `/chat/completions`. TranslateGemma uses `/completions`, with
+Gemma control tokens and the exact text branch of Google's pinned template;
+pre-rendering avoids losing source/target language fields in server chat adapters.
+Only complete, nonblank plain text with `finish_reason=stop` is accepted. Context
+or output limits must fail explicitly, never silently truncate a document.
+
+Specialized configuration adds `server_backend` (`openai` or `llamacpp`),
+`max_output_tokens` (2048), `top_p` (1), `top_k` (0), `repetition_penalty` (1), and
+`seed` (0). Existing `temperature` (0) and `max_concurrency` (4) also apply.
+`server_backend=llamacpp` maps the repetition setting to `repeat_penalty` and
+explicitly disables min-p filtering; other servers receive `repetition_penalty`.
+These are server extensions and require a compatible deployment, not an arbitrary
+public OpenAI endpoint. Every specialized deployment requires a nonblank
+`deployment_revision` identifying model artifacts, quantization, runtime and
+server settings. Core never downloads model code or weights.
+
+Specialized output identities contain the profile, backend, prompt version,
+decoding settings, effective batch size 1, JSON mode false and concurrency.
+Concurrency belongs in this identity because GPU batching can change even greedy
+outputs. Generic request construction and identity remain byte-for-byte compatible
+with the previous implementation. Both apps expose these settings using the
+`DOCTRANSLATOR_LLM_` prefix; core never reads the environment.
+
+The local Windows launcher binds only to loopback, creates a local API credential,
+defaults to CPU with one 8192-token slot and vendor sampling for HY-MT2, and
+disables context shifting. TranslateGemma currently uses a one-slot CPU fallback
+because GPU runtime validation failed on this host. HY-MT2 GPU offload is experimental after a broader run also crashed. AngelSlim variants require their separately pinned CPU runtimes. It verifies model hashes and starts no public inference service.
+TranslateGemma's unused chat parser is disabled; its actual translation request
+still contains the official rendered template. Native model inference is a
+separate process, outside the workspace Python dependency lock.
+
+The P1.1 full current-model baselines remain required before promoting a new
+model or changing existing default behavior. Subset chrF/timing measurements are
+exploratory evidence, not COMET baselines or proof of superiority.
