@@ -17,7 +17,7 @@ import re
 import statistics
 import unicodedata
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -165,6 +165,8 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
         self._units: list[_Unit] = []
         self._extracted = False
         self._target: Language | None = None
+        self._should_skip: Callable[[], bool] = lambda: False
+        self._skipped = False
 
     def _check(self) -> None:
         doc = self._doc
@@ -355,10 +357,17 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
         self._units[paragraph_id].translated = tuple(nodes)
         self._target = target
 
-    def place(self, options: FitOptions, fonts: FontManifest | None) -> list[FitEntry | None]:
+    def place(
+        self,
+        options: FitOptions,
+        fonts: FontManifest | None,
+        should_skip: Callable[[], bool] | None = None,
+    ) -> tuple[list[FitEntry | None], bool]:
         changed = [u for u in self._units if u.translated is not None]
         if not changed:
-            return []
+            return [], False
+        self._should_skip = should_skip or (lambda: False)
+        self._skipped = False
         resolver = FontResolver(fonts)
         outcomes: list[FitEntry | None] = []
         substituted = 0
@@ -378,7 +387,7 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
                     count=substituted,
                 )
             )
-        return outcomes
+        return outcomes, self._skipped
 
     def _place_page(
         self, page: pymupdf.Page, record: _Page, options: FitOptions, resolver: FontResolver
@@ -445,17 +454,16 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
             build = functools.partial(
                 unit_html, nodes, self._styles, families, align, unit.line_height
             )
+            if not self._skipped and self._should_skip():
+                self._skipped = True
+            # Required placement always happens; skipping only removes the optional shrinking.
+            scale_low = 1.0 if self._skipped else floor_scale(unit.sizes, options)
             placement = place_html(
-                page,
-                region,
-                build,
-                css,
-                archive,
-                floor_scale(unit.sizes, options),
-                record.height - 2.0,
+                page, region, build, css, archive, scale_low, record.height - 2.0
             )
             unit.placed = placement.rect
-            outcomes.append(_entry(unit, region, placement))
+            if not self._skipped:
+                outcomes.append(_entry(unit, region, placement))
         return outcomes, substituted
 
     def save(self, path: Path) -> None:

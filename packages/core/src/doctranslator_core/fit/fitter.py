@@ -10,7 +10,7 @@ they only describe containers and apply sizes.
 """
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -33,7 +33,7 @@ MAX_CANDIDATES = 40
 
 @dataclass(frozen=True)
 class FitOutcome:
-    status: Literal["unchanged", "adjusted", "unresolved"]
+    status: Literal["unchanged", "adjusted", "unresolved", "skipped"]
     sizes: list[list[float]] | None
     """Sizes to apply (per paragraph, per run), or ``None`` to leave the container as it is."""
     entry: FitEntry | None
@@ -45,7 +45,13 @@ def fit_container(
     translated: LayoutContainer,
     options: FitOptions,
     library: FontLibrary | None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> FitOutcome:
+    """Fit one container. ``should_stop`` is checked before every measurement; when it returns
+    true the container keeps its current sizes and the outcome is ``skipped``."""
+    stop = should_stop or (lambda: False)
+    if stop():
+        return FitOutcome("skipped", None, None)
     base_sizes = [[r.size_pt for r in p.runs] for p in translated.paragraphs]
     flat = [s for sizes in base_sizes for s in sizes]
     if library is None:
@@ -76,6 +82,8 @@ def fit_container(
             for sizes, fl in zip(base_sizes, floors, strict=True)
         ]
         if candidate != last:
+            if stop():
+                return FitOutcome("skipped", None, None)  # discard the uncommitted candidate
             try:
                 final = measure(translated, library, candidate)
             except Unmeasurable as exc:

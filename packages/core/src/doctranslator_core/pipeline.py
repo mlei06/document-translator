@@ -123,17 +123,23 @@ def translate_document(
     fonts: FontManifest | None = None,
     on_progress: ProgressCallback | None = None,
     font_library: FontLibrary | None = None,
+    should_skip_fit: Callable[[], bool] | None = None,
 ) -> DocumentTranslationResult:
-    """Translate ``input_path`` into a new file at ``output_path`` (see the Document API)."""
+    """Translate ``input_path`` into a new file at ``output_path`` (see the Document API).
+
+    ``should_skip_fit`` is polled during fitting; once it returns true the remaining optional fit
+    work stops (translation and adjustments already applied are kept) and the result records
+    ``FitStatus.SKIPPED``.
+    """
     if options.source != "auto" and options.source == options.target:
         raise ValueError(f"source and target language are both {options.target.value!r}")
     _check_paths(input_path, output_path)
     started = time.perf_counter()
     report = _reporter(on_progress)
+    report(ProgressPhase.EXTRACT, 0, 1)  # before parsing, so reading time is visible
     fmt = detect_format(input_path, limits)
     adapter = open_adapter(fmt, input_path, limits, options)
     try:
-        report(ProgressPhase.EXTRACT, 0, 1)
         paragraphs = adapter.paragraphs()
         if len(paragraphs) > limits.max_segments:
             raise DocumentLimitError(
@@ -154,7 +160,9 @@ def translate_document(
             diagnostics.append(_NO_TEXT if source is None else _ALREADY_TARGET)
             originals = _containers(adapter)
             fit_started = time.perf_counter()
-            fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report, font_library)
+            fit_report = _fit(
+                adapter, originals, options.fit, fonts, fmt, report, font_library, should_skip_fit
+            )
             fit_s = time.perf_counter() - fit_started
             report(ProgressPhase.WRITE, 0, 1)
             _publish_copy(input_path, output_path, report)
@@ -193,10 +201,14 @@ def translate_document(
         )
         translate_s = time.perf_counter() - started - extract_s
         originals = _containers(adapter)
+        report(ProgressPhase.APPLY, 0, 1)
         for paragraph_id, nodes in results.items():
             adapter.apply(paragraph_id, nodes, options.target)
+        report(ProgressPhase.APPLY, 1, 1)
         fit_started = time.perf_counter()
-        fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report, font_library)
+        fit_report = _fit(
+            adapter, originals, options.fit, fonts, fmt, report, font_library, should_skip_fit
+        )
         fit_s = time.perf_counter() - fit_started
         write_started = time.perf_counter()
         _write_verify_publish(adapter, output_path, fmt, limits, options, report)
@@ -492,10 +504,12 @@ def _fit(
     fmt: DocumentFormat,
     report: _Report,
     shared: FontLibrary | None = None,
+    should_skip: Callable[[], bool] | None = None,
 ) -> FitReport:
     """Fit every container against its original and apply the chosen sizes (ADR-012)."""
     if isinstance(adapter, PlacementFit):
-        return _placement_report(adapter.place(options, fonts), fmt, options, fonts, report)
+        outcomes, skipped = adapter.place(options, fonts, should_skip)
+        return _placement_report(outcomes, fmt, options, fonts, report, skipped=skipped)
     if originals is None or not isinstance(adapter, LayoutSupport):
         if fmt is DocumentFormat.TXT:  # no fixed-size containers
             return FitReport(
@@ -531,14 +545,22 @@ def _fit(
     library = shared if shared is not None else (FontLibrary(fonts) if fonts is not None else None)
     try:
         entries: list[FitEntry] = []
-        unchanged = adjusted = unresolved = 0
+        unchanged = adjusted = unresolved = inspected = 0
+        skipped = False
+        stop = should_skip or (lambda: False)
         report(ProgressPhase.FIT, 0, len(originals))
         for index, original in enumerate(originals):
+            if stop():
+                skipped = True
+                break
             current = translated[original.id]
             if _same_text(original, current):
                 unchanged += 1  # untranslated text cannot introduce new overflow
             else:
-                outcome = fit_container(original, current, options, library)
+                outcome = fit_container(original, current, options, library, stop)
+                if outcome.status == "skipped":
+                    skipped = True
+                    break
                 if outcome.sizes is not None:
                     adapter.apply_run_sizes(original.id, outcome.sizes)
                 if outcome.entry is not None:
@@ -549,11 +571,14 @@ def _fit(
                     adjusted += 1
                 else:
                     unresolved += 1
+            inspected += 1
             report(ProgressPhase.FIT, index + 1, len(originals))
     finally:
         if library is not None and library is not shared:
             library.close()
-    if not originals:
+    if skipped:
+        status = FitStatus.SKIPPED
+    elif not originals:
         status = FitStatus.NOT_APPLICABLE
     elif unresolved:
         status = FitStatus.UNRESOLVED
@@ -567,7 +592,7 @@ def _fit(
         measurement=STRATEGIES["measure"],
         font_manifest=fonts.digest if fonts is not None else None,
         options=options,
-        inspected=len(originals),
+        inspected=inspected,
         unchanged=unchanged,
         adjusted=adjusted,
         unresolved=unresolved,
@@ -581,13 +606,17 @@ def _placement_report(
     options: FitOptions,
     fonts: FontManifest | None,
     report: _Report,
+    *,
+    skipped: bool = False,
 ) -> FitReport:
     """The fit report for a format whose writer placed and fitted every changed unit."""
     report(ProgressPhase.FIT, len(outcomes), len(outcomes))
     entries = [e for e in outcomes if e is not None]
     adjusted = sum(1 for e in entries if e.status == "adjusted")
     unresolved = len(entries) - adjusted
-    if not outcomes:
+    if skipped:
+        status = FitStatus.SKIPPED
+    elif not outcomes:
         status = FitStatus.NOT_APPLICABLE
     elif unresolved:
         status = FitStatus.UNRESOLVED

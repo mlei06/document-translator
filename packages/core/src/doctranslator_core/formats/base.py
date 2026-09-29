@@ -1,7 +1,7 @@
 """Format capability abstract base classes (ADR-003). Implemented only where applicable."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from doctranslator_core.document import LayoutContainer, Paragraph
@@ -43,8 +43,17 @@ class PlacementFit(ABC):
     """
 
     @abstractmethod
-    def place(self, options: FitOptions, fonts: FontManifest | None) -> list[FitEntry | None]:
-        """Place every translated unit; ``None`` for a unit that fit at its original sizes."""
+    def place(
+        self,
+        options: FitOptions,
+        fonts: FontManifest | None,
+        should_skip: Callable[[], bool] | None = None,
+    ) -> tuple[list[FitEntry | None], bool]:
+        """Place every translated unit; ``None`` for a unit that fit at its original sizes.
+
+        Returns the outcomes and whether optional fitting was skipped: once ``should_skip``
+        returns true, remaining units are still placed completely but without shrinking.
+        """
 
 
 class DocumentAdapter(ABC):

@@ -66,8 +66,12 @@ class Translator:
         *,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None] | None = None,
+        should_skip_fit: Callable[[], bool] | None = None,
     ) -> DocumentTranslationResult:
-        """Translate one document into a new file of the same format (see the Document API)."""
+        """Translate one document into a new file of the same format (see the Document API).
+
+        ``should_skip_fit`` lets the caller stop remaining optional fit work (ADR-012 amendment).
+        """
         if self._closed:
             raise RuntimeError("Translator is closed")
         return pipeline.translate_document(
@@ -80,6 +84,7 @@ class Translator:
             fonts=self._fonts,
             on_progress=on_progress,
             font_library=self._font_library,
+            should_skip_fit=should_skip_fit,
         )
 
     def translate_texts(

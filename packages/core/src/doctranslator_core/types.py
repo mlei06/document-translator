@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "LANGUAGE_NAMES",
     "DiagnosticSeverity",
+    "DocumentDetection",
     "DocumentDiagnostic",
     "DocumentError",
     "DocumentFormat",
@@ -36,6 +37,7 @@ __all__ = [
     "ProgressPhase",
     "SegmentCounts",
     "SourceLanguageAmbiguousError",
+    "TextUnit",
     "TranslationError",
     "TranslationIdentity",
     "TranslationMode",
@@ -181,6 +183,8 @@ class DocumentTranslationOptions(BaseModel):
 class ProgressPhase(StrEnum):
     EXTRACT = "extract"
     TRANSLATE = "translate"
+    APPLY = "apply"
+    """Translations (including formatting fallbacks) are being placed into the document."""
     FIT = "fit"
     WRITE = "write"
 
@@ -231,6 +235,9 @@ class FitStatus(StrEnum):
     PASSED = "passed"
     ADJUSTED = "adjusted"
     UNRESOLVED = "unresolved"
+    SKIPPED = "skipped"
+    """The caller stopped the remaining optional fit work (ADR-012 owner amendment): translation
+    and adjustments already applied are kept; unvisited containers are not reported."""
 
 
 class Extent(BaseModel):
@@ -297,6 +304,36 @@ class DocumentTranslationResult(BaseModel):
     @property
     def fit_status(self) -> FitStatus:
         return self.fit_report.status
+
+
+class DocumentDetection(BaseModel):
+    """What a document is before translation: its verified format and detected source language.
+
+    ``status`` is ``detected``, ``ambiguous`` (the text does not settle the language; ``source`` is
+    ``None`` and the caller should choose) or ``no_text`` (nothing translatable was found).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    format: DocumentFormat
+    source: Language | None
+    status: Literal["detected", "ambiguous", "no_text"]
+    segments: int
+    diagnostics: list[DocumentDiagnostic] = Field(default_factory=list[DocumentDiagnostic])
+
+
+class TextUnit(BaseModel):
+    """One translatable paragraph's text with its stable location, for previews.
+
+    ``group`` is the page-like part it belongs to: a slide, sheet, document part, PDF page or a
+    run of TXT lines.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    location: str
+    group: str
+    text: str
 
 
 class TranslationError(Exception):
