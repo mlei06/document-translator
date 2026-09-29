@@ -50,9 +50,7 @@ def main() -> int:
         verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
     )
     args.out.mkdir(parents=True, exist_ok=True)
-    options = json.dumps(
-        {"target": args.to, "mode": args.mode, "force_retranslate": args.force}
-    )
+    options = json.dumps({"target": args.to, "mode": args.mode, "force_retranslate": args.force})
     failures = 0
     for path in args.files:
         before = sha256(path.read_bytes())
@@ -64,7 +62,11 @@ def main() -> int:
                 data={"options": options, "submission_id": str(uuid.uuid4())},
             )
         if response.status_code not in (201, 202):
-            print(json.dumps({"file": path.name, "http": response.status_code, "error": response.json()}))
+            print(
+                json.dumps(
+                    {"file": path.name, "http": response.status_code, "error": response.json()}
+                )
+            )
             failures += 1
             continue
         job = response.json()
