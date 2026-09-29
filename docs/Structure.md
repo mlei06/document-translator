@@ -36,13 +36,13 @@ Reusable libraries.
 
 ### `/packages/core`
 
-`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Only the text API, types/config and engines are implemented; document, pipeline, format, fit and render files are scaffolds.
+`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Implemented: the text and document APIs, engines, `inline`/`protect`/`detect`/`identity`, the pipeline, TXT/PPTX/DOCX/XLSX format packages (each Office package has `adapter.py` and `layout.py`; `formats/_ooxml/` holds safe package access and run-style tables) and `fit/` (fonts, measure, fitter). `formats/pdf/` and `render/` are scaffolds (P4, P7).
 
 ## `/apps`
 
 Deployable surfaces, each a distribution depending on the core. They never import each other.
 
-- `cli/` - `doctranslator_cli`: package scaffold for the P2 command-line interface.
+- `cli/` - `doctranslator_cli`: `doctranslator translate` (local, synchronous; `main`, `settings`, `fonts`, `console`). Service commands arrive in P5.
 - `server/` - `doctranslator_server`: scaffolds for the future REST/MCP web process and workers (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`). No service is runnable yet.
 - `eval/` - `doctranslator_eval`: implemented translation quality benchmark (ADR-005, [evaluation reference](Architecture.md#evaluation-reference)). `baselines/` is the planned location for committed scores; full baselines are still deferred.
 
@@ -52,13 +52,16 @@ Each package and app has its own `tests/` directory next to `src/`.
 
 ## `/tests`
 
-Cross-surface end-to-end tests (`e2e/`) and sample documents shared by all test suites (`fixtures/`), per ADR-003. Empty until those tests exist.
+Sample documents shared by all test suites (`fixtures/<format>/`, provenance in `fixtures/README.md`) and shared test helpers (`support/`: fake translators, a local fake LLM server, a synthetic font, OOXML inspection); `tests` is on the pytest and pyright path so suites import `support.*`. Cross-surface end-to-end tests (`e2e/`) arrive with the service (P5).
 
 ## `/scripts`
 
 Development, migration, deployment, and maintenance scripts.
 
 - `convert_mt_model.py` converts SMALL-100 to CTranslate2 in a throwaway environment with PyTorch (ADR-006; usage in its docstring).
+- `native_office_check.ps1` opens documents read-only in native Word/Excel/PowerPoint, detects repair, optionally exports PDFs and reads Excel formula values (release evidence).
+- `render_pdf_pages.py` rasterizes PDFs to PNG for visual spot checks.
+- `acceptance_local.py` runs every fixture format through the real local CLI with both engines and records outcomes, fit reports and timings.
 
 ## `/docs`
 

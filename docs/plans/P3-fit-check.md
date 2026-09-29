@@ -2,6 +2,8 @@
 
 Status: Revised 2026-09-28 for owner-approved lightweight best-effort fitting. Parent: Feature #9011. [ADR-012](../decisions/ADR-012-lightweight-fit-policy.md) is authoritative.
 
+Progress (2026-09-28): fit is integrated for PPTX, DOCX and XLSX with saved-output verification, the policy/unsupported/search-limit tests, the synthetic-font corpus and a real-engine run with native spot checks; see the [closure report](../experiments/fit-measurement/README.md). Remaining for phase closure: reviewed-commit CI (branch not pushed) and the service-level R11 evidence. PDF fit arrives with P4.
+
 ## Dependencies and Entry Gate
 
 Preserve P2 formatting, completeness and file-integrity guarantees. Close current measurement research through [P3.0](P3.0-fit-design-validation.md); do not restart engine selection or seek exhaustive native parity. Reuse the fitter/adapters.

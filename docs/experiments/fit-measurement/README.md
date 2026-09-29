@@ -36,6 +36,21 @@ ADR-012 does not endorse the East Asian multipliers that fitted this data (a 1.3
 
 Estimator constants (ADR-012): 70% relative and 8 pt absolute floor, 2.5% scale steps, 0.5 pt quantization, 1 pt tolerance, at most 40 candidate measurements per container. XLSX column widths assume a maximum digit width of 7 px at an 11 pt default font (scaled with the default size) and 2 px cell padding per side, which is Excel's behaviour for its default fonts. `passed` and `adjusted` mean only that the supported estimator found no excess.
 
+Characters that neither run font contains are measured with the document's theme script fonts (Hans, Jpan, Hant: the fonts Office substitutes for East Asian text in a Latin font); a character in none of the document's fonts is `missing_glyph`.
+
+## Acceptance Corpus (ADR-012)
+
+Frozen corpus: the four fixture formats in `tests/fixtures/` (native PowerPoint deck with placeholders, table, group and text box; generated DOCX with body, tables and a text box; XlsxWriter workbook with merged cells and rich text), synthetic-font tests for growth, floors, source overflow, missing fonts, unsupported geometry and search limits, and the real-engine runner `scripts/acceptance_local.py` (`data/acceptance/p3/local/summary.json`, 2026-09-28, Gemma and SMALL-100, zh -> en, Windows and Office cloud fonts):
+
+| Format | Fit outcome (both engines) | Fit time vs translation time |
+|--------|----------------------------|------------------------------|
+| TXT | not_applicable | 0 s |
+| PPTX | passed: 14 containers inspected, none needed shrinking | 1.2-4.4 s vs 2.2-2.8 s (first-run font loading; the library is now shared across documents) |
+| DOCX | unresolved: the text box holds Chinese source text (`east_asian_layout_unvalidated`) | 0.02 s |
+| XLSX | unresolved: 10 of 12 cells fit; one rich-text cell with explicit run sizes (`rich_text_sizes`); one clipped label still overflowing at the 8 pt floor (`overflow_at_floor`) | 0.1-0.9 s |
+
+Every input was unchanged. All eight outputs opened in native PowerPoint, Excel and Word (build 20326). Visual spot checks of the PowerPoint and Excel exports: translated text inside every passed PowerPoint shape and table cell (no false pass); the Excel label reported `overflow_at_floor` is visibly clipped at 8 pt, as reported; no unnecessary shrinking seen; formatting (red bold runs, hyperlinks, merged title, chart, text box) preserved. The `########` date cells in the workbook are the same in the source and unrelated to translation.
+
 ## Saved-Output Verification
 
 After writing, the pipeline reopens the output as the same format and checks that every container's run sizes in the file equal the sizes the fit check applied (`pipeline._verify`); a mismatch fails the job instead of publishing. Formats without layout support report `not_run` (never `not_applicable`); only TXT and documents without applicable containers report `not_applicable`.

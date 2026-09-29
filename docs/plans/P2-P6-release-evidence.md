@@ -6,7 +6,11 @@ Evidence for the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md). Every row 
 
 Branch: `release/p2-p6` (baseline commit `57a7671`, "Add P2-P6 release plans and design material").
 
-**Current phase and step:** P3.0 - fit measurement/font design (font module drafted in `fit/fonts.py`, not yet committed or wired). P2 is implemented; its closure waits on P3 (fit) because `fit_status=not_run` is a P2-interim value only.
+**Current phase and step:** P3 fit integrated under owner ADR-012 (PPTX/DOCX/XLSX, saved-output verification, corpus and native spot checks; see `docs/experiments/fit-measurement/README.md`). Next: P4 (PDF), then P5 (service), then P6 (web UI).
+
+**Owner decisions during this run (2026-09-28):** ADR-012 lightweight best-effort fit (supersedes native-parity fit); ADR-013 deployment profiles and the desktop/internal-app plan (follow-on tracks, not part of P2-P6); P6 web UI keeps every mock feature except prompt/comment-driven document edits and fit-check notifications (fit runs silently; reports stay stored for diagnostics); all COMET scoring stopped by the owner.
+
+**P1.1 baselines paused by the owner:** the SMALL-100 full run is translated but unscored (`data/eval/runs/20260928T055619Z-mt-alirezamsh--small100-ct2-int8`; rescore with `doctranslator-eval score <run_dir>`, no retranslation); the Gemma run was not captured. CPU-only COMET needed roughly 3 h and ~50 core-hours on this laptop. R02's engine-quality evidence depends on these baselines.
 
 **Done**
 

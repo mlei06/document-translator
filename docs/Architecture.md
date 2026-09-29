@@ -148,13 +148,13 @@ Lenovo managed rollout and eventual OEM preload follow a working installer app. 
 
 | Area | Implemented | Planned |
 |------|-------------|---------|
-| Core | `Translator.translate_texts`, typed configuration, LLM and SMALL-100 engines, whitespace handling and per-call deduplication | Documents/adapters, document-wide reuse, detection, fingerprint and progress (P2); fit (P3); PDF (P4); rendering/edits (P7) |
+| Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | PDF (P4); rendering/edits (P7) |
 | Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
-| CLI | Package scaffold | Document translation command (P2) |
+| CLI | Local `doctranslator translate` (both engines, fit with a configured font manifest, JSON result and report file) | Service commands (P5) |
 | Server | Module scaffolds | Persistence, jobs/workers, auth and REST (P5); MCP (P7) |
 | Web | Design exploration | React application (P6) |
 
-P1 remains in progress pending delivery verification/closure. Its deferred baselines are separate from that closure. Local engine tests and the XLSX serialization experiment are not proof that the full document system is implemented.
+P2 and the ADR-012 fit integration (P3) are implemented on `release/p2-p6`; the [release evidence](plans/P2-P6-release-evidence.md) records what has been verified. P1 remains in progress pending delivery verification/closure. Its deferred baselines are separate from that closure. Local engine tests and the XLSX serialization experiment are not proof that the full document system is implemented.
 
 ## Major Components
 
@@ -763,7 +763,7 @@ with Translator(config, fonts=fonts) as translator:
 ```
 
 `Translator(config, *, fonts: FontManifest | None = None)`
-: `fonts` is the provisioned font manifest used by fit measurement (P3). Without it, applicable containers are reported unresolved (`font_unavailable`).
+: `fonts` is the provisioned font manifest used by fit measurement (build it with `build_font_manifest(directories)`; apps choose the directories). The Translator keeps one font library for its lifetime, so loaded fonts are reused across documents. Without a manifest, changed containers are reported unresolved (`font_manifest_missing`).
 
 `Translator.identity -> TranslationIdentity`
 : The loaded engine's output identity; equal to `prepare_identity(config)` for the same configuration.
@@ -796,9 +796,10 @@ Document types (`doctranslator_core.types`, all frozen Pydantic models):
 | `TranslationProgress` | `phase: extract \| translate \| fit \| write`, `done`, `total` |
 | `DocumentDiagnostic` | `code`, `severity: info \| warning`, `message`, `location`, `count` |
 | `SegmentCounts` | `segments`, `passed_through`, `unique_inputs`, `formatting_fallbacks` |
-| `DocumentTranslationResult` | `output_path`, `format`, `source_requested`, `source_resolved`, `target`, `engine: EngineInfo`, `fingerprint`, `counts`, `diagnostics`, `fit_report: FitReport`; property `fit_status` |
+| `DocumentTranslationResult` | `output_path`, `format`, `source_requested`, `source_resolved`, `target`, `engine: EngineInfo`, `fingerprint`, `counts`, `diagnostics`, `fit_report: FitReport`, `timings_s` (extract/translate/fit/write seconds, not part of the cached report); property `fit_status` |
 | `TranslationIdentity` | `mode`, `model`, `details: dict[str, str]`; property `digest` |
-| `FitReport`, `FitEntry`, `FitStatus`, `Extent` | See [Fit Check](#fit-check); `fit_status` is `not_applicable` for TXT and for documents without applicable containers |
+| `FitReport`, `FitEntry`, `FitStatus`, `Extent` | See [Fit Check](#fit-check). `FitStatus`: `not_applicable` (TXT, or no applicable containers), `passed`, `adjusted`, `unresolved` (including a required format without layout support: entry reason `fit_unsupported_for_format`) |
+| `FontManifest`, `FontFace` | Provisioned font faces with family/full names (every language), typographic names, style, weight and content hash; `digest` ignores paths |
 
 Stable locations are strings built from part and structure, never Python object identities: `slide 3 / shape "Title 1" (id 2) / paragraph 1`, `document body / table 1 / row 2 / cell 1 / paragraph 1`, `sheet "数据" / A1`, `line 12`. Sheet names appear as they are (they are preserved, not translated).
 
@@ -815,7 +816,8 @@ Stable locations are strings built from part and structure, never Python object 
 | `formats/base.py` | `DocumentAdapter` ABC: `paragraphs()`, `apply(paragraph_id, nodes, target)`, `save(path)`, `diagnostics`, `close()`; `LayoutSupport` ABC (P3) |
 | `formats/__init__.py` | `detect_format(path)`, `open_adapter(format, path, limits)` |
 | `formats/_ooxml/` | Safe ZIP reading with limits, secure lxml parsing, relationship resolution, targeted part writer |
-| `formats/<format>/` | Format adapters (TXT, PPTX, DOCX, XLSX; PDF in P4) |
+| `formats/<format>/` | Format adapters (TXT, PPTX, DOCX, XLSX; PDF in P4); `layout.py` implements `LayoutSupport` for PPTX, DOCX and XLSX |
+| `fit/fonts.py`, `fit/measure.py`, `fit/fitter.py` | Font manifest and resolution; HarfBuzz estimator; ADR-012 policy. Supported cases and limits: [fit experiment report](experiments/fit-measurement/README.md) |
 
 An adapter reads the file once and keeps its own parsed state. `paragraphs()` returns every translatable paragraph in document order with inline nodes whose style ids and object keys only the adapter interprets. `apply` replaces a paragraph's content: the adapter writes one run per `Text`/`Keep` with the style's saved properties, re-inserts the original object elements by identity and rebuilds wrappers. `save` writes the package, changing only parts that were modified.
 

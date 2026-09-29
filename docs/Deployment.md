@@ -34,7 +34,18 @@ uv run pytest
 
 The repository selects Python through `.python-version`; package requirements are Python 3.14 or newer. `uv.lock` owns workspace dependency versions. Optional heavyweight COMET tooling runs outside the workspace as described in the [eval component](Architecture.md#evaluation-reference).
 
-The evaluation entry point is `uv run doctranslator-eval --help`. P2 owns the document CLI; verify the current checkout's command help and release evidence before treating a planned deployment command as available. SMALL-100 conversion is documented in `scripts/convert_mt_model.py`; model files remain under gitignored `data/models/`.
+The evaluation entry point is `uv run doctranslator-eval --help`. SMALL-100 conversion is documented in `scripts/convert_mt_model.py`; model files remain under gitignored `data/models/`.
+
+### Local document translation (implemented)
+
+```powershell
+uv run doctranslator translate report.docx --to en                 # mode from DOCTRANSLATOR_MODE (default mt)
+uv run doctranslator translate deck.pptx --to en --from zh --mode llm --json
+```
+
+Output defaults to `<name>.<target><suffix>` beside the input and is never overwritten; `<output>.report.json` holds diagnostics and the fit report. Exit codes: 0 success (warnings possible), 2 invalid input/configuration, 3 engine failure, 4 output path, 130 interrupted. Nothing is stored on a server and there is no cache or history (ADR-010).
+
+Fit uses a font manifest built from `DOCTRANSLATOR_FONT_DIRS` (directories separated by `;` on Windows, `:` elsewhere). The default is the platform font directories; on Windows that includes the user font directory and Office's cloud-font cache, where Office keeps fonts such as Aptos and DengXian. The manifest is cached in `%LOCALAPPDATA%\doctranslator\font-manifest.json` (or `~/.cache/doctranslator/`) and rebuilt for changed files only. Missing fonts make affected containers unresolved; they never block translation.
 
 ## Configuration and Secrets
 
