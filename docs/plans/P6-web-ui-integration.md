@@ -1,5 +1,8 @@
 # P6 - Audit and Integrate the Existing Web UI
 
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+
+
 Status: Owner-requested execution plan. Parent: Feature #9014. Implement after the combined P2-P5 backend acceptance gate; audit the mock earlier to identify API gaps. No existing mock is evidence of a working product.
 
 ## Objective
@@ -46,6 +49,10 @@ P6's architect must extend the P5 authentication ADR and OpenAPI before coding:
 - Redirect unauthenticated users to sign-in with safe local return routes. After authentication, reload owned history. On expired session, stop polling, explain reauthentication and retain only safe resumable job IDs; every later request rechecks ownership.
 
 Long-lived API credentials remain appropriate for CLI/API. Browser sessions are another transport for the same owner identity, not a separate user table. Never trust owner IDs, display names or cached browser identity for authorization.
+
+## Saved Document Behavior
+
+Apply ADR-014: library source records with current language results, not one library tile per attempt. Normal Translate reuses only the selected document's compatible current result. Translate again and Always generate a new translation send a new submission ID with force; network retries preserve that ID. Keep the old download during replacement, swap only after success, and preserve it on failure/cancel. Show active-target conflicts as the existing job. Offer Delete translation and Delete source with the concrete scope; source deletion revokes job-based downloads. Do not expose model ranking or version history. Temporary integration jobs are not permanent library entries.
 
 ## Real Workflow and Data Contract
 

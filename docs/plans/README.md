@@ -22,6 +22,7 @@ Start with the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md): user-owned s
 | [P4](P4-pdf-support.md) | PDF experiment/ADR and implementation contract |
 | [P5 implementation](P5-server-and-service-cli.md) | Users, auth, REST, batches, jobs, storage and service CLI |
 | [P6](P6-web-ui-integration.md) | Existing mock audit, real backend integration and browser acceptance |
+| [P5-D2 storage and ownership](P5-D2-storage-and-ownership.md) | ADR-014 transition: local exports, hosted current results, human/service owners |
 | [P5-P6 progress](P5-P6-document-progress.md) | Proposed latest-job snapshot, honest stage/count display, polling and recovery contract |
 | [P5.0](P5.0-server-design-validation.md) | Draft authentication/server/operations design work |
 

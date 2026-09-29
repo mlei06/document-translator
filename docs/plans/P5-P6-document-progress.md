@@ -1,5 +1,8 @@
 # P5-P6 - Store and Display Document Processing Progress
 
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+
+
 Status: Proposed implementation plan requested by the owner. No production behavior is implemented by this document. Applies to the shared service used by the website, service CLI and future desktop app.
 
 ## Objective and scope
@@ -67,9 +70,9 @@ The service phase set is `prepare | extract | translate | apply | fit | write`. 
 }
 ```
 
-This is an illustrative subset of the existing job response, not a new endpoint. Use `progress: null` before the first attempt and while requeued. Keep the last snapshot for failed/cancelled jobs to explain where they stopped. On success it may remain as historical detail, but `status` controls the Ready display. A cache hit can succeed with no progress snapshot; return `cache_hit: true` and the new owner's existing result/report links, without fabricating phases or copying the producer's progress.
+This is an illustrative subset of the existing job response, not a new endpoint. Use `progress: null` before the first attempt and while requeued. Keep the last snapshot for failed/cancelled jobs to explain where they stopped. On success it may remain as historical detail, but `status` controls the Ready display. A cache hit can succeed with no progress snapshot; return `cache_hit: true` and the same owner's exact job result/report links, without fabricating phases or copying the producer's progress.
 
-Persist original/output/report blobs and owned document/version references through P5's existing storage contract. Fit status/counts come from the final version's report and existing document summary, not from the progress counter. Do not duplicate document text, model output, local paths, credentials or per-section records in progress. Job/progress retention follows P5 job retention.
+Use ADR-014 persistence by profile: immutable hosted job results and saved current references, or temporary local working files followed by user-controlled export. Fit status/counts come from the result report, not from the progress counter. Do not duplicate document text, model output, local paths, credentials or per-section records in progress. Job/progress retention follows P5 job retention.
 
 ## Skip layout check
 
@@ -79,7 +82,7 @@ Persist original/output/report blobs and owned document/version references throu
 4. Check the control at fit entry, between containers and between bounded size candidates. On observation, finish the current indivisible native call, discard any uncommitted candidate for the current container and stop further fit work. Retain previously applied adjustments and all translations. Do not restart the pipeline, copy/restore the entire document or re-run the model. Ordinary job cancellation/lost claim still aborts publication and takes precedence.
 5. Continue the normal write, integrity verification and owned publication path. Record effective bypass as `FitStatus.SKIPPED` / `skipped`; report only actually processed work, without generating an unresolved entry for every unvisited area. Persist the request across automatic retries so further fit is bypassed; translation recovery itself remains P5's normal retry behavior, not a new checkpoint system.
 6. This is cooperative: accepting the request does not guarantee interruption of a native call. If fit completes before the request can be observed, keep the actual completed-fit outcome and proceed to save. Never hold back a ready file merely to display Skipping. Once Saving starts, the button disappears; a late request cannot mutate an already published file.
-7. An effectively skipped result is a complete translated file, not a partial/cancelled translation. Publish its owned output/report/version, but do not insert or replace the normal reusable `translation_results` cache row, including on a force run. Existing good cached results stay intact. A retry satisfied by an existing fully fitted cache result uses that result's real fit metadata.
+7. An effectively skipped result is a complete translated file, not a partial/cancelled translation. Under ADR-014 it may replace the owned current translation after success, including force, but cannot satisfy a later full-fit reuse request. Do not keep a separate hidden previous full-fit cache. Local exports and temporary hosted jobs never use persistent result reuse.
 8. PDF must still place/write all translated text when optional fit is skipped; separate the optional adjustment loop from required construction in the selected writer. Unsupported measurement and text loss must not be relabelled as user skip. Do not add a second PDF renderer or a rollback pass to implement this control.
 
 ## Core and worker changes
@@ -121,7 +124,7 @@ Persist original/output/report blobs and owned document/version references throu
 | Publication boundary | Delay/fail blob publication after core write completes; job remains Saving or fails, never exposes a successful partial result |
 | Skip during fit | Button stops further fit at a safe checkpoint, preserves all translation and prior adjustments, then writes/verifies/persists a downloadable file; no additional model call |
 | Skip races/recovery | Duplicate requests are safe; late request reconciles to Saving/Ready; disconnect/retry retains intent; job cancellation wins; stale attempts cannot publish |
-| Skip and cache | Skipped output has owned storage and technical skipped status; normal cache entry is not created/replaced, including force; later normal translation cannot reuse the skipped file |
+| Skip and cache | Skipped output is downloadable/current with technical skipped status; later full-fit translation cannot reuse it; no separate hidden previous cache is retained |
 | Cache hit | Immediate Ready using this user's result/report links; no fake translation animation or another user's IDs |
 | Format differences | TXT skips layout; Office/PDF show actual supported events/reports; no fabricated pages/slides/sheets or division by zero |
 | Refresh and network loss | Accepted work survives reload/disconnect; latest stored snapshot and result return on reconnect without duplicate submission |

@@ -18,11 +18,17 @@ One shared translation capability, delivered in three forms:
 
 1. **Web service** - users sign in, submit documents, track jobs and download owned results.
 2. **Installed desktop app** - users select a supported model to download during setup, then open the app and drag in files or folders. Local translation works offline once its runtime/model is installed. The app manages its local service and workers; no terminal or web sign-in is required for local mode.
-3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with the same job/cache/storage behavior. Python applications may also use the public core when they own orchestration.
+3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with shared processing/jobs and explicit saved or temporary retention. Python applications may also use the public core when they own orchestration.
 
-The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; histories/caches are not automatically synchronized.
+The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; local exports are user-controlled files; they are not synchronized to a hosted library.
 
 The current implementation handoff remains P2-P6. The [desktop and internal-app plan](docs/plans/Desktop-and-internal-app-delivery.md) adds installer/model setup and drag/drop delivery. Explorer right-click translation is only a later consideration. Lenovo laptop integration/preload is a long-term ambition after a proven installable app, not a current shipping commitment.
+
+## Storage and Retranslation
+
+Under [ADR-014](docs/decisions/ADR-014-storage-ownership-and-retranslation.md), local desktop/future Explorer processing is files or folders in, files or folders out: always translate each new explicit run, export to the chosen destination with numbered filename collisions, and clean up temporary working copies. No hidden permanent local document library or translation cache is required.
+
+The shared website saves private source-document records and one current translation per language pair, deduplicating identical physical bytes underneath. Compatible current results can be reused; Translate again or Always generate a new translation bypasses reuse and replaces only that owner's result after success. Old results remain available while replacements run. Human accounts and application service accounts own their records; internal apps can use temporary results and store outputs themselves. Jobs retain their exact outputs only for their stated retention, independently of the library's current pointer. See the [implementation handoff](docs/plans/P5-D2-storage-and-ownership.md). These are accepted targets, not claims that the service is implemented.
 
 ## Users
 

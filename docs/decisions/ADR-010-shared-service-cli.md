@@ -1,5 +1,8 @@
 # ADR-010: Shared Service for the Pre-GUI CLI and API
 
+> Superseded in part on 2026-09-29 by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): local exports always translate fresh with temporary working storage; hosted owners retain one current result per document/language pair, with owner-scoped reuse and immutable job results. Human and application service accounts are owners. Earlier global-cache, mandatory version-history, desktop-library and conflicting retention requirements below are historical; ADR-014 takes precedence. Fit skip remains supported, but no separate old full-fit cache is retained.
+
+
 ## Status
 
 Accepted (2026-09-27), based on the owner's explicit selection of a shared service for CLI and API. Implementation is pending.

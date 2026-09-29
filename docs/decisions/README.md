@@ -14,12 +14,13 @@ An ADR exists so that an agent working on this months later understands a decisi
 | [004 job storage](ADR-004-job-storage.md) | Accepted |
 | [005 quality evaluation](ADR-005-translation-quality-evaluation.md) | Accepted |
 | [006 MT selection](ADR-006-mt-model-selection.md) | Accepted; full quality baseline deferred |
-| [007 reuse and document storage](ADR-007-translation-reuse-and-document-storage.md) | Accepted |
+| [007 reuse and document storage](ADR-007-translation-reuse-and-document-storage.md) | Partly superseded by ADR-014 |
 | [008 job execution](ADR-008-job-execution-model.md) | Accepted |
 | [009 XLSX preservation](ADR-009-xlsx-preservation.md) | Accepted (sheet names preserved; recalculation on open) |
 | [010 shared service CLI](ADR-010-shared-service-cli.md) | Accepted by owner; implementation pending |
 | [011 document translation contract](ADR-011-document-translation-contract.md) | Accepted (formatting, writers, detection, identity) |
 | [012 lightweight fit](ADR-012-lightweight-fit-policy.md) | Accepted by owner; implementation reconciliation pending |
-| [013 deployment profiles](ADR-013-deployment-profiles.md) | Accepted direction; desktop packaging/design gate pending |
+| [013 deployment profiles](ADR-013-deployment-profiles.md) | Accepted direction; storage amended by ADR-014 |
+| [014 storage, ownership and retranslation](ADR-014-storage-ownership-and-retranslation.md) | Accepted; implementation pending |
 
 Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

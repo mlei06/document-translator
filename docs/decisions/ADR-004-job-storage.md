@@ -1,5 +1,8 @@
 # ADR-004: Job Storage
 
+> Superseded in part on 2026-09-29 by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): local exports always translate fresh with temporary working storage; hosted owners retain one current result per document/language pair, with owner-scoped reuse and immutable job results. Human and application service accounts are owners. Earlier global-cache, mandatory version-history, desktop-library and conflicting retention requirements below are historical; ADR-014 takes precedence. Fit skip remains supported, but no separate old full-fit cache is retained.
+
+
 ## Status
 
 Accepted (2026-09-26). Amended by [ADR-007](ADR-007-translation-reuse-and-document-storage.md) (file storage and retention) and [ADR-008](ADR-008-job-execution-model.md) (worker processes sharing the database on one host).

@@ -1,5 +1,8 @@
 # Implementation Plan
 
+> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. Implementation and migration are pending; no phase completion is implied.
+
+
 <!--
 This is the roadmap / dependency graph for the project, not the detailed how-to for any one phase - that level of detail goes in docs/plans/. Give every phase an ID (P0, P1, P2, ...) and subphases as needed (P2.1, P2.2). Those IDs are used to name files in docs/plans/, e.g. docs/plans/P2.1-authentication.md.
 -->
@@ -259,8 +262,8 @@ Run user-owned translations as persistent asynchronous jobs behind a REST API an
 - Service CLI HTTP commands for submission, history/status, cancellation and downloads; local synchronous `translate` remains explicit and separate.
 - `apps/server`: FastAPI app, settings, `cli.py` (`serve`, `worker`), `db/` (SQLAlchemy models, repositories), initial Alembic migration, `jobs/`, `auth/`, `api/` with OpenAPI schema.
 - Job execution per [ADR-008](decisions/ADR-008-job-execution-model.md): the jobs table as the queue, worker processes with leases, retries, recovery, progress, and cancellation; `serve --workers N` on the laptop.
-- Storage and reuse per [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md): content-addressed blob storage behind a storage interface (local disk implementation), `translation_results`, `documents`, and `document_versions`, the whole-document cache with `force_retranslate`, and cache hit/miss logging.
-- Retention per ADR-007 with decided default durations: cache entries and user documents expire independently, and blobs are deleted only when unreferenced.
+- Storage and reuse per [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md): content-addressed blob storage behind a storage interface (local disk implementation), owned source/current-translation and immutable job-result records under ADR-014, owner-scoped current-result reuse with `force_retranslate`, and cache hit/miss logging.
+- Retention per ADR-014: saved originals/current results persist within quota until deletion; temporary/superseded job results and metadata expire on advertised bounds. Delete blobs only when unreferenced and unpinned.
 - `docs/Deployment.md` for laptop hosting: running the server, binding to the network, firewall, configuration and secrets, backup.
 
 ### Completion Criteria

@@ -1,5 +1,8 @@
 # D0 - Desktop Runtime and Packaging Contract
 
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+
+
 Status: Python packaging and real local translation demonstrated on branch `desktop/packaging`; full D0 remains open. The [experiment report](../experiments/desktop-packaging/README.md) records results, the baseline fit-wiring defect already being fixed in the other agent's working copy, and remaining acceptance. Production desktop work remains gated by the evidence below. Parent: [desktop delivery plan](Desktop-and-internal-app-delivery.md).
 
 ## Scope and ownership
@@ -26,11 +29,11 @@ The following is the proposed wire/bootstrap contract, not a currently available
 4. On readiness the child emits one bounded JSON line on stdout: event, protocol version, API version, PID and loopback base URL. Logs go to stderr; readiness does not contain secrets or imply that a model is loaded. The shell confirms readiness with an authenticated health call and fails visibly on version mismatch/start timeout.
 5. The desktop API client uses the existing versioned REST job endpoints. Keep the session token only in memory in the trusted app context. Restrict WebView navigation and CSP to packaged assets and the selected API; local server validates Host and configured Origin, with no wildcard CORS. Unrelated browser origins and other OS users must fail acceptance tests.
 6. The shell manages its children in a Windows Job Object so abrupt shell termination cannot leave orphan local servers/workers. Graceful quit requests shutdown and observes a bounded deadline before terminating only its own job object. Durable job recovery remains P5's lease/retry behavior.
-7. Window close with active work offers clearly explained background/tray behavior; explicit quit explains interruption. Reopening reconnects to the same running app. After a full restart the token/port rotate but owner, history and stored results remain stable.
+7. Window close with active work offers clearly explained background/tray behavior; explicit quit explains interruption. Reopening reconnects to the same running app. After a full restart the token/port rotate but owner and active recovery state remain stable; exported files remain in the chosen folder. There is no permanent local document library.
 
 The service owner must implement and test this profile in the existing server executable. Desktop must not import server modules, maintain a second database queue, or fabricate completed jobs while that profile is unavailable.
 
-Use a per-user application-data root resolved by the runtime through Windows known-folder APIs. Keep database, private inputs/results, logs, temporary files and installed model versions in distinct subdirectories with current-user access controls. Exported results live in the user's chosen output folder. Upgrades preserve both sets of data; uninstall preserves user data unless the user explicitly selects removal. Never store documents beside installed executables. Load models on demand; unload only when no job uses them. The initial desktop idle-unload default is five minutes, configurable independently of durable job state and subject to the laptop acceptance measurements.
+Use a per-user application-data root resolved by the runtime through Windows known-folder APIs. Keep bounded job metadata, temporary working inputs/results, logs and installed model versions in distinct subdirectories with current-user access controls. Clean working copies after confirmed export; never delete user-exported files during cleanup. Exported results live in the user's chosen output folder. Upgrades preserve both sets of data; uninstall preserves user data unless the user explicitly selects removal. Never store documents beside installed executables. Load models on demand; unload only when no job uses them. The initial desktop idle-unload default is five minutes, configurable independently of durable job state and subject to the laptop acceptance measurements.
 
 ## Model installation boundary
 
@@ -42,7 +45,7 @@ The backend resolves a selected installed model ID to validated immutable files 
 
 ## Folder and output contract
 
-Native file/folder selection produces a bounded stream of inputs for the existing per-file batch API. Do not follow reparse points by default. Exclude generated output roots and deduplicate repeated selected source paths. Preserve relative paths under distinct input roots. A destination collision receives an explicit new name or user decision; never overwrite a source/result. Unreadable and unsupported files are counted individually and do not stop valid siblings. The UI shows enumerating, accepted, running and complete counts without inventing a percentage before enumeration finishes.
+Native file/folder selection produces a bounded stream of inputs for the existing per-file batch API. Do not follow reparse points by default. Exclude generated output roots and deduplicate repeated selected source paths. Preserve relative paths under distinct input roots. Every explicit run translates fresh. A destination collision receives an atomically reserved numbered name; never overwrite a source/result. Unreadable and unsupported files are counted individually and do not stop valid siblings. The UI shows enumerating, accepted, running and complete counts without inventing a percentage before enumeration finishes.
 
 ## Validation sequence and stopping rule
 
@@ -50,7 +53,7 @@ Native file/folder selection produces a bounded stream of inputs for the existin
 2. Run a real local SMALL-100 TXT translation, inspect target text/report and verify the input hash. Check a supported Office file separately for native-dependency coverage. Run a second fresh process to expose missing startup assets.
 3. Record bundle/model size, fresh-process launch and translation elapsed time. State cache/load conditions; a run immediately after building is not a cold-cache benchmark. These are observations on this host, not a performance SLA or model benchmark.
 4. Compile a minimal Tauri shell against that bundle on a build machine with Rust/MSVC. Prove child lifecycle and installer resource layout before adding product screens.
-5. When P5 is ready, replace the CLI probe with the real local service and test authentication, persistent history, crash recovery and model readiness.
+5. When P5 is ready, replace the CLI probe with the real local service and test authentication, no persistent translation cache, crash/export reconciliation and model readiness.
 6. Verify installation on a clean supported Windows VM, including WebView2/VC runtime provisioning, offline inference after model install, signing and uninstall/data retention.
 
 Steps 1-3 can close as a packaging feasibility result. D0 as a whole is not complete until steps 4-6 pass. Missing P5, compiler toolchain, signing material or clean VM must be reported separately; they are not evidence against Python or permission to weaken the desktop requirements.
