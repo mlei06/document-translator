@@ -103,8 +103,8 @@ class Database:
         config.attributes["engine"] = self.engine
         return config
 
-    def migrate(self) -> None:
-        command.upgrade(self._alembic(), "head")
+    def migrate(self, revision: str = "head") -> None:
+        command.upgrade(self._alembic(), revision)
 
     def current_revision(self) -> str | None:
         with self.engine.connect() as conn:

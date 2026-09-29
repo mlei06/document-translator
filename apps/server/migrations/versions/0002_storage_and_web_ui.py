@@ -55,6 +55,7 @@ def upgrade() -> None:
         batch.create_index(batch.f("ix_sessions_user_id"), ["user_id"], unique=False)
 
     op.execute("UPDATE users SET kind = 'human' WHERE kind = 'person'")
+    op.execute("UPDATE jobs SET phase = NULL WHERE phase = 'done'")  # 0001 terminal marker
 
     op.rename_table("documents", "legacy_documents")
     with op.batch_alter_table("legacy_documents") as batch:
@@ -294,7 +295,7 @@ def _convert(old_results: dict[str, str]) -> None:
         for _, result_id in older:
             bind.execute(
                 sa.text("UPDATE job_results SET expires_at = :at WHERE id = :id"),
-                {"at": now + SUPERSEDED, "id": result_id},
+                {"at": (now + SUPERSEDED).strftime("%Y-%m-%d %H:%M:%S.%f"), "id": result_id},
             )
 
 

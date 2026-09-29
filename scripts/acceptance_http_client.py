@@ -36,6 +36,7 @@ def main() -> int:
     parser.add_argument("--to", required=True)
     parser.add_argument("--mode", required=True)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--temporary", action="store_true")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("files", type=Path, nargs="+")
     args = parser.parse_args()
@@ -50,7 +51,14 @@ def main() -> int:
         verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
     )
     args.out.mkdir(parents=True, exist_ok=True)
-    options = json.dumps({"target": args.to, "mode": args.mode, "force_retranslate": args.force})
+    options = json.dumps(
+        {
+            "target": args.to,
+            "mode": args.mode,
+            "force_retranslate": args.force,
+            "retention": "temporary" if args.temporary else "saved",
+        }
+    )
     failures = 0
     for path in args.files:
         before = sha256(path.read_bytes())
@@ -82,11 +90,11 @@ def main() -> int:
             "error": job["error_code"],
             "seconds": round(time.monotonic() - started, 1),
         }
+        record["document_id"] = job["document_id"]
         if job["status"] == "succeeded":
-            document = job["document_id"]
-            output = client.get(f"/documents/{document}/versions/0/file")
-            report = client.get(f"/documents/{document}/versions/0/fit-report")
-            name = f"{path.stem}.{args.to}.{document[:8]}{path.suffix}"
+            output = client.get(f"/jobs/{job['id']}/file")
+            report = client.get(f"/jobs/{job['id']}/fit-report")
+            name = f"{path.stem}.{args.to}.{job['id'][:8]}{path.suffix}"
             (args.out / name).write_bytes(output.content)
             (args.out / f"{name}.report.json").write_bytes(report.content)
             record |= {

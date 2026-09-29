@@ -135,8 +135,11 @@ def _parse_cursor(cursor: str | None) -> tuple[datetime, str] | None:
         raise InvalidRequestError("invalid cursor", code="invalid_cursor") from exc
 
 
+_PHASES = frozenset({"prepare", "extract", "translate", "apply", "fit", "write"})
+
+
 def _progress(job: Job) -> ProgressView | None:
-    if job.phase is None:
+    if job.phase not in _PHASES:
         return None
     counted = (
         job.phase == "translate"
