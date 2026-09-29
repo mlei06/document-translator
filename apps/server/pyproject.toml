@@ -3,7 +3,19 @@ name = "doctranslator-server"
 version = "0.1.0"
 description = "Web backend: REST API, MCP endpoint, job service."
 requires-python = ">=3.14"
-dependencies = ["doctranslator-core"]
+dependencies = [
+    "alembic>=1.20.0",
+    "doctranslator-core[mt]",
+    "fastapi>=0.141.1",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1.1",
+    "typer>=0.27.2",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+doctranslator-server = "doctranslator_server.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]

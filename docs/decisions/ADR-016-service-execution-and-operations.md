@@ -1,0 +1,55 @@
+# ADR-016 - Service Execution, Storage Safety and Operations
+
+Status: Accepted 2026-09-29 (P5.0). Amends [ADR-008](ADR-008-job-execution-model.md) (worker-ID fence replaced by an attempt claim token; exact transaction predicates) and makes [ADR-004](ADR-004-job-storage.md)/[ADR-007](ADR-007-translation-reuse-and-document-storage.md) storage and retention concrete. Contracts come from the [P5 plan](../plans/P5-server-and-service-cli.md).
+
+## Context
+
+ADR-008 fences completion on `worker_id`. That is insufficient: a worker whose lease expired can reclaim the same job later with the same worker ID, and its old attempt could then publish. ADR-007 requires that blob cleanup never deletes a file something references, including a file just written whose reference has not committed yet. P5 also needs pinned operational defaults, a process model for Windows, and a backup/restore procedure covering database and files together.
+
+## Decision
+
+### Queue and attempts (amends ADR-008 rules 3-6, 8)
+
+Job columns: `status` (`queued`, `running`, `succeeded`, `failed`, `cancelled`), `attempts`, `max_attempts`, `available_at`, `claim_token`, `worker_id`, `lease_until`, `heartbeat_at`, `cancel_requested`, `phase`, `progress_done`, `progress_total`, `error_code`, `error_message`, `cache_hit`, timestamps.
+
+- **Claim:** `UPDATE jobs SET status='running', attempts=attempts+1, claim_token=:new, worker_id=:w, lease_until=:now+lease, heartbeat_at=:now, started_at=:now WHERE id=:candidate AND status='queued' AND available_at<=:now AND cancel_requested=false`. `:new` is 128 random bits per claim. The worker owns the attempt only if exactly one row changed. Candidates are the oldest by `(available_at, created_at)`.
+- **Fence:** heartbeat, progress, requeue, failure and completion all include `WHERE id=:id AND status='running' AND claim_token=:token`. Heartbeat and completion additionally require `lease_until > :now`. A zero-row result means the attempt is lost: the worker stops, publishes nothing and discards its temporary files. A stale attempt can never publish, even if the same process reclaims the job, because every claim has a new token.
+- **Heartbeat:** a separate thread with its own database connection extends `lease_until` every heartbeat interval and reads `cancel_requested`. It never depends on progress callbacks, so a long model batch cannot expire a healthy lease.
+- **Progress:** the pipeline callback writes phase/progress at most once per second (always on phase change), fenced by the token, and raises a cancellation exception when the heartbeat has seen `cancel_requested` or the progress update itself finds the flag set.
+- **Recovery (sweep before each claim):** `UPDATE ... SET status='queued', claim_token=NULL, worker_id=NULL, available_at=:now+backoff WHERE id=:id AND status='running' AND claim_token=:old AND lease_until<=:now AND attempts<max_attempts AND cancel_requested=false`; with attempts exhausted the row becomes `failed` (`worker_lost`); with `cancel_requested` it becomes `cancelled`. Cancellation wins over requeue.
+- **Completion transaction** (one database transaction, after blobs are written and verified): fenced update to `succeeded` with the lease/token predicate *and* `cancel_requested=false`, *and* the owner still active (`EXISTS users WHERE id=owner AND active`); only if that update changed one row, insert or update the cache row and insert the document and version 0, then release the blob pins. If it changed no row, roll back: nothing is published.
+- **Cancellation:** a queued job becomes `cancelled` immediately (`WHERE status='queued'`). A running job gets `cancel_requested=true`; the worker observes it at the next callback or heartbeat and records `cancelled` with its token. Because the completion predicate requires `cancel_requested=false` and both are single-row updates serialized by the database, whichever commits first wins: a cancel after success returns the succeeded job unchanged; a success after a committed cancel request cannot publish. Cancelling a terminal job is a no-op returning its state.
+- **Retries:** only `EngineUnavailableError` (network or server unavailability after the engine's own retries) and lost workers are transient. Transient failures requeue with `available_at` +10 s after the first attempt and +30 s after the second; `max_attempts` is 3 claims in total. Everything else fails at once with a safe code: unsupported/invalid/limit/no-text/ambiguous-source documents, authentication, malformed engine output (`EngineResponseError`), identity mismatch, preservation or verification failure. Error messages are the core's safe messages; tracebacks go to the worker log only.
+- **Identity:** submission computes the fingerprint from `prepare_identity` and the font manifest without loading models. Before translating, the worker recomputes `output_fingerprint(translator.identity, options, fonts)`; a mismatch (model files or configuration changed between submission and execution) fails the job with `identity_mismatch` and the user resubmits.
+- **Cache re-check:** after claiming and before loading the input, a worker (unless `force`) looks up `(input_hash, fingerprint)` again and, on a hit, completes through the same fenced transaction with `cache_hit=true`.
+
+### Blobs and reference-safe cleanup (ADR-007 files)
+
+- Layout `<data>/blobs/sha256/<2 hex>/<64 hex>`; writes go to `<data>/staging/` first and are published with an atomic rename on the same volume, so a file at a blob path is always complete. `blobs(hash, size, state, created_at)` with `state` in `pending`, `available`, `deleting`; `blob_pins(id, hash, expires_at)` protect blobs between writing and referencing.
+- **Put:** stream to staging while hashing; in one transaction, if the row is `deleting` retry after a short wait, otherwise insert the row (`pending`) if missing and insert a pin; rename into place unless the blob file exists; mark `available`. The pin is deleted in the same transaction that inserts the first reference (job, cache row or document version), or expires (staging retention) if the upload is abandoned.
+- **References** are columns: `jobs.input_blob`, `documents.original_blob`, `document_versions.output_blob`/`report_blob`, `translation_results.output_blob`/`report_blob`.
+- **GC:** in one transaction per candidate, `UPDATE blobs SET state='deleting' WHERE hash=:h AND state IN ('available','pending') AND NOT EXISTS(any reference) AND NOT EXISTS(unexpired pin)` (pending rows only after the staging grace period); if one row changed, delete the file, then delete the row. A publisher that finds `deleting` waits and re-puts. There is no "count then unlink".
+- **Serialization:** on SQLite every write transaction is serialized, which makes each check-and-mark atomic. The PostgreSQL move must add row locks (`SELECT ... FOR UPDATE` on the blob row in put, publish and GC); the repositories isolate this.
+
+### Submission and admission
+
+Uploads stream to staging with a running size check (413 at the limit) and SHA-256; the file is validated with the core's `inspect_document` (format and package limits) before acceptance. Admission is checked in the job-creating transaction: at most 1,000 nonterminal jobs globally and 200 per user, otherwise 429 with `Retry-After: 5`. Idempotency bindings: `(owner_id, submission_id)` for standalone jobs and `(batch_id, client_item_id)` for batch items, each storing a request hash of the input hash plus canonical options; same binding and hash returns the original outcome, a different hash is 409. Unique constraints make two concurrent identical requests produce one job (the loser re-reads the winner).
+
+### Retention
+
+Defaults: cache rows unused for 30 days expire; documents expire 90 days after creation (`expires_at` shown to users); terminal jobs, batches and their idempotency bindings are deleted 90 days after completion when no document of theirs remains; staging files and pins older than 24 hours are removed. Retention deletes rows transactionally, then GC removes unreferenced blobs. `DELETE /v1/documents/{id}` deletes the document and its versions at once (the job keeps its row for audit, without a download link). A document's original, output and report blobs stay as long as the document does, regardless of cache expiry.
+
+### Processes and operations
+
+- `doctranslator-server serve [--workers N]` runs uvicorn in-process (REST) and supervises N worker subprocesses (default 1), restarting a crashed worker after 5 s, 10 s, 20 s ... up to 60 s. `doctranslator-server worker` runs one worker. Workers stop claiming on SIGINT/SIGTERM/CTRL_BREAK, finish or abandon the current job (abandoned jobs recover by lease expiry) and exit. `serve` runs retention once an hour in a background thread when `--retention` is on (default on).
+- Migrations run only through `doctranslator-server migrate`; `serve` and `worker` refuse to start on a database that is not at the current revision.
+- Defaults: idle poll 1 s, heartbeat 20 s, lease 120 s, progress writes at most once per second. SQLite: WAL, `foreign_keys=ON`, `busy_timeout=5000` on every connection, short write transactions (`BEGIN IMMEDIATE` for claims and publication). Upload limit 100 MiB per file; OOXML/PDF limits are the core `DocumentLimits`. All effective limits are returned by `GET /v1/capabilities`.
+- **Backup:** `doctranslator-server backup DEST` takes the GC lock (a `locks` row with a lease that GC also requires), snapshots the database with SQLite's online backup API, copies every blob referenced by the snapshot into `DEST/blobs/...`, writes `DEST/manifest.json` with every blob hash and size, and releases the lock. The service may keep running; blobs are immutable and GC cannot delete during the backup. **Restore:** `doctranslator-server restore SRC --data-dir DIR` into an empty data directory verifies every blob hash against the manifest and the database, then places the database; the service starts afterwards.
+- Time comes from the host clock on one host; a multi-host deployment (PostgreSQL) uses the database clock.
+
+## Consequences
+
+- Stale workers and duplicate claims are harmless by construction; race tests use real SQLite files and separate processes with an injectable clock.
+- A job can wait behind a lost worker for up to one lease (120 s) before recovery.
+- Cleanup is safe under concurrent uploads, publication and backup, at the cost of a pins table and a lock row.
+- Moving to PostgreSQL requires adding row locks in three repository methods, not new semantics.
