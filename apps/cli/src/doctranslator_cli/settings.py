@@ -7,8 +7,6 @@ import os
 from pathlib import Path
 from typing import Literal
 
-import keyring
-from keyring.errors import KeyringError
 from pydantic import HttpUrl, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -55,6 +53,11 @@ class CliSettings(BaseSettings):
         """``value`` from the environment/``.env``, else the OS vault entry ``name``."""
         if value is not None:
             return value
+        # Imported only when needed: keyring pulls in jaraco.context, which calls into
+        # platform/WMI at import and can take many seconds on some Windows machines.
+        import keyring
+        from keyring.errors import KeyringError
+
         try:
             stored = keyring.get_password(KEYRING_SERVICE, name)
         except KeyringError:

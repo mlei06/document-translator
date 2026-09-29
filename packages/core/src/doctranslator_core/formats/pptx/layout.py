@@ -386,9 +386,15 @@ class PptxLayout:
             alt = next((str(e.get("altLang")) for e in chain if e.get("altLang")), "")
             script = _script_for(lang, alt, text)
             east = theme.fonts.get(f"mn-{script}") or None
+        fallbacks = tuple(
+            name
+            for key in _fallback_order(text)
+            if (name := theme.fonts.get(f"mn-{key}") or theme.fonts.get(f"mj-{key}"))
+        )
         return LayoutRun(
             text=text,
             size_pt=size * font_scale,
+            fallback_fonts=fallbacks,
             latin_font=latin or theme.fonts.get("mn-lt") or None,
             east_asian_font=east,
             bold=bold,
@@ -439,6 +445,14 @@ def _script_for(lang: str, alt: str, text: str) -> str:
             return "Hang"
     has_kana = any(0x3040 <= ord(c) <= 0x30FF for c in text)
     return "Jpan" if has_kana else "Hans"
+
+
+def _fallback_order(text: str) -> tuple[str, ...]:
+    """Theme script fonts Office substitutes for East Asian text: Japanese first when the text
+    has kana, otherwise Simplified Chinese."""
+    if any(0x3040 <= ord(c) <= 0x30FF for c in text):
+        return ("Jpan", "Hans", "Hant")
+    return ("Hans", "Jpan", "Hant")
 
 
 def _line_spacing(chain: list[Element], reduction: float) -> tuple[float, float | None]:

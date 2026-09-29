@@ -202,3 +202,44 @@ def test_pipeline_without_fonts_reports_unresolved_not_passed(tmp_path: Path) ->
     )
     assert result.fit_status is FitStatus.UNRESOLVED
     assert {e.reason for e in result.fit_report.entries} == {"font_manifest_missing"}
+
+
+def test_translator_uses_its_font_manifest(
+    tmp_path: Path, manifest: FontManifest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: Translator.translate_document must measure with the fonts it fingerprints."""
+    from collections.abc import Sequence
+
+    import doctranslator_core.translator as translator_module
+    from doctranslator_core import MtEngineConfig, Translator
+    from doctranslator_core.engines import TranslationEngine
+    from doctranslator_core.types import EngineInfo, TranslationIdentity, TranslationMode
+
+    class Engine(TranslationEngine):
+        @property
+        def info(self) -> EngineInfo:
+            return EngineInfo(mode=TranslationMode.MT, model="fake", details={})
+
+        @property
+        def identity(self) -> TranslationIdentity:
+            return TranslationIdentity(mode=TranslationMode.MT, model="fake", details={})
+
+        def translate_batch(
+            self, texts: Sequence[str], source: Language, target: Language
+        ) -> list[str]:
+            return ["EN " + t for t in texts]
+
+    def create_engine(config: object) -> TranslationEngine:
+        return Engine()
+
+    monkeypatch.setattr(translator_module, "create_engine", create_engine)
+    deck = _deck_with_test_font(tmp_path)
+    config = MtEngineConfig(model_dir=tmp_path, model_family="small100")
+    with Translator(config, fonts=manifest) as translator:
+        result = translator.translate_document(
+            deck,
+            tmp_path / "out.pptx",
+            options=DocumentTranslationOptions(source=Language.ZH, target=Language.EN),
+        )
+    assert result.fit_report.font_manifest == manifest.digest
+    assert "font_manifest_missing" not in {e.reason for e in result.fit_report.entries}

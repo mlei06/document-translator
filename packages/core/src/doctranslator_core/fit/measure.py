@@ -107,7 +107,10 @@ def _advances(font: LoadedFont, text: str) -> list[float]:
 def _font_for(ch: str, run: LayoutRun, library: FontLibrary) -> LoadedFont:
     """The font a document application uses for ``ch``: the script slot, then the other slot."""
     east = is_east_asian(ch)
-    names = (run.east_asian_font, run.latin_font) if east else (run.latin_font, run.east_asian_font)
+    primary = (
+        (run.east_asian_font, run.latin_font) if east else (run.latin_font, run.east_asian_font)
+    )
+    names = (*primary, *run.fallback_fonts)
     if all(name is None for name in names):
         raise Unmeasurable("font_unknown")
     unavailable = False

@@ -64,6 +64,7 @@ class XlsxLayout:
         self._cells: dict[str, _Cell] = {}
         self._clones: dict[tuple[int, float], int] = {}
         shared = next((r.target for r in package.related(workbook, "sharedStrings")), None)
+        self._scripts = _theme_script_fonts(package, workbook)
         self._shared = package.xml(shared).findall(qn("s:si")) if shared else []
 
     # ---- styles ------------------------------------------------------------------------------
@@ -225,6 +226,12 @@ class XlsxLayout:
             line_metric="font",
         )
 
+    def _fallbacks(self, text: str) -> tuple[str, ...]:
+        """Theme script fonts Excel substitutes for East Asian text (kana: Japanese first)."""
+        kana = any(0x3040 <= ord(c) <= 0x30FF for c in text)
+        order = ("Jpan", "Hans", "Hant") if kana else ("Hans", "Jpan", "Hant")
+        return tuple(self._scripts[k] for k in order if self._scripts.get(k))
+
     def _runs(self, item: Element, font: Element | None) -> list[LayoutRun]:
         base_size = _font_size(font) if font is not None else 11.0
         base_name = _font_name(font)
@@ -234,7 +241,15 @@ class XlsxLayout:
         plain = item.find(qn("s:t"))
         if plain is not None:
             runs.append(
-                LayoutRun(plain.text or "", base_size, base_name, base_name, base_bold, base_italic)
+                LayoutRun(
+                    plain.text or "",
+                    base_size,
+                    base_name,
+                    base_name,
+                    base_bold,
+                    base_italic,
+                    self._fallbacks(plain.text or ""),
+                )
             )
         for run in item.findall(qn("s:r")):
             properties = run.find(qn("s:rPr"))
@@ -249,6 +264,7 @@ class XlsxLayout:
                     family,
                     _flag(properties, "s:b") if properties is not None else base_bold,
                     _flag(properties, "s:i") if properties is not None else base_italic,
+                    self._fallbacks(run.findtext(qn("s:t")) or ""),
                 )
             )
         return runs
@@ -287,6 +303,18 @@ class XlsxLayout:
         xfs_element.append(new_xf)
         xfs_element.set("count", str(len(xfs_element.findall(qn("s:xf")))))
         return len(xfs_element.findall(qn("s:xf"))) - 1
+
+
+def _theme_script_fonts(package: Package, workbook: str) -> dict[str, str]:
+    """Minor-font script fonts (Hans, Jpan, Hant...) of the workbook theme."""
+    fonts: dict[str, str] = {}
+    for rel in package.related(workbook, "theme"):
+        minor = package.xml(rel.target).find(
+            f"{qn('a:themeElements')}/{qn('a:fontScheme')}/{qn('a:minorFont')}"
+        )
+        for font in minor.findall(qn("a:font")) if minor is not None else []:
+            fonts[str(font.get("script"))] = font.get("typeface", "")
+    return fonts
 
 
 def _empty_font(styles: Element) -> Element:

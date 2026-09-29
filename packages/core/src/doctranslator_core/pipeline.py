@@ -122,6 +122,7 @@ def translate_document(
     limits: DocumentLimits,
     fonts: FontManifest | None = None,
     on_progress: ProgressCallback | None = None,
+    font_library: FontLibrary | None = None,
 ) -> DocumentTranslationResult:
     """Translate ``input_path`` into a new file at ``output_path`` (see the Document API)."""
     if options.source != "auto" and options.source == options.target:
@@ -153,7 +154,7 @@ def translate_document(
             diagnostics.append(_NO_TEXT if source is None else _ALREADY_TARGET)
             originals = _containers(adapter)
             fit_started = time.perf_counter()
-            fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
+            fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report, font_library)
             fit_s = time.perf_counter() - fit_started
             report(ProgressPhase.WRITE, 0, 1)
             _publish_copy(input_path, output_path, report)
@@ -195,7 +196,7 @@ def translate_document(
         for paragraph_id, nodes in results.items():
             adapter.apply(paragraph_id, nodes, options.target)
         fit_started = time.perf_counter()
-        fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report)
+        fit_report = _fit(adapter, originals, options.fit, fonts, fmt, report, font_library)
         fit_s = time.perf_counter() - fit_started
         write_started = time.perf_counter()
         _write_verify_publish(adapter, output_path, fmt, limits, options, report)
@@ -487,18 +488,42 @@ def _fit(
     fonts: FontManifest | None,
     fmt: DocumentFormat,
     report: _Report,
+    shared: FontLibrary | None = None,
 ) -> FitReport:
     """Fit every container against its original and apply the chosen sizes (ADR-012)."""
     if originals is None or not isinstance(adapter, LayoutSupport):
-        # TXT has no fixed-size containers. Any other format without layout support has fit
-        # missing, which is reported as not run, never as not applicable.
-        status = FitStatus.NOT_APPLICABLE if fmt is DocumentFormat.TXT else FitStatus.NOT_RUN
-        measurement = "none" if fmt is DocumentFormat.TXT else "unsupported"
+        if fmt is DocumentFormat.TXT:  # no fixed-size containers
+            return FitReport(
+                format=fmt,
+                status=FitStatus.NOT_APPLICABLE,
+                measurement="none",
+                font_manifest=None,
+                options=options,
+            )
+        # A required format without layout support is unresolved, never not applicable.
+        missing = FitEntry(
+            location="document",
+            kind="document",
+            status="unresolved",
+            reason="fit_unsupported_for_format",
+            original_sizes_pt=[],
+            final_sizes_pt=[],
+            allowed=None,
+            original_extent=None,
+            translated_extent=None,
+            final_extent=None,
+        )
         return FitReport(
-            format=fmt, status=status, measurement=measurement, font_manifest=None, options=options
+            format=fmt,
+            status=FitStatus.UNRESOLVED,
+            measurement="unsupported",
+            font_manifest=None,
+            options=options,
+            unresolved=1,
+            entries=[missing],
         )
     translated = {c.id: c for c in adapter.layout_containers()}
-    library = FontLibrary(fonts) if fonts is not None else None
+    library = shared if shared is not None else (FontLibrary(fonts) if fonts is not None else None)
     try:
         entries: list[FitEntry] = []
         unchanged = adjusted = unresolved = 0
@@ -521,7 +546,7 @@ def _fit(
                     unresolved += 1
             report(ProgressPhase.FIT, index + 1, len(originals))
     finally:
-        if library is not None:
+        if library is not None and library is not shared:
             library.close()
     if not originals:
         status = FitStatus.NOT_APPLICABLE

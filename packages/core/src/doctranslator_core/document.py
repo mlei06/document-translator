@@ -33,6 +33,9 @@ class LayoutRun:
     """Font for Han, kana and full-width characters."""
     bold: bool = False
     italic: bool = False
+    fallback_fonts: tuple[str, ...] = ()
+    """Fonts the document declares for scripts its run fonts lack (theme Hans/Jpan/Hant),
+    tried in order when neither run font contains a character."""
 
 
 @dataclass(frozen=True, slots=True)

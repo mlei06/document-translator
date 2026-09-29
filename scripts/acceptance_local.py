@@ -109,6 +109,24 @@ def main() -> None:
                     "unique_inputs": result["counts"]["unique_inputs"],
                     "formatting_fallbacks": result["counts"]["formatting_fallbacks"],
                     "fit_status": result["fit_report"]["status"],
+                    "fit_counts": {
+                        k: result["fit_report"][k]
+                        for k in ("inspected", "unchanged", "adjusted", "unresolved")
+                    },
+                    "fit_entries": [
+                        {
+                            k: e[k]
+                            for k in (
+                                "location",
+                                "status",
+                                "reason",
+                                "original_sizes_pt",
+                                "final_sizes_pt",
+                            )
+                        }
+                        for e in result["fit_report"]["entries"]
+                    ],
+                    "timings_s": result["timings_s"],
                     "diagnostics": sorted({d["code"] for d in result["diagnostics"]}),
                     "source_script_left": leftover(output),
                 }

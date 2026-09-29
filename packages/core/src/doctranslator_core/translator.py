@@ -10,6 +10,7 @@ from typing import Self
 from doctranslator_core import pipeline
 from doctranslator_core.config import DocumentLimits, EngineConfig
 from doctranslator_core.engines import TranslationEngine, create_engine
+from doctranslator_core.fit.fonts import FontLibrary
 from doctranslator_core.identity import output_fingerprint
 from doctranslator_core.types import (
     DocumentTranslationOptions,
@@ -44,6 +45,8 @@ class Translator:
     ) -> None:
         self._engine: TranslationEngine = create_engine(config)
         self._fonts = fonts
+        # One library per Translator: loaded fonts are reused across documents.
+        self._font_library = FontLibrary(fonts) if fonts is not None else None
         self._limits = limits or DocumentLimits()
         self._closed = False
 
@@ -74,7 +77,9 @@ class Translator:
             options=options,
             fingerprint=output_fingerprint(self.identity, options, self._fonts),
             limits=self._limits,
+            fonts=self._fonts,
             on_progress=on_progress,
+            font_library=self._font_library,
         )
 
     def translate_texts(
@@ -118,6 +123,8 @@ class Translator:
         if not self._closed:
             self._closed = True
             self._engine.close()
+            if self._font_library is not None:
+                self._font_library.close()
 
     def __enter__(self) -> Self:
         return self

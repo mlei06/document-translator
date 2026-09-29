@@ -228,9 +228,6 @@ class SegmentCounts(BaseModel):
 class FitStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
     """TXT, or a document with no fixed-size text containers."""
-    NOT_RUN = "not_run"
-    """P2 interim only: fit is not implemented for the format yet. Removed when P3 lands; never
-    acceptable in a release result (P2-P6 handoff)."""
     PASSED = "passed"
     ADJUSTED = "adjusted"
     UNRESOLVED = "unresolved"

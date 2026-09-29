@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from support.fake_llm import FakeLlm, fake_llm_server
 from support.fakes import copy_fixture
+from support.fonts import synthetic_font_manifest
 
 CLI = [sys.executable, "-c", "from doctranslator_cli.main import main; main()"]
 
@@ -22,6 +23,11 @@ def llm() -> Iterator[FakeLlm]:
 
 def run(args: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     clean = {k: v for k, v in os.environ.items() if not k.startswith("DOCTRANSLATOR_")}
+    # A private font directory keeps runs fast and independent of the machine's fonts.
+    fonts = cwd / "fonts"
+    if not fonts.is_dir():
+        synthetic_font_manifest(cwd)
+    clean["DOCTRANSLATOR_FONT_DIRS"] = str(fonts)
     return subprocess.run(  # noqa: S603 - the test's own interpreter and arguments
         [*CLI, *args],
         cwd=cwd,
@@ -102,7 +108,7 @@ def test_engine_rejection_exits_3_without_output(tmp_path: Path, llm: FakeLlm) -
     result = run(["translate", source.name, "--to", "en", "--from", "zh"], tmp_path, llm_env(llm))
     assert result.returncode == 3
     assert "rejected the credentials" in result.stderr
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["report.docx"]
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name != "fonts") == ["report.docx"]
 
 
 def test_help_needs_no_settings_or_models(tmp_path: Path) -> None:

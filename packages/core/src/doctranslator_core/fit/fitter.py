@@ -103,6 +103,15 @@ def fit_container(
         if candidate == floors:
             break
         scale -= SCALE_STEP
+    if measured >= MAX_CANDIDATES and last != floors:
+        # The search cap ended the search before the floor was measured: no reliable result.
+        return FitOutcome(
+            "unresolved",
+            None,
+            _entry(
+                translated, "unresolved", "search_limit", flat, None, allowed, source, current, None
+            ),
+        )
     return FitOutcome(
         "unresolved",
         floors,
