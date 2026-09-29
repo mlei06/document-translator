@@ -10,7 +10,7 @@ Teams regularly receive and produce documents (slide decks, reports, spreadsheet
 - Translating by hand, which is slow and expensive.
 - Using tools that translate text but destroy the document: fonts, colors, tables, and slide layouts are lost, and translated text overflows its boxes because target-language text is often longer than the source.
 
-The output is a translated document with structure and formatting preserved, plus explicit warnings where layout could not be fitted reliably.
+The output is a translated document with structure and formatting preserved. Lightweight layout checking runs by default; the planned UI lets users skip that stage and continue saving their translated file.
 
 ## Solution
 
@@ -35,7 +35,7 @@ The current implementation handoff remains P2-P6. The [desktop and internal-app 
 
 - Translate PPTX, DOCX, XLSX, PDF, and TXT files, producing output in the same format as the input.
 - Preserve formatting and structure: fonts, styles, colors, run-level formatting (bold, italic, etc.), tables, lists, slide layouts, and sheet structure.
-- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation and explicit unresolved warnings.
+- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation that users can skip.
 - Keep document content on the user's device or approved company infrastructure; never silently upload local-mode documents.
 - Translate in both directions between Chinese, English, Japanese, and Spanish, with Chinese -> English as the primary focus and highest quality bar, on technical and business content.
 - Offer more than one translation mode, so users can trade quality against speed and availability.
@@ -91,7 +91,9 @@ Translation quality and accuracy take priority. Automatic post-processing is a l
 
 *Layer 1 - automatic fit (all surfaces).* Preserve wording and formatting, allow natural reflow and inspect changed constrained containers. Use the same supported font/wrapping estimator for source and translation. Allow the larger of container bounds and source extent, then apply bounded proportional font shrinking only when overflow is reliably measurable. Defaults are 70% relative and 8pt absolute floors; original smaller text is not enlarged or further shrunk. Unknown measurements retain original sizes and produce unresolved warnings. Never rewrite, shorten or truncate translations to fit.
 
-Every result carries a fit report. A measured pass is not rendered visual approval. Unresolved fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
+Normal website/desktop screens show **Checking layout** with **Skip layout check**, then **Saving** and **Ready to download**. They do not show unresolved-section details or layout-warning badges. Skipping stops further optional fit work, keeps adjustments already applied and still writes/verifies/persists the full translation. Existing technical reports can remain for troubleshooting; effective bypass is recorded as `skipped` and is excluded from normal full-fit cache reuse. This owner-approved control is planned, not implemented yet; see the [progress/skip plan](docs/plans/P5-P6-document-progress.md#skip-layout-check).
+
+A measured pass is not rendered visual approval. Unresolved or user-skipped fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
 
 | Format | Minimum fit scope |
 |---|---|

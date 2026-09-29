@@ -189,7 +189,7 @@ Planning revised 2026-09-28: [ADR-012](decisions/ADR-012-lightweight-fit-policy.
 
 ### Goal
 
-Prioritize translation accuracy and preserved formatting; mitigate obvious measured overflow in changed constrained PPTX/DOCX/XLSX containers with bounded shrinking and honest unresolved warnings. No native layout parity guarantee.
+Prioritize translation accuracy and preserved formatting; mitigate obvious measured overflow in changed constrained PPTX/DOCX/XLSX containers with bounded shrinking and truthful technical outcomes. Under the ADR-012 owner amendment, users see Checking layout with Skip layout check; they do not need per-section fit details or warning badges. No native layout parity guarantee.
 
 ### Dependencies
 
@@ -299,7 +299,7 @@ Non-technical coworkers use the existing mock UI, audited and integrated with th
 - `apps/web`: React + TypeScript SPA with an API client generated from the server's OpenAPI schema.
 - Feature disposition audit of the existing artifact, including all screens/controls and mock-data dependencies.
 - Real browser authentication/session flow on the same stable users as CLI/API.
-- Mixed-file upload, language/mode selection, real job progress, owned history, download and fit report views, including failure/recovery states.
+- Mixed-file upload, language/mode selection, real job progress, owned history, download and a stage-specific Skip layout check control, including failure/recovery states. Follow the progress plan for cooperative stopping, saving and cache exclusion; no required fit-report view or unresolved-section UI.
 - Production mocks/simulated completion removed; unsupported previews/fix actions reworked or removed rather than implying P7 functionality.
 - Built SPA served by the server; web build, lint, and tests in CI.
 

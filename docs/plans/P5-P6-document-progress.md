@@ -6,7 +6,7 @@ Status: Proposed implementation plan requested by the owner. No production behav
 
 Show what each document is doing, preserve that information across refresh/disconnect, and expose the same facts to every client. Use one latest progress snapshot on the existing job row and the existing polling API. Do not build a progress-event service, event history table, broker, WebSocket/SSE infrastructure, overall percentage estimator or ETA system.
 
-This task adds reporting, not translation/fit behavior. It does not add numeric/unit validation, another model review, a rendering loop, new fit algorithms or per-slide scheduling. The user's preference is minimal processing and honest feedback.
+This task adds progress reporting and the owner-requested ability to skip fit while it runs, under the amended ADR-012. It does not add numeric/unit validation, another model review, a rendering loop, new fit algorithms or per-slide scheduling. The user's preference is minimal processing and a simple UI, without unresolved-section details.
 
 ## Relevant architecture and starting point
 
@@ -32,22 +32,22 @@ Keep job status separate from stage: `queued`, `running`, `succeeded`, `failed`,
 | `running / translate`, `done < total` | Translating · 48 of 120 text sections | Stage-only count/bar, not overall document progress |
 | `running / translate`, `done == total` | Finishing translation | Spinner until the next phase; formatting fallbacks may still run |
 | `running / apply` | Applying translations | Spinner |
-| `running / fit` | Checking layout · 12 of 30 text areas | Count/bar when total is positive |
+| `running / fit` | Checking layout | Spinner and Skip layout check button; no area counts |
 | `running / write` | Saving translated document | Spinner through writing, verification and service persistence |
-| `succeeded` | Ready to download | Download and report actions; optional Layout warnings indicator |
+| `succeeded` | Ready to download | Download action; no layout-warning badge or unresolved-section view |
 | `failed` / `cancelled` | Translation failed / Cancelled | Safe explanation and applicable action; no download for partial output |
 
 These labels are presentation strings mapped from stable codes, not arbitrary server messages. Show no overall percentage. A translation percentage, if rendered beside its bar, is explicitly for that stage and appears only while `0 <= done < total`. `total == 0` never causes division or a 100% claim. Model calls can take time without emitting a new count; do not animate fake increments.
 
 Use text-section counts for all formats in this release. Deduplication means these are unique translation inputs, not slide/page/cell counts. Keep a long paragraph as the pipeline's existing input unit; do not alter segmentation for a progress bar. Do not claim Word page counts or completed slides/sheets. Such context is deferred until a real need justifies mapping all inputs and fallback outcomes to locations.
 
-TXT skips layout checking. Other formats reflect the actual fit callback and final report. `passed` means no measured adjustment was required; `adjusted` means changes were applied; `unresolved` means some locations could not be measured or fitted, possibly alongside successful adjustments. Do not generate warnings before fit finishes, infer warnings from elapsed time, or describe every unresolved result as confirmed overflow.
+TXT has no fit stage or skip button. Other formats show Checking layout only while actual fit work runs. Keep `passed`, `adjusted`, `unresolved`, `not_applicable` and the new `skipped` outcome as technical metadata. Existing reports can remain available to API/diagnostic tooling; normal website/desktop screens do not need a fit-report viewer, warning badge, per-section explanation or report-download action. All successfully published outputs show Ready to download.
 
 No-text/already-target-language results can skip translation. Display the existing result diagnostic and available output; never simulate translation stages that did not run.
 
 ## Storage and API contract
 
-Use the existing jobs table fields `phase`, `progress_done`, `progress_total`; add `progress_updated_at` (nullable UTC timestamp) for the last saved progress snapshot. Counts are nullable nonnegative integers. Both are null for indeterminate phases; both are set for translation/fit counts, with `done <= total`. Existing job timestamps cover submission/start/completion; do not add per-phase history or stage-duration tables.
+Use the existing jobs table fields `phase`, `progress_done`, `progress_total`; add `progress_updated_at` (nullable UTC timestamp) for the last saved progress snapshot and `fit_skip_requested` (boolean, default false) for the user's durable control. Counts are nullable nonnegative integers. Both are null for indeterminate phases, including fit; both are set for translation counts, with `done <= total`. Existing job timestamps cover submission/start/completion; do not add per-phase history or stage-duration tables.
 
 The service phase set is `prepare | extract | translate | apply | fit | write`. Only `apply` is a new core enum value; `prepare` belongs to the worker. Job detail and list/batch-item responses expose the same nested projection of these columns:
 
@@ -56,6 +56,7 @@ The service phase set is `prepare | extract | translate | apply | fit | write`. 
   "status": "running",
   "attempts": 1,
   "cancel_requested": false,
+  "fit_skip_requested": false,
   "cache_hit": false,
   "progress": {
     "phase": "translate",
@@ -70,12 +71,23 @@ This is an illustrative subset of the existing job response, not a new endpoint.
 
 Persist original/output/report blobs and owned document/version references through P5's existing storage contract. Fit status/counts come from the final version's report and existing document summary, not from the progress counter. Do not duplicate document text, model output, local paths, credentials or per-section records in progress. Job/progress retention follows P5 job retention.
 
+## Skip layout check
+
+1. Show **Skip layout check** only while the owned job is `running / fit`. Click sends `POST /v1/jobs/{id}/skip-fit`; no confirmation dialog. While pending/acknowledged show **Skipping layout check...** and disable repeat clicks. Saving and Ready still follow real backend state. On a network error retain the current stage and allow retry; never pretend skip succeeded locally.
+2. The authenticated endpoint conditionally sets `fit_skip_requested=true` only for a running fit stage with no job-cancellation request. Return 202 with the updated job. An already-set flag is idempotent and returns the current job (200); another owner's/absent job is 404. A first request outside the fit stage is 409 with the current phase for the owned job. If fit finished first, refresh and show Saving/Ready without turning the job into an error. P6 cookie requests use the existing CSRF protection.
+3. Add an optional public core control `should_skip_fit: Callable[[], bool] | None` to document translation, forwarded by `Translator` to the fitter. Default is no skip. The callback reads worker control state; the core never queries the database. Reuse the worker's control checks to refresh the durable flag at most once per second during fit, independently of lease heartbeat and progress-write throttling.
+4. Check the control at fit entry, between containers and between bounded size candidates. On observation, finish the current indivisible native call, discard any uncommitted candidate for the current container and stop further fit work. Retain previously applied adjustments and all translations. Do not restart the pipeline, copy/restore the entire document or re-run the model. Ordinary job cancellation/lost claim still aborts publication and takes precedence.
+5. Continue the normal write, integrity verification and owned publication path. Record effective bypass as `FitStatus.SKIPPED` / `skipped`; report only actually processed work, without generating an unresolved entry for every unvisited area. Persist the request across automatic retries so further fit is bypassed; translation recovery itself remains P5's normal retry behavior, not a new checkpoint system.
+6. This is cooperative: accepting the request does not guarantee interruption of a native call. If fit completes before the request can be observed, keep the actual completed-fit outcome and proceed to save. Never hold back a ready file merely to display Skipping. Once Saving starts, the button disappears; a late request cannot mutate an already published file.
+7. An effectively skipped result is a complete translated file, not a partial/cancelled translation. Publish its owned output/report/version, but do not insert or replace the normal reusable `translation_results` cache row, including on a force run. Existing good cached results stay intact. A retry satisfied by an existing fully fitted cache result uses that result's real fit metadata.
+8. PDF must still place/write all translated text when optional fit is skipped; separate the optional adjustment loop from required construction in the selected writer. Unsupported measurement and text loss must not be relabelled as user skip. Do not add a second PDF renderer or a rollback pass to implement this control.
+
 ## Core and worker changes
 
 1. Emit extraction start before opening/parsing the format adapter so reading time is represented. Preserve callback cancellation/error behavior and cleanup if that early callback raises.
 2. Add `ProgressPhase.APPLY`; emit its start after translation plus all formatting fallbacks return, before applying text to the in-memory document, and its end after application. Use the existing binary start/end convention internally. Update CLI phase presentation and callers/tests that enumerate phases.
 3. Preserve current translation batching, reuse and counter semantics. The UI's Finishing translation state handles initial-batch completion without inventing fallback totals. No pipeline reordering solely to obtain a smoother bar.
-4. Worker sets `prepare` after claim. Map core callbacks into the job snapshot. Normalize extract/apply/write counts to null in the service response; retain translation/fit counts. Clear old counts whenever phase changes.
+4. Worker sets `prepare` after claim. Map core callbacks into the job snapshot. Normalize extract/apply/fit/write counts to null in the service response; retain translation counts. Clear old counts whenever phase changes. Internal fit callbacks may still provide cancellation/control checkpoints without exposing area counts.
 5. Coalesce count updates to at most one DB write per second per running job, following P5. Persist phase changes and terminal outcomes immediately. Serialize updates; a buffered old-phase callback must never overwrite a later phase or terminal state. Dropping superseded intermediate counts is fine.
 6. Persist only under P5's valid current claim/lease and running-state predicates. Keep cancellation checking and lease heartbeat independent of throttled progress writes. A quiet counter is not evidence that a worker died.
 7. Leave the UI in Saving while the service verifies/stores blobs and commits its owned result. Only that successful publication transaction sets `succeeded`. A core `write 1/1` event alone cannot enable download.
@@ -90,13 +102,13 @@ Persist original/output/report blobs and owned document/version references throu
 - Keep progress bubbles for current work and completed results awaiting the user's attention, with a stable accessible list for large batches/failures. Preserve P6's owned opened/downloaded/dismissed/put-back behavior; wire these through its audited workspace/history contract rather than using translation success as acknowledgement. Clearing a bubble never deletes a document. This progress task does not add a separate notification system.
 - Per-file display: filename, current label, count/bar when meaningful, and a cancel action while allowed. Show Cancellation requested after the server accepts the request; keep the underlying job state until the server confirms cancellation or already-committed success. Do not promise instantaneous interruption of a model call.
 - Batch display uses server counts: e.g. 7 ready, 2 failed, 1 running. While submission is open, say 10 files submitted, adding more; a final denominator is unknown. Once sealed, derive finished outcomes from ready + failed + cancelled + rejected, labelled finished rather than successfully translated. Local unsubmitted/upload failures are shown separately. Do not average per-document percentages.
-- Keep the main surface quiet: final unresolved fit adds one Layout warnings indicator and a link to the existing report. Detailed reasons and locations belong in result detail/report, not repeated toasts. Downloads stay available for successful unresolved results.
+- Keep the main surface quiet: Checking layout with its skip button, then Saving and Ready. No fit-warning badges, per-section unresolved lists, fit detail screens or repeated toasts. Existing technical reports remain diagnostic data; successful unresolved/skipped results remain downloadable.
 - Reuse P6's visual system. Keep readable text alongside color/icons, accessible progressbar semantics only for real counts, and polite announcements on meaningful phase/terminal changes rather than every counter tick. Do not move focus on updates. Respect reduced motion and maintain keyboard-accessible list/actions. Fast phases may be skipped between polls; do not insert artificial delays to display them.
 
 ## Implementation steps and files
 
-1. Core reporting: `packages/core/src/doctranslator_core/{types,pipeline}.py`, affected CLI presentation and progress tests. Add apply events and test callback order/fallback behavior without changing translation results.
-2. P5 snapshot: job model/migration, repository/worker and API schemas in `apps/server`. Add the timestamp, map/throttle/fence updates and include snapshots in owned detail/list/item responses. Ratify P5's existing claim/publication contract before implementing it.
+1. Core reporting/control: `packages/core/src/doctranslator_core/{types,translator,pipeline}.py`, fitter checkpoints, affected CLI presentation and progress tests. Add apply events, optional fit-skip control and skipped status; test callback order/fallback behavior and unchanged translation content.
+2. P5 snapshot/control: job model/migration, repository/worker and API schemas in `apps/server`. Add the timestamp and skip-request flag/endpoint, map/throttle/fence updates and include snapshots in owned detail/list/item responses. Exclude effective skips from reusable cache publication. Ratify P5's existing claim/publication contract before implementing it.
 3. P6 display: generated API types, shared queries, progress bubble/list/detail and batch views in `apps/web`. Replace prototype timer/random progress; preserve audited assets and interactions. The future desktop uses the same response, without a second job store.
 4. Integration review: update the canonical Architecture progress/API reference and operating docs to match implemented behavior. Keep this plan proposed until reviewed; no phase or board completion is implied by drafting it.
 
@@ -107,12 +119,15 @@ Persist original/output/report blobs and owned document/version references throu
 | Real file | Upload -> owned job -> real phase/count updates -> persisted file/report -> download; original unchanged |
 | Formatting fallback | Initial count reaches total while fallback still runs; UI says Finishing translation, not Ready; apply begins only afterward |
 | Publication boundary | Delay/fail blob publication after core write completes; job remains Saving or fails, never exposes a successful partial result |
+| Skip during fit | Button stops further fit at a safe checkpoint, preserves all translation and prior adjustments, then writes/verifies/persists a downloadable file; no additional model call |
+| Skip races/recovery | Duplicate requests are safe; late request reconciles to Saving/Ready; disconnect/retry retains intent; job cancellation wins; stale attempts cannot publish |
+| Skip and cache | Skipped output has owned storage and technical skipped status; normal cache entry is not created/replaced, including force; later normal translation cannot reuse the skipped file |
 | Cache hit | Immediate Ready using this user's result/report links; no fake translation animation or another user's IDs |
 | Format differences | TXT skips layout; Office/PDF show actual supported events/reports; no fabricated pages/slides/sheets or division by zero |
 | Refresh and network loss | Accepted work survives reload/disconnect; latest stored snapshot and result return on reconnect without duplicate submission |
 | Retry/cancel/race | Counter resets on a new attempt; stale callbacks cannot overwrite current/terminal state; cancel/publication race obeys P5 |
 | Long model call | Counter may stay unchanged while independent heartbeat preserves the lease; no timer-derived failure or percentage |
 | Large/open batch | Bounded polling/writes/pages; accurate ready/failed/rejected counts and no fixed denominator before sealing |
-| Ownership and UI | Two users cannot read each other's progress/results; accessible status/actions and reduced-motion behavior; no random/mock success |
+| Ownership and UI | Two users cannot read/control each other's jobs; accessible skip/cancel actions; no random/mock success, fit-warning badge or unresolved-section UI |
 
 Use existing fake-engine fixtures for deterministic delays/fallback/race tests, plus a real-engine smoke through the service. Run all six repository checks and P6 frontend/browser checks during implementation. Completion requires the acceptance above; this planning change does not claim those tests have been implemented or passed.

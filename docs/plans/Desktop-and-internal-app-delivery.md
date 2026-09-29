@@ -4,7 +4,7 @@ Status: Owner-approved product direction (2026-09-28), under ADR-013. D0 technic
 
 ## Outcome and Priorities
 
-Users install an application, choose a supported translation model to download, open the app and drop files/folders into it. They receive same-format translated files, lightweight fit reports and durable local progress/history. No terminal, manually started service or web sign-in is required for local translation. The signed-in web service and internal REST backend remain supported.
+Users install an application, choose a supported translation model to download, open the app and drop files/folders into it. They receive same-format translated files and durable local progress/history. During fit, show Checking layout and Skip layout check using [the shared progress contract](P5-P6-document-progress.md#skip-layout-check); then save and offer the file without per-section fit details or warning badges. No terminal, manually started service or web sign-in is required for local translation. The signed-in web service and internal REST backend remain supported.
 
 Primary delivery is the desktop window and installer. System-tray progress/completion notifications are useful secondary behavior. Explorer right-click translation is optional backlog. Lenovo managed deployment/preload is an ambition after a proven desktop release, not an assumed distribution commitment.
 
@@ -42,7 +42,7 @@ Exit: clean-machine install -> selected model ready -> one real offline translat
 - Open app; drag files/folders or use file/folder pickers. Enumerate supported files recursively into a preview with counts, supported/unsupported/read-error outcomes, language/model and output destination.
 - Do not follow reparse points by default. Exclude the selected generated-output tree from input traversal, prevent recursive ingestion of earlier results, deduplicate the same selected source path, and stream large enumerations with backpressure.
 - Export to a selected output root, preserving relative paths beneath distinct selected roots. Resolve collisions explicitly without overwriting existing files. Keep source bytes unchanged; unreadable/locked files produce per-item failures while other files continue.
-- Submit one file per durable job through the selected runtime. Closing/reopening UI or restarting the local host must not fabricate success or lose accepted jobs. Provide honest phase/count progress, cancellation, retry, reports and open-file/open-folder actions.
+- Submit one file per durable job through the selected runtime. Closing/reopening UI or restarting the local host must not fabricate success or lose accepted jobs. Provide honest phase/count progress, cancellation, retry, Skip layout check during fit, and open-file/open-folder actions.
 - Default to local processing with the installed model. Local ownership is the OS user. An explicitly selected hosted connection requires sign-in and clearly states that files will be uploaded; no implicit local/remote fallback or history synchronization.
 - Main-window queue/history works independently of tray/notification availability. If tray progress is included, clicking it opens the real queue; completion notifications link to the appropriate result. Respect disabled notifications and aggregate batch completion instead of emitting hundreds of alerts.
 - Translation fidelity and ADR-012 fit are identical to equivalent core/service requests. Do not add desktop-specific fit/model prompts.

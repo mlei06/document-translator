@@ -66,7 +66,7 @@ flowchart TD
     MODE -->|LLM| LLM["Internal Gemma server"]
     MT --> APPLY["Validate translation<br/>and restore text into its structure"]
     LLM --> APPLY
-    APPLY --> FIT["Fit check against original<br/>shrink when needed or report unresolved"]
+    APPLY --> FIT["Checking layout<br/>lightweight fit; user may skip"]
     FIT --> WRITE["Same format adapter applies size changes<br/>and writes the translated document"]
     WRITE --> STORE["Store output and fit report<br/>commit result and complete job"]
     STORE --> DOWNLOAD["Authorized result retrieval"]
@@ -345,6 +345,8 @@ The fingerprint represents every output-affecting choice: requested source (incl
 
 Cached results include unresolved fit findings when the pipeline completed successfully; the report travels with the file. Partial/failed outputs and later user/agent edits are not cached. A cache hit gives the new user a document/version reference with their own ownership, never access to another user's private edit history. Two concurrent misses may both translate; the unique result key chooses the reusable entry. This is accepted duplicate work, not an exactly-once execution promise.
 
+Under the amended ADR-012, a user-skipped fit produces a complete owned translated document with technical `fit_status=skipped`, but does not insert or replace the reusable full-fit cache row. Existing normally fitted cache entries remain intact, including when a force run is skipped. Full text/file construction, verification and ownership still apply.
+
 ### Job Lifecycle
 
 The proposed [P5-P6 progress contract](plans/P5-P6-document-progress.md) details the latest stored job snapshot and stage-specific UI feedback. It preserves the lifecycle below; proposed reporting additions are not yet implemented API guarantees.
@@ -408,6 +410,7 @@ flowchart TD
     RESTORE --> LAYOUT["Adapter describes translated containers"]
     ORIGINAL --> FIT["Generic fit policy"]
     LAYOUT --> FIT
+    FIT -->|User skips remaining fit| WRITE
     FIT --> CHANGES["Size adjustments and unresolved issues"]
     CHANGES --> APPLY["Same adapter applies font changes"]
     APPLY --> WRITE["Write and verify output<br/>without modifying the input"]
@@ -422,11 +425,14 @@ The exact neutral document schema, paragraph segmentation, inline-token format, 
 
 [ADR-012](decisions/ADR-012-lightweight-fit-policy.md) supersedes the former absolute visual guarantee. Translation accuracy and faithful formatting lead; fit is lightweight best-effort overflow mitigation. Reuse the existing shared estimator/fitter and adapter boundaries. Only changed constrained containers need measurement. Normal reflow, DOCX body and unconstrained content need no fitting.
 
+The owner's 2026-09-28 amendment makes this a simple, skippable stage: normal UI shows **Checking layout** and **Skip layout check**, with no unresolved-section view, area counts or warning badges. A cooperative skip stops further measurements/adjustments, preserves translated text and already-applied adjustments, and proceeds through normal writing/verification/persistence. Successful output shows Ready to download. Detailed diagnostics may remain internal; no new per-area reporting work is required. The [progress/skip plan](plans/P5-P6-document-progress.md#skip-layout-check) specifies the durable job flag, owned endpoint and core control; implementation is pending. A skipped result never claims passed or not_applicable and is not entered in the normal reusable cache.
+
 For supported geometry/fonts, estimate source and translated extents with the same provisioned-font/shaping/wrapping implementation. Allowed extent is the larger of bounds and source extent on each constrained axis. Preserve source overflow. Unknown fonts, glyphs or layout behavior retain original sizes and report unresolved, never a false pass.
 
 ```mermaid
 flowchart TD
     INPUT["Translated container with source baseline"] --> NEED{"Changed and constrained?"}
+    INPUT -->|Skip requested at safe checkpoint| SKIP["Stop remaining optional fit; keep prior adjustments"]
     NEED -->|No| KEEP["Keep wording, formatting and natural reflow"]
     NEED -->|Yes| SUPPORT{"Supported geometry and fonts?"}
     SUPPORT -->|No| UNKNOWN["Retain original sizes; unresolved reason"]
@@ -442,13 +448,14 @@ flowchart TD
     UNKNOWN --> WRITE
     DONE --> WRITE
     ISSUE --> WRITE
+    SKIP --> WRITE
 ```
 
 Defaults remain 70% relative and 8pt absolute floors, 2.5% scale steps, half-point quantization and 1pt tolerance. Never enlarge or further shrink a source run at/below the absolute minimum. Bound candidate measurements to 40 per container, stop at first fit/floor/no further size change and reuse duplicate candidates. If the search cap is reached before a reliable floor result, retain original sizes and report search_limit; never invent a pass. Format adapters apply sizes; generic fit never imports format packages.
 
 Do not move objects, change row/column dimensions, force pagination or rephrase/truncate translations. No runtime renderer, vision/model calls or font downloads for fit. PDF should use its selected writer's placement/layout facilities where available rather than add a second independent measurement engine.
 
-Reports identify adjustments and unresolved locations/reasons, original/final sizes and measurable extents. Passed/adjusted mean estimator outcomes, not native-rendered approval. Missing layout capability is unresolved for a required format; not_applicable is reserved for TXT or proven absence of applicable containers. Preserve cache fingerprinting of policy, fonts and implementation identity.
+Existing technical reports may retain adjustment/unresolved details for troubleshooting; normal UI does not expose those lists and release work need not expand them. Passed/adjusted mean estimator outcomes, not native-rendered approval. Missing layout capability is unresolved for a required format; not_applicable is reserved for TXT or proven absence of applicable containers; skipped records an effective user bypass. Preserve normal cache fingerprinting of policy, fonts and implementation identity and exclude skipped outputs from that cache.
 
 [P3.0](plans/P3.0-fit-design-validation.md) now closes existing research using a fixed small corpus and explicit support limits; it does not require native line-count/pitch parity or continuing font-specific tuning. Native-open/visual spot checks remain acceptance work, not per-job production steps. Optional visual correction remains P7.
 
