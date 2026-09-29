@@ -1,6 +1,6 @@
 # Deployment and Local Operation
 
-Status (2026-09-28): this document distinguishes intended deployment profiles from development operations. Desktop packaging/installer and deployment acceptance remain pending; consult the roadmap and release evidence for current implementation status.
+Status (2026-09-29): this document distinguishes intended deployment profiles from implemented operations. The shared service (P5) and local CLI are implemented and verified on one Windows host; desktop packaging and non-loopback TLS deployment remain pending. See the release evidence for what has been verified.
 
 ## Intended Deployment Profiles
 
@@ -55,15 +55,76 @@ See `.env.example` for variable names and the eval component for precedence. The
 
 Real LLM integration requires the company network/VPN and configured `DOCTRANSLATOR_LLM_*` settings. Real MT integration needs `DOCTRANSLATOR_TEST_MT_MODEL_DIR` pointing to converted SMALL-100 files. `uv run pytest -m integration` selects those tests; each skips if its settings are absent. A skipped test is not backend verification.
 
-## Planned Hosting
+## Shared Service (implemented)
 
-P5 will define authentication, bind address, firewall rules, worker count, storage paths, retention durations, backup/restore and service lifecycle. ADR-004, ADR-007 and ADR-008 already require database migrations, content-addressed files and separate workers with leases. Do not expose an unauthenticated scaffold while these decisions remain open.
+The service is one command on a Windows host in the repository checkout (`uv sync --all-packages` first). Design: [ADR-015](decisions/ADR-015-authentication-and-ownership.md) (users, keys, ownership, network) and [ADR-016](decisions/ADR-016-service-execution-and-operations.md) (queue, storage, retention, backup, defaults). Verified on this laptop over loopback on 2026-09-29 (release evidence R01, R05, R12); a non-loopback TLS deployment and a second client machine are not yet verified (R14).
+
+### Configure
+
+Settings come from the environment or a `.env` file in the working directory (`--env-file` overrides); see `.env.example`.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `DOCTRANSLATOR_DATA_DIR` | `data/server` | Database (`doctranslator.db`), `blobs/`, `staging/`, `work/` and the font-manifest cache |
+| `DOCTRANSLATOR_MT_MODEL_DIR` | none | Enables MT mode (converted SMALL-100) |
+| `DOCTRANSLATOR_LLM_BASE_URL`, `_API_KEY`, `_MODEL`, `_DEPLOYMENT_REVISION` | none | Enable LLM mode (Gemma); the revision is part of the cache identity |
+| `DOCTRANSLATOR_FONT_DIRS` | platform and Office font folders | Fonts for fit and PDF output |
+| `DOCTRANSLATOR_SERVER_HOST`, `_PORT` | `127.0.0.1`, `8765` | Bind address |
+| `DOCTRANSLATOR_SERVER_TLS_CERT`, `_TLS_KEY` | none | Required for a non-loopback bind unless `DOCTRANSLATOR_SERVER_BEHIND_PROXY=true` (a trusted TLS-terminating proxy) |
+| `DOCTRANSLATOR_WORKERS` | `1` | Worker processes started by `serve` (each MT worker loads its own model) |
+| `DOCTRANSLATOR_MAX_UPLOAD_BYTES` | 100 MiB | Per-file upload limit |
+| `DOCTRANSLATOR_MAX_QUEUED_JOBS`, `_PER_USER` | 1000, 200 | Admission limits (429 with `Retry-After` when full) |
+| `DOCTRANSLATOR_DOCUMENT_RETENTION_DAYS`, `_CACHE_RETENTION_DAYS`, `_JOB_RETENTION_DAYS`, `_STAGING_RETENTION_HOURS` | 90, 30, 90, 24 | Retention (ADR-016) |
+| `DOCTRANSLATOR_LEASE_S`, `_HEARTBEAT_S`, `_POLL_S`, `_MAX_ATTEMPTS` | 120, 20, 1, 3 | Worker lease, heartbeat, idle poll and attempt budget |
+
+The server refuses to start on a non-loopback address without TLS or the proxy declaration. With TLS, issue the certificate from the company CA; clients verify it through their OS trust store.
+
+### Install, provision and start
+
+```powershell
+uv run doctranslator-server migrate                                   # create or upgrade the schema; run after every upgrade
+uv run doctranslator-server users create "Mei Chen"                   # prints the user ID
+uv run doctranslator-server keys create <user-id> --label laptop      # prints the key ONCE; deliver it privately
+uv run doctranslator-server serve --workers 1                         # REST on http://127.0.0.1:8765/v1 plus supervised workers
+```
+
+`serve` and `worker` refuse an unmigrated database. `serve --workers N` restarts a crashed worker after 5 s, doubling to at most 60 s, and runs retention hourly (`--no-retention` disables it). `doctranslator-server worker` runs one extra worker (for example as a separate service); stop workers with CTRL+C or CTRL+BREAK (they finish or abandon the current job; an abandoned job is retried after its lease expires). The OpenAPI document is at `/v1/openapi.json`, interactive docs at `/v1/docs`, liveness at `/v1/health`.
+
+Key and user administration: `users list|disable|enable`, `keys list <user-id>|revoke <key-id>`. Disabling a user blocks all of their keys at once and cancels their unfinished jobs; revoking one key leaves accepted work running. Service identities for internal applications are users created with `--kind service`.
+
+### Use it from the CLI
+
+Each user sets the service URL and their key, then works with batches:
+
+```powershell
+$env:DOCTRANSLATOR_SERVER_URL = "http://127.0.0.1:8765"   # or https://<host> with a company certificate
+$env:DOCTRANSLATOR_API_KEY = "<key>"                        # or store it in the Windows Credential Manager (service "doctranslator", name DOCTRANSLATOR_API_KEY)
+uv run doctranslator whoami
+uv run doctranslator submit deck.pptx report.docx --to en --mode mt --wait --download-dir out
+uv run doctranslator submit --manifest files.jsonl --to en --mode llm --resume-state run.jsonl --download-dir out --json
+uv run doctranslator batches status <batch-id>
+uv run doctranslator jobs list --status failed
+uv run doctranslator download --batch <batch-id> --output-dir out
+```
+
+A manifest is UTF-8 JSON Lines, one `{"path": ..., "source": ..., "target": ..., "mode": ...}` per file (paths relative to the manifest; per-line values override the command options). `--resume-state` records each file's submission identity before uploading, so rerunning the same command after an interruption or lost response reuses identities and never creates duplicate jobs; a file that changed since is reported as a conflict. Submission uploads at most `--concurrency` files at a time (default 2) and backs off on 429. Without `--wait`, files are accepted but not yet translated. CTRL+C stops submitting or waiting but never cancels accepted jobs; `batches cancel` does. Downloads are named `<stem>.<target>.<document-id-prefix><suffix>` with `.report.json` beside them, verified by SHA-256 and published atomically; an existing file is never replaced without `--overwrite`. Exit codes: 0 success, 1 some items failed/rejected/cancelled/unsubmitted or could not be downloaded (and unresolved fit with `--fail-on-unresolved`), 2 configuration/authentication/usage, 3 service unreachable, 130 interrupted. Raw HTTP clients use the same endpoints with `Authorization: Bearer <key>` (example: `scripts/acceptance_http_client.py`).
+
+### Operate
+
+```powershell
+uv run doctranslator-server retention run          # also runs hourly inside serve
+uv run doctranslator-server backup D:ackups6-09-29
+# restore: stop the service, point DOCTRANSLATOR_DATA_DIR at an EMPTY directory, then
+uv run doctranslator-server restore D:ackups6-09-29
+```
+
+Backup may run while the service is up: it snapshots the database with SQLite's online backup, holds the cleanup lock while copying every referenced blob, and writes `manifest.json` with every hash. Restore verifies the database and every blob hash before placing anything and refuses a directory that already has a database. Logs go to stderr and never contain keys, document text or file paths; the database keeps an audit table of administration, authentication failures, submissions, cancellations, deletions and outcomes. Moving to PostgreSQL or several hosts requires the row locks noted in ADR-016 and shared blob storage first.
 
 P7 adds Streamable HTTP MCP and rendering. Enterprise clients remain blocked on reachable HTTPS hosting and the confidentiality/authentication decisions in P8.
 
 ## Verification and Recovery
 
-Local check results do not establish CI success; record CI run IDs and the tested commit when closing a phase. For a failed benchmark scoring step, use the eval `score` command on its translated run directory rather than retranslating. Deployment rollback and persistent data recovery procedures are P5 deliverables; none are currently implemented or verified.
+Local check results do not establish CI success; record CI run IDs and the tested commit when closing a phase. For a failed benchmark scoring step, use the eval `score` command on its translated run directory rather than retranslating. Service data recovery is the backup/restore procedure above (verified by restoring a live backup into an empty directory and comparing every document download, release evidence R12). Rolling back a code upgrade means restoring the backup taken before `migrate`.
 
 ## Delivery Handoff Requirements
 

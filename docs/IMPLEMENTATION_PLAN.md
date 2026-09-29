@@ -239,7 +239,7 @@ Translate PDF files with layout preserved as closely as practical, including the
 
 ## P5 - Server and Job Service
 
-Board: [Feature #9013](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9013) | Status: Not started
+Board: [Feature #9013](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9013) | Status: Implemented on `release/p2-p6` (2026-09-29); closure needs R02, R14 and reviewed-commit CI
 
 Planning: [P5.0 server design draft](plans/P5.0-server-design-validation.md). The [detailed P5 contract](plans/P5-server-and-service-cli.md) supplies user flow, recommended auth/defaults, API/batch/CLI behavior and race tests for that review; ADR-007/008/010 settle reuse, worker execution and shared-service CLI.
 

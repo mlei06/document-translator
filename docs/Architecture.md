@@ -150,8 +150,8 @@ Lenovo managed rollout and eventual OEM preload follow a working installer app. 
 |------|-------------|---------|
 | Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; PDF adapter with targeted replacement and writer-driven fit (ADR-014); ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | Rendering/edits (P7) |
 | Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
-| CLI | Local `doctranslator translate` (both engines, fit with a configured font manifest, JSON result and report file) | Service commands (P5) |
-| Server | Module scaffolds | Persistence, jobs/workers, auth and REST (P5); MCP (P7) |
+| CLI | Local `doctranslator translate`; service commands `whoami`, `submit` (files or manifest, resume state, wait, download), `batches`, `jobs`, `download` over REST | - |
+| Server | Users and API keys (ADR-015), SQLite/Alembic persistence, blob storage with pins and GC, REST `/v1`, attempt-fenced queue and workers, retention, backup/restore, `doctranslator-server` administration (ADR-016) | Browser sessions (P6); MCP (P7); PostgreSQL/multi-host (later) |
 | Web | Design exploration | React application (P6) |
 
 P2 and the ADR-012 fit integration (P3) are implemented on `release/p2-p6`; the [release evidence](plans/P2-P6-release-evidence.md) records what has been verified. P1 remains in progress pending delivery verification/closure. Its deferred baselines are separate from that closure. Local engine tests and the XLSX serialization experiment are not proof that the full document system is implemented.
@@ -160,7 +160,7 @@ P2 and the ADR-012 fit integration (P3) are implemented on `release/p2-p6`; the 
 
 ### Users, Batches and Owned Results
 
-Every service request resolves an authenticated stable user ID before accessing data. Batches, jobs and documents belong to that user; no client-supplied owner ID can grant access. Multiple credentials or a later browser session can represent the same user. Authentication transport and operational defaults are specified for validation in the P5/P6 plans; they are not implemented yet.
+Every service request resolves an authenticated stable user ID before accessing data. Batches, jobs and documents belong to that user; no client-supplied owner ID can grant access. Multiple credentials or a later browser session can represent the same user. Implemented with per-user opaque API keys ([ADR-015](decisions/ADR-015-authentication-and-ownership.md)); browser sessions arrive with P6.
 
 ```mermaid
 flowchart LR
@@ -233,7 +233,7 @@ The format-specific code describes and edits a document; the generic pipeline ch
 | `app.py` | Composition, routes, MCP mounting and database-session wiring | Translation and job execution |
 | `settings.py` | App configuration and public core config construction | Model inference |
 | `api/`, `mcp/` | REST/MCP request validation and response adaptation over `jobs/` | Direct database access or their own translation pipeline |
-| `auth/` | Identity and authorization policy, still to be designed | Formatting or fit behavior |
+| `auth/` | API keys, users and authentication (ADR-015) | Formatting or fit behavior |
 | `jobs/` | Submission, lookup, queue transitions, workers, progress, result/version publication and storage coordination | File-format internals |
 | `db/` | SQLAlchemy models, sessions and repositories; Alembic owns schema changes | Document file contents |
 
@@ -365,7 +365,7 @@ stateDiagram-v2
 
 `Submitted` is a conceptual entry point, not an additional persisted status. The accepted job statuses are queued/running/succeeded/failed/cancelled. Attempts are counted at claim time. Workers heartbeat their leases independently of progress reports so a slow model batch cannot accidentally expire a healthy job. Cancellation is cooperative at pipeline batch boundaries; in-flight model requests can finish first. A worker that loses ownership must not publish a result. A process crash leaves unreferenced blobs eligible for cleanup, not a successful partial job.
 
-[ADR-008](decisions/ADR-008-job-execution-model.md) defines these rules, including retries and worker recovery. Exact fence predicates, attempt identity, race handling, intervals and defaults must be finalized in P5; its current worker-ID wording must not be treated as proof that every stale-completion race is resolved.
+[ADR-008](decisions/ADR-008-job-execution-model.md) defines these rules; [ADR-016](decisions/ADR-016-service-execution-and-operations.md) amends its fence with a per-attempt claim token and gives the exact transaction predicates, cancellation ordering, retry classes and defaults. See the [server reference](#server-reference).
 
 ### Storage and Document Ownership
 
@@ -386,7 +386,7 @@ flowchart LR
     V1 -.->|parent| V0
 ```
 
-This is a conceptual reference diagram, not a finalized database schema. Cache rows and user documents have independent retention policies. Delete a blob only when no job, result or document version references it. Expiring a cache entry cannot delete a user's translated file. Editing a document writes a new blob/version and never mutates a shared result. Defaults, authentication/ownership schemas and deletion races are P5 design work.
+Cache rows and user documents have independent retention policies. Delete a blob only when no job, result or document version references it and no pin protects it (ADR-016). Expiring a cache entry cannot delete a user's translated file. Editing a document writes a new blob/version and never mutates a shared result. The implemented schema is in the [server reference](#server-reference).
 
 ## Core Document Pipeline
 
@@ -630,11 +630,48 @@ The high-level upload -> lookup -> job -> worker -> adapter -> model -> fit -> w
 | XLSX recalculation | Sheet names stay unchanged by owner decision; preserving formula caches is not the same as preserving their meaning after cell translation. | Finish proposed ADR-009 with native tests |
 | PPTX/DOCX serialization | Candidate libraries may not preserve unsupported structures; XLSX findings cannot establish their behavior. | P2.0 format-specific experiments |
 | Font measurement / shrink policy | Lightweight supported estimates with explicit uncertainty; no native parity guarantee. | ADR-012; bounded P3.0 closure |
-| Queue race and cancellation contract | Progress is not a lease heartbeat; stale attempts must never publish. Current ADR-008 needs exact predicates and tests. | P5.0 worker design |
-| Identity, retention and limits | Downloads/edits must be owned and uploads bounded before colleagues use the server. Shared-cache timing is an accepted signal that auth design must revisit. | P5.0 |
 | MCP transfer / rendering / edits | Logical file submission does not define transport, and vision review requires safely rendered pages and constrained edit operations. | P7, after P4/P5 and network verification |
 
 These are explicit gates, not hidden decisions for coders. The [delivery handoff](plans/P2-P6-delivery-handoff.md), [plan index](plans/README.md) and [roadmap](IMPLEMENTATION_PLAN.md) retain the implementation sequence. The owner's sheet-name and service-CLI decisions are incorporated; technical experiments and future phase implementations are still outstanding.
+
+## Server Reference
+
+Implemented in `apps/server` (P5). Decisions: [ADR-015](decisions/ADR-015-authentication-and-ownership.md), [ADR-016](decisions/ADR-016-service-execution-and-operations.md). Operation: [Deployment](Deployment.md#shared-service-implemented).
+
+### REST `/v1`
+
+Every route except `GET /v1/health` requires `Authorization: Bearer <key>`; failures are 401 `unauthenticated`. Errors use `{code, message, request_id, retryable, details}` (400 malformed, 401, 404 absent or not owned, 409 conflict/idempotency mismatch/closed batch, 413 too large, 415 unsupported format, 422 invalid options or document, 429 queue full with `Retry-After`, 503 temporarily unavailable). Lists are newest first with opaque cursors (`limit` 1-200, default 50). OpenAPI: `/v1/openapi.json`.
+
+| Route | Contract |
+|---|---|
+| `GET /me`, `GET /capabilities` | Caller identity; formats, modes, languages, fit statuses, limits, versions |
+| `POST /batches` `{idempotency_key, label}` | 201 created, 200 replay; `GET /batches`, `GET /batches/{id}` with counts by outcome |
+| `POST /batches/{id}/items` multipart `file`, `options` (JSON), `client_item_id` | 202 queued, 201 completed from cache, 200 replay; 415/422 record a rejected member (`details.item_id`) |
+| `GET /batches/{id}/items?client_item_id=` | Members in submission order with job summaries; cursor is the last ordinal |
+| `POST /batches/{id}/seal`, `/cancel` | Stop accepting members; cancel also cancels unfinished jobs |
+| `POST /jobs` multipart `file`, `options`, `submission_id` | Standalone submission with the same status codes |
+| `GET /jobs?status=`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel` | Status, phase/progress, attempts, cache hit, safe error, document ID and fit status |
+| `GET /documents`, `GET /documents/{id}` | Owned results with fit status, output size/SHA-256 and expiry |
+| `GET /documents/{id}/versions/0/file`, `.../fit-report`, `/original` | Streamed with `X-Content-SHA256` and a safe filename |
+| `DELETE /documents/{id}` | 204; removes the user's access |
+
+Submission `options`: `target`, `source` (`auto` default), `mode`, `protected_terms`, `txt_encoding`, `min_scale`, `min_size_pt`, `force_retranslate`.
+
+### Schema (Alembic revision 0001)
+
+| Table | Purpose and key constraints |
+|---|---|
+| `users`, `api_keys` | Stable user IDs (`person`/`service`, active flag, reserved `(issuer, subject)`); keys by unique prefix with SHA-256 digest and revocation |
+| `blobs`, `blob_pins` | Content-addressed files (`pending`/`available`/`deleting`) and pins protecting unreferenced new blobs |
+| `translation_results` | Shared cache, unique `(input_hash, fingerprint)`, output/report blobs; never exposed |
+| `batches`, `batch_items` | Owned batches (unique `(owner_id, idempotency_key)`); members unique by `(batch_id, client_item_id)` and ordinal, with a job or a rejection |
+| `jobs` | ADR-016 queue fields, canonical options, fingerprint, unique `(owner_id, submission_id)`, request hash for idempotency |
+| `documents`, `document_versions` | Owned results; version 0 references output and report blobs independent of the cache |
+| `audit_events`, `locks` | Audit trail; the GC/backup lock |
+
+### Process model
+
+`doctranslator-server serve` runs uvicorn (REST) and supervises worker subprocesses; each worker keeps one `Translator` per mode, heartbeats in a separate thread and publishes results in one fenced transaction. Submission never loads models: fingerprints come from `prepare_identity` and the font manifest, and the worker checks its loaded identity before translating (`identity_mismatch` otherwise).
 
 ## Core API Reference
 

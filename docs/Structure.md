@@ -42,8 +42,8 @@ Reusable libraries.
 
 Deployable surfaces, each a distribution depending on the core. They never import each other.
 
-- `cli/` - `doctranslator_cli`: `doctranslator translate` (local, synchronous; `main`, `settings`, `fonts`, `console`). Service commands arrive in P5.
-- `server/` - `doctranslator_server`: scaffolds for the future REST/MCP web process and workers (ADR-008) (`app`, `settings`, `db/`, `auth/`, `jobs/`, `api/`, `mcp/`). No service is runnable yet.
+- `cli/` - `doctranslator_cli`: `main` (the `doctranslator` command; local synchronous `translate`), `commands` (service commands `whoami`, `submit`, `batches`, `jobs`, `download`), `service` (REST client: retries, verified atomic downloads), `batch` (manifests, resume state, bounded uploads, waiting, downloads), `settings`, `fonts`, `console`.
+- `server/` - `doctranslator_server` (the `doctranslator-server` command): `app` (composition root), `settings`, `cli` (migrate, serve, worker, users, keys, retention, backup, restore), `api/` (REST `/v1` routes and wire schemas), `auth/` (API keys, users, ADR-015), `jobs/` (submission service, queue transitions, worker, blob storage, engine identities, retention, backup; the only module calling the core), `db/` (engine and sessions, ORM models, `repositories/`), `mcp/` (scaffold, P7). `apps/server/migrations/` holds the Alembic environment and revisions (ADR-004).
 - `eval/` - `doctranslator_eval`: implemented translation quality benchmark (ADR-005, [evaluation reference](Architecture.md#evaluation-reference)). `baselines/` is the planned location for committed scores; full baselines are still deferred.
 
 Planned under [ADR-013](decisions/ADR-013-deployment-profiles.md): a desktop client/launcher, model setup and installer assets. Exact directories/toolkit are chosen at D0; they do not exist merely because the product direction is approved. The client uses HTTP and packaged process entry points, not server Python imports. Hosted and per-user local installations reuse the server implementation.
@@ -52,7 +52,7 @@ Each package and app has its own `tests/` directory next to `src/`.
 
 ## `/tests`
 
-Sample documents shared by all test suites (`fixtures/<format>/`, provenance in `fixtures/README.md`) and shared test helpers (`support/`: fake translators, a local fake LLM server, a synthetic font, OOXML inspection); `tests` is on the pytest and pyright path so suites import `support.*`. Cross-surface end-to-end tests (`e2e/`) arrive with the service (P5).
+Sample documents shared by all test suites (`fixtures/<format>/`, provenance in `fixtures/README.md`), cross-surface end-to-end tests (`e2e/`: the service CLI against the service in another process, crash recovery) and shared test helpers (`support/`: fake translators, a local fake LLM server, a synthetic font, OOXML inspection, synthetic PDFs, server builders with a deterministic engine, the fake-engine service process); `tests` is on the pytest and pyright path so suites import `support.*`. Cross-surface end-to-end tests (`e2e/`) arrive with the service (P5).
 
 ## `/scripts`
 
@@ -61,6 +61,7 @@ Development, migration, deployment, and maintenance scripts.
 - `convert_mt_model.py` converts SMALL-100 to CTranslate2 in a throwaway environment with PyTorch (ADR-006; usage in its docstring).
 - `native_office_check.ps1` opens documents read-only in native Word/Excel/PowerPoint, detects repair, optionally exports PDFs and reads Excel formula values (release evidence).
 - `render_pdf_pages.py` rasterizes PDFs to PNG for visual spot checks.
+- `acceptance_http_client.py` is an independent REST client (only HTTP, no project code) for release evidence: submit, wait, download, verify hashes, confirm inputs unchanged.
 - `pdf_independent_check.py` checks translated PDFs with PDFium (the Chrome/Edge PDF engine, in a throwaway environment): page geometry, remaining source text in PDFium's own extraction, and page renders (release evidence).
 - `acceptance_local.py` runs every fixture format through the real local CLI with both engines and records outcomes, fit reports and timings.
 

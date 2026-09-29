@@ -2,6 +2,8 @@
 
 Status: Detailed execution contract for the pre-GUI handoff. Shared-service CLI is accepted in ADR-010. Authentication and exact database/lease contracts must pass P5.0 architect review and be recorded in accepted ADRs before production work. Parent: Feature #9013.
 
+Progress (2026-09-29): P5.0 accepted (ADR-015, ADR-016). P5.1-P5.6 implemented: storage/auth, REST vertical slice, durable worker, batches/idempotency, service CLI and operations (retention, backup/restore), with API, queue-race, storage, auth and cross-process E2E tests (including a killed-worker recovery). P5.7 real-engine evidence recorded for R01, R05 and R12 in the release evidence; R14 (second machine) and CI remain open. Browser sessions are P6.
+
 ## Scope and Dependencies
 
 Build FastAPI REST, users/credentials, immutable storage, database jobs/workers, cached results, bounded batches and CLI HTTP commands. P2 is the development dependency; P3/P4 are required for pre-GUI release acceptance. No React UI, MCP implementation or agent editing in this phase.
