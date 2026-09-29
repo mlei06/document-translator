@@ -284,6 +284,8 @@ Board: [Feature #9014](https://chintand.visualstudio.com/AI%20Projects/_workitem
 
 Plan: [P6 existing UI audit and integration](plans/P6-web-ui-integration.md). Locate the runnable mock artifact and preserve a baseline before editing.
 
+Progress detail: [P5-P6 document progress proposal](plans/P5-P6-document-progress.md). Implement persistent latest-job snapshots and truthful stage/count displays as part of P5/P6, without a separate event system or overall-percentage estimator.
+
 ### Goal
 
 Non-technical coworkers use the existing mock UI, audited and integrated with the real backend, to translate documents in a browser. Preserve useful features and deliberately rework/drop/add features to match actual backend behavior and the user-owned workflow.

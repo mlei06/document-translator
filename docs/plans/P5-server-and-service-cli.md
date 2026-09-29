@@ -10,6 +10,8 @@ Existing server and CLI packages are scaffolds. Preserve ADR-003 boundaries: CLI
 
 ## User Journey
 
+Progress persistence/display is specified in the proposed [P5-P6 progress plan](P5-P6-document-progress.md): reuse ADR-008 job fields, throttle snapshots, fence updates and expose them through existing owned job/batch routes. It adds reporting, not another queue or event-history service.
+
 1. Administrator installs the service, runs migrations, provisions internal TLS/fonts/model identity and creates a user with a stable UUID, display name and optional external subject reserved for future identity integration. Display name is never an authorization key. No public signup in this release.
 2. Administrator issues a credential for that user through a local administrative command, delivers it through an approved private channel and never commits it. The user configures the service URL and credential through environment or an OS-backed credential store. Command history, resume manifests and logs never contain the secret.
 3. CLI calls `GET /v1/me` and capabilities to show the authenticated identity and supported modes/formats/limits before submitting. A raw API client uses the same Bearer credential. Invalid/revoked credentials produce 401 before creating owned records.

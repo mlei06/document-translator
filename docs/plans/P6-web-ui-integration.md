@@ -49,6 +49,8 @@ Long-lived API credentials remain appropriate for CLI/API. Browser sessions are 
 
 ## Real Workflow and Data Contract
 
+Use the proposed [P5-P6 progress plan](P5-P6-document-progress.md) when replacing mock progress: stage-specific counts, indeterminate reading/applying/saving, persistent snapshots and one bounded polling coordinator. Success comes from published backend results; initial translation counts reaching their total do not imply completion.
+
 1. Sign in and fetch identity/capabilities. Show unavailable service/engine states honestly.
 2. Select one/many supported files, target/mode and optional source override; show validation and estimated upload count, not invented translation duration.
 3. Create batch and submit each file through the bounded P5 endpoints, assigning stable client item IDs before upload. Distinguish local validation, upload, accepted/queued, processing and completed states.

@@ -18,6 +18,8 @@ Use changed constrained containers, supported font/wrap estimates, bounded size 
 
 ## Required Outcome
 
+The proposed [document progress plan](P5-P6-document-progress.md) details storage and display of real processing stages for P5/P6. It reuses the job record and REST polling; it does not expand translation validation, fit scope or rendering requirements.
+
 A user supplies one file or a mixed-format batch through the CLI or REST API. Every accepted file gets its own durable job. The service checks the complete-output cache, translates misses with the selected SMALL-100/Gemma mode, fits applicable containers against the original, persists the original/output/report and returns owned download references. Successful files remain available when siblings fail or the client disconnects. Restarting the service does not lose accepted jobs or completed results.
 
 "Any number of files" means a streaming/resumable manifest with no fixed total batch-count ceiling. It does not mean an unlimited multipart request, unlimited memory, unbounded worker concurrency or unlimited disk. Admission limits are observable and retryable; no file is silently skipped. A batch can exceed the number of jobs allowed to wait simultaneously because workers drain it while the client submits further items.

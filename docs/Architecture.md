@@ -347,6 +347,8 @@ Cached results include unresolved fit findings when the pipeline completed succe
 
 ### Job Lifecycle
 
+The proposed [P5-P6 progress contract](plans/P5-P6-document-progress.md) details the latest stored job snapshot and stage-specific UI feedback. It preserves the lifecycle below; proposed reporting additions are not yet implemented API guarantees.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Submitted
