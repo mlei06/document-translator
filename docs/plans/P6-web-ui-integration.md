@@ -1,10 +1,13 @@
 # P6 - Audit and Integrate the Existing Web UI
 
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+
+
 Status: Owner-requested execution plan. Parent: Feature #9014. Implement after the combined P2-P5 backend acceptance gate; audit the mock earlier to identify API gaps. No existing mock is evidence of a working product.
 
 ## Objective
 
-Integrate the existing agent-built mock UI into the accepted React/TypeScript application, preserving useful visual/interaction features while making all production data and actions real. The owner explicitly permits dropping, reworking or adding features to fit the design. The result must operate against the authenticated persistent backend and return actual translated files and reports.
+Integrate the existing agent-built mock UI into the accepted React/TypeScript application, preserving useful visual/interaction features while making all production data and actions real. The owner explicitly permits dropping, reworking or adding features to fit the design. The result must operate against the authenticated persistent backend and return actual translated files.
 
 ## Artifact Discovery and Baseline
 
@@ -26,7 +29,7 @@ For every visible feature record: screenshot/route/component, current behavior, 
 | Type/language confirmation | Type/validation/source detection are server facts. Browser extension guesses are provisional. Show `detecting`/unknown until the job reports resolved language; permit explicit source selection. |
 | One target language per batch | Preserve as the normal flow, with per-file source detection. Reflect actual available engines/formats and limits from capabilities. Do not offer unavailable options. |
 | Floating progress bubbles | Bind to real per-file job states/progress. Keep an accessible stable list/table for larger batches and all failures. Indeterminate progress is preferable to invented percentages. |
-| Preview page | Always provide real document metadata, fit summary/report and download. PDF/TXT inline viewing may use authorized real output safely. Do not pretend a browser can render Office files or add the P7 renderer implicitly. Rework unsupported previews to clear download/report detail. |
+| Preview page | Always provide real document metadata and download. Normal UI does not show per-section fit issues, fit-warning badges or a required report viewer. PDF/TXT inline viewing may use authorized real output safely. Do not pretend a browser can render Office files or add the P7 renderer implicitly. Rework unsupported previews to clear document details and download. |
 | Comments requesting fixes | P7 edit jobs are out of scope. Remove/rework the action unless an explicitly scoped real P6 feedback feature is justified and persisted with ownership. No fake “fix applied” or comments implying translation changes. |
 | History, counts and settings if present | Query owned persisted records. Add backend support only when needed for an audited in-scope feature; otherwise remove the misleading view. Do not infer global totals from one page of results. |
 
@@ -47,14 +50,20 @@ P6's architect must extend the P5 authentication ADR and OpenAPI before coding:
 
 Long-lived API credentials remain appropriate for CLI/API. Browser sessions are another transport for the same owner identity, not a separate user table. Never trust owner IDs, display names or cached browser identity for authorization.
 
+## Saved Document Behavior
+
+Apply ADR-014: library source records with current language results, not one library tile per attempt. Normal Translate reuses only the selected document's compatible current result. Translate again and Always generate a new translation send a new submission ID with force; network retries preserve that ID. Keep the old download during replacement, swap only after success, and preserve it on failure/cancel. Show active-target conflicts as the existing job. Offer Delete translation and Delete source with the concrete scope; source deletion revokes job-based downloads. Do not expose model ranking or version history. Temporary integration jobs are not permanent library entries.
+
 ## Real Workflow and Data Contract
+
+Use the proposed [P5-P6 progress plan](P5-P6-document-progress.md) when replacing mock progress: stage-specific counts, indeterminate reading/applying/checking layout/saving, persistent snapshots and one bounded polling coordinator. Success comes from published backend results; initial translation counts reaching their total do not imply completion.
 
 1. Sign in and fetch identity/capabilities. Show unavailable service/engine states honestly.
 2. Select one/many supported files, target/mode and optional source override; show validation and estimated upload count, not invented translation duration.
 3. Create batch and submit each file through the bounded P5 endpoints, assigning stable client item IDs before upload. Distinguish local validation, upload, accepted/queued, processing and completed states.
 4. Handle admission 429 with retry/backoff and pause/resume controls. One file error does not discard accepted siblings. Browsers cannot resume access to arbitrary local files after reload: restore server jobs and ask the user to reselect unmatched unsubmitted files, validating hash/metadata before retry.
 5. Seal completed submission batches; poll visible jobs/batch summaries at a bounded rate, back off on errors and stop on terminal/logout. Do not create one timer per file for large batches. Pagination/virtualization keep long batches responsive.
-6. Job detail displays actual mode/source/target, cache reuse, timestamps, progress stage, fit status, safe failure diagnostics and authenticated download/report links. Unresolved fit is visible and does not suppress a valid download.
+6. Job detail displays actual mode/source/target, cache reuse, timestamps, progress stage, safe failure diagnostics and authenticated downloads. During fit, show **Checking layout** and **Skip layout check**. A skip request stops remaining optional fit, keeps prior adjustments and proceeds through Saving to Ready. Follow the progress plan for pending/error/race behavior; do not show per-section fit problems or fit-warning badges. Technical report endpoints may remain available to API/tooling clients.
 7. History is backend-backed and survives reload/device changes. Detail routes refetch by ID and handle deleted/not-owned/expired records. Local storage is never the history source of truth.
 8. Download actual bytes through owned API routes, with safe filenames. Batch “download all” must honestly handle browser multiple-download restrictions; individual downloads remain available. If adding a ZIP export, design bounded authenticated streaming and retention as an explicit API extension with tests, not a client memory concatenation of an arbitrary batch.
 9. Cancellation/deletion confirm the concrete target where needed, show pending/error state and reconcile server results. Cancelled jobs never become visual successes due to an animation timer. Logout or a second user's login must not expose the first user's cached data.
@@ -68,7 +77,7 @@ Use a generated OpenAPI TypeScript client/types; centralize transport/auth/error
 | P6.0 audit | Source inventory, baseline screenshots, feature disposition, API gap list | Every actual route/control accounted for; existing style/assets understood |
 | P6.1 auth/API extensions | Session ADR amendment, schemas/routes, generated client | Real login/logout/expiry/revocation, CSRF and two-user tests |
 | P6.2 import and connect | `apps/web`, retained components/assets, service data layer | Build runs; mock fixtures unavailable in production; real metadata/history |
-| P6.3 workflows | Upload/batch/job/detail/download/report/error/recovery views | Browser completes real five-format workflow |
+| P6.3 workflows | Upload/batch/job/detail/download/skip-fit/error/recovery views | Browser completes real five-format workflow |
 | P6.4 visual/accessibility | Responsive/reduced-motion/keyboard/error-state polish | Screenshots and interaction audit at desktop and narrow viewport |
 | P6.5 ship | Static build served by backend, CI, operating docs/evidence | Fresh deployment and routed reloads work; full matrix below passes |
 
@@ -79,11 +88,11 @@ Add frontend install/build/typecheck/lint/component and browser E2E commands to 
 | ID | Scenario | Required result |
 |----|----------|-----------------|
 | W01 | Sign in, reload, logout, expired/revoked session, switch users | Real stable identity, no leaked prior-user views/cache, correct reauth and owned history |
-| W02 | Upload all five formats in both modes against real backend | Actual downloadable translated bytes and fit reports; source hashes unchanged |
+| W02 | Upload all five formats in both modes against real backend | Actual downloadable translated bytes; technical fit outcomes remain truthful; source hashes unchanged |
 | W03 | Mixed batch with malformed/oversized/unsupported and duplicate-named inputs | Valid siblings complete; per-file outcomes, bounded admission handling, usable large-batch view |
 | W04 | Repeat translation, change target/fit setting, force | UI reflects genuine cache hit/miss and returned identities, no fake instant completion |
 | W05 | Disconnect/reload during upload/translation, restart server | Accepted jobs reappear; unsubmitted files are clearly identified for reselection; no duplicate accepted jobs |
-| W06 | Cancel, failed engine, unresolved fit, delete/expire document | Truthful terminal states/actions; working reports/downloads where appropriate; no stale download bypass |
+| W06 | Cancel, failed engine, skip fit, unresolved fit, delete/expire document | Skip during fit reaches a real downloadable result after saving; late/repeated requests reconcile correctly; no unresolved-section UI or fit-warning badges; truthful failures and no stale download bypass |
 | W07 | Keyboard, focus, screen-reader names, narrow viewport, reduced motion, day/night contrast | Usable alternative to drag/drop/mascot; readable progress/errors; no motion-dependent interaction |
 | W08 | Audit every visible control and production network request | Real scoped backend behavior or documented removal/rework; no fake users/stats/results/timer completion, no external document leakage |
 

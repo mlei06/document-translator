@@ -6,6 +6,8 @@ Accepted ADRs retain decision history; plans retain proposed contracts and imple
 
 ## Overview
 
+[ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) is the accepted storage/ownership authority as of 2026-09-29. Local exports always translate fresh; hosted saved documents reuse only their current compatible result. Hosted temporary processing retains outputs for retrieval, not a permanent library. These contracts are planned, not claims of implemented service behavior.
+
 Document Translator is an internal document-processing system. A user submits files through the web UI, installed desktop app, CLI/API or later MCP; internal applications use the same versioned REST backend. The server creates a persistent job, reuses a compatible completed translation when possible, or dispatches the job to a worker. The worker runs one shared core pipeline: read the document through its format adapter, translate its text with SMALL-100 or the internal Gemma server, fit translated text against the original layout, and write a translated file in the original format. The server stores the result and makes it available to the submitting user.
 
 The CLI has two paths: local `translate` runs the core without a database or job queue; service commands submit through REST and share persistent jobs, cache and owned results with API/UI users ([ADR-010](decisions/ADR-010-shared-service-cli.md)). The evaluation app exercises the same translation engines on benchmark text. Translation, formatting and fit behavior belong to the core, never to the UI, CLI, REST routes or MCP tools.
@@ -51,14 +53,14 @@ flowchart TD
     U --> DESKTOP["Desktop: add files or folders"]
     INTERNAL["Internal application"] --> CLI
     U --> MCP["Agent submits via MCP"]
-    UI --> JOB["Selected local or hosted job service<br/>validate, store original and create job"]
+    UI --> JOB["Selected local or hosted job service<br/>validate, accept input and create job"]
     DESKTOP --> JOB
     MCP --> JOB
     CLI --> JOB
-    JOB --> CACHE{"Compatible completed result?<br/>Database lookup"}
-    CACHE -->|Hit| REUSE["Link stored result<br/>to the user's document"]
-    CACHE -->|Miss| QUEUE["Queued job in database"]
-    QUEUE --> WORKER["Worker claims job<br/>and rechecks cache"]
+    JOB --> CACHE{"Hosted saved mode, no force,<br/>owned compatible current result?"}
+    CACHE -->|Hit| REUSE["Reference owned current result<br/>without translating"]
+    CACHE -->|No reuse or local / temporary| QUEUE["Queued job in database"]
+    QUEUE --> WORKER["Worker claims job<br/>rechecks reuse only for hosted saved mode"]
     WORKER -->|Hit| REUSE
     WORKER -->|Still a miss| READ["Format adapter reads document<br/>and preserves original layout"]
     READ --> MODE{"Selected mode"}
@@ -66,10 +68,12 @@ flowchart TD
     MODE -->|LLM| LLM["Internal Gemma server"]
     MT --> APPLY["Validate translation<br/>and restore text into its structure"]
     LLM --> APPLY
-    APPLY --> FIT["Fit check against original<br/>shrink when needed or report unresolved"]
+    APPLY --> FIT["Checking layout<br/>lightweight fit; user may skip"]
     FIT --> WRITE["Same format adapter applies size changes<br/>and writes the translated document"]
-    WRITE --> STORE["Store output and fit report<br/>commit result and complete job"]
-    STORE --> DOWNLOAD["Authorized result retrieval"]
+    WRITE --> STORE["Publish verified result<br/>using selected storage profile"]
+    STORE -->|Hosted| DOWNLOAD["Authorized result retrieval"]
+    STORE -->|Local| EXPORT["Export with collision-safe name<br/>then clean working copies"]
+    EXPORT --> RESULT
     REUSE --> DOWNLOAD
     DOWNLOAD --> RESULT["User receives translated file"]
 ```
@@ -79,9 +83,9 @@ Important qualifications:
 - A hit means the **same input bytes and output fingerprint**, not merely the same filename or some matching text. It reuses the already post-processed result and report, so no model or fit work is repeated.
 - `force_retranslate` bypasses both lookups. Concurrent misses can still perform duplicate work; the accepted design does not lock identical requests together.
 - The database stores job/cache metadata and blob references. Original documents, outputs and reports are files in blob storage, not database payloads.
-- A format adapter is a reader/writer with preserved document state. There is no universal conversion to DOCX, PDF or plain text. PDF uses targeted text replacement in the PDF itself ([ADR-014](decisions/ADR-014-pdf-strategy.md)).
+- A format adapter is a reader/writer with preserved document state. There is no universal conversion to DOCX, PDF or plain text. PDF uses targeted text replacement in the PDF itself ([ADR-018](decisions/ADR-018-pdf-strategy.md)).
 - The original text, styles and layout measurements must remain available throughout fitting. Fit never compares the translation with a source layout that has already been overwritten.
-- TXT bypasses fit because it has no fixed-size text containers. PPTX, DOCX and XLSX fit through the shared estimator (P3); PDF fits while its writer places each translation (ADR-014).
+- TXT bypasses fit because it has no fixed-size text containers. PPTX, DOCX and XLSX fit through the shared estimator (P3); PDF fits while its writer places each translation (ADR-018).
 - The MCP upload/download mechanism still needs a wire contract. The arrow above is a logical submission, not a claim that every MCP client can stream a file identically.
 
 ## Deployment Profiles
@@ -90,7 +94,7 @@ Important qualifications:
 
 ### Shared runtime, separate installations
 
-The desktop is an installed application with file/folder drag/drop, not merely a browser shortcut. It launches a per-user local host/worker using the same job, cache and storage implementation as the company service. The desktop calls REST and may launch packaged executables; it does not import server internals or build a second queue. Translation stays in the Python core. The desktop toolkit/installer remain D0 decisions; existing React UI components may be reused.
+The desktop is an installed application with file/folder drag/drop, not merely a browser shortcut. It launches a per-user local host/worker using the same job implementation as the company service, with a local-export storage profile and no persistent translation cache. The desktop calls REST and may launch packaged executables; it does not import server internals or build a second queue. Translation stays in the Python core. The approved language boundary is a native desktop shell around the Python backend, with inference replaceable independently. The desktop toolkit/installer remain D0 decisions; existing React UI components may be reused. The [D0 runtime contract](plans/D0-desktop-runtime-contract.md) records proposed bootstrap and packaging details for validation, not an implemented local-service API.
 
 ```mermaid
 flowchart LR
@@ -100,7 +104,7 @@ flowchart LR
     CHOICE -->|Local default| LOCAL["Per-user local REST host"]
     CHOICE -->|Company connection| HOST
     LOCAL --> LW["Local worker and installed model"]
-    LOCAL --> LS["Local jobs, cache and owned files"]
+    LOCAL --> LS["Local active jobs and temporary working files"]
     HOST --> HW["Hosted workers and approved engines"]
     HOST --> HS["Hosted jobs, cache and owned files"]
     LW --> CORE["Same core: formats, translation, lightweight fit"]
@@ -148,7 +152,7 @@ Lenovo managed rollout and eventual OEM preload follow a working installer app. 
 
 | Area | Implemented | Planned |
 |------|-------------|---------|
-| Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; PDF adapter with targeted replacement and writer-driven fit (ADR-014); ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | Rendering/edits (P7) |
+| Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; PDF adapter with targeted replacement and writer-driven fit (ADR-018); ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | Rendering/edits (P7) |
 | Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
 | CLI | Local `doctranslator translate`; service commands `whoami`, `submit` (files or manifest, resume state, wait, download), `batches`, `jobs`, `download` over REST | - |
 | Server | Users and API keys (ADR-015), SQLite/Alembic persistence, blob storage with pins and GC, REST `/v1`, attempt-fenced queue and workers, retention, backup/restore, `doctranslator-server` administration (ADR-016) | Browser sessions (P6); MCP (P7); PostgreSQL/multi-host (later) |
@@ -160,50 +164,33 @@ P2 and the ADR-012 fit integration (P3) are implemented on `release/p2-p6`; the 
 
 ### Users, Batches and Owned Results
 
-Every service request resolves an authenticated stable user ID before accessing data. Batches, jobs and documents belong to that user; no client-supplied owner ID can grant access. Multiple credentials or a later browser session can represent the same user. Implemented with per-user opaque API keys ([ADR-015](decisions/ADR-015-authentication-and-ownership.md)); browser sessions arrive with P6.
+Human and application service accounts are stable owners. Credentials/sessions authenticate the owner; external case/user IDs are correlation metadata, not permissions. Applications call from their backend and enforce their own end-user access. Desktop derives its local owner from the OS user through authenticated loopback. API keys (ADR-015) and, for the web UI, browser sessions (ADR-017) authenticate owners today.
 
 ```mermaid
 flowchart LR
-    ADMIN["Administrator provisions user"] --> USER["Stable user identity"]
-    USER --> AUTH["Authenticate CLI / API / browser"]
-    AUTH --> SUBMIT["Create owned batch<br/>upload files one at a time"]
-    SUBMIT --> JOBS["One persistent job per accepted file"]
-    JOBS --> PROCESS["Cache lookup or worker pipeline"]
-    PROCESS --> DOC["User-owned document and version 0"]
-    DOC --> HISTORY["Owned history, status and fit report"]
-    HISTORY --> GET["Authorized file download"]
-    AUTH --> HISTORY
+    H["Human account"] --> A["Authenticate owner"]
+    S["Application service account"] --> A
+    A --> J["Owned job / batch"]
+    J --> P["Shared translation pipeline"]
+    P --> R["Immutable job result"]
+    R --> D["Owned download"]
+    R -->|Hosted saved mode| C["Current translation for owned source and language pair"]
+    R -->|Temporary mode| E["Expires after advertised retention"]
 ```
-
-```mermaid
-flowchart TD
-    UA["User A"] --> DA["A's document and report references"]
-    UB["User B"] --> DB["B's document and report references"]
-    DA --> BLOB[("Immutable translated file / report blobs")]
-    DB --> BLOB
-    CACHE["Shared cache: exact input hash + fingerprint"] --> BLOB
-    CACHE -.->|hit creates own references| DA
-    CACHE -.->|hit creates own references| DB
-```
-
-A cache hit never transfers another user's job/document IDs or history. Files may share immutable bytes; authorization always follows the user's document/version references. Reports must remain tied to that version even when a forced translation replaces the cache entry. Disabling a user, revoking credentials, logout, document deletion and retention have explicit lifecycle tests in the service/UI plans.
 
 ```mermaid
 flowchart LR
-    FILES["Paths / streaming manifest / UI selection"] --> BATCH["Owned open batch"]
-    BATCH --> UPLOAD["Bounded per-file upload"]
-    UPLOAD --> CHECK{"Accepted?"}
-    CHECK -->|Yes| JOB["Durable independent job"]
-    CHECK -->|Invalid| ERROR["Visible per-item error"]
-    CHECK -->|Capacity full| RETRY["Backoff and retry same identity"]
-    RETRY --> UPLOAD
-    JOB --> OUTPUT["Owned output + fit report"]
-    BATCH --> SEAL["Seal when submission finishes"]
-    OUTPUT --> SUMMARY["Per-file outcomes and downloads"]
-    ERROR --> SUMMARY
+    UA["User A"] --> DA["A's logical document"]
+    UB["User B / service account"] --> DB["B's logical document"]
+    DA --> INPUT[("Same immutable source bytes")]
+    DB --> INPUT
+    DA --> TA["A's current language result"]
+    DB --> TB["B's current language result"]
+    TA --> OUT[("Output bytes may also be shared")]
+    TB --> OUT
 ```
 
-There is no fixed product-level total file-count ceiling. Per-file limits, bounded concurrent uploads, queue admission and storage capacity constrain resource use. A batch is a grouping of independent outcomes, not an all-or-nothing job or a second queue. Accepted jobs run while submission continues. Stable client submission IDs permit retries after an uncertain response without duplicating accepted jobs. One failure does not cancel successful siblings.
+Content hashes deduplicate physical storage, never grant access or merge business identities. A new result changes only the submitting document's current reference. Job downloads remain tied to their own immutable output/report until expiry; deleting a document revokes its job-based access too. Normal UI has no version browser or per-section fit-report view. P7 editing/version history requires a later contract.
 
 ### Core
 
@@ -222,7 +209,7 @@ The format-specific code describes and edits a document; the generic pipeline ch
 | `fit/` | Format-neutral measurement, font lookup and fit policy |
 | `render/` | Shared conversion/rasterization infrastructure used by format packages |
 
-`DocumentAdapter`, `LayoutSupport`, `PlacementFit`, `RenderSupport` and `EditSupport` are separate capabilities, implemented only where applicable (`PlacementFit` replaces `LayoutSupport` for PDF, whose writer lays out and fits text itself; ADR-014). Engines and formats never import one another. The [core API reference](#core-api-reference) retains the complete implemented text contract. Exact document API signatures remain in the [P2 draft](plans/P2-document-translation-and-cli.md) until approved.
+`DocumentAdapter`, `LayoutSupport`, `PlacementFit`, `RenderSupport` and `EditSupport` are separate capabilities, implemented only where applicable (`PlacementFit` replaces `LayoutSupport` for PDF, whose writer lays out and fits text itself; ADR-018). Engines and formats never import one another. The [core API reference](#core-api-reference) retains the complete implemented text contract. Exact document API signatures remain in the [P2 draft](plans/P2-document-translation-and-cli.md) until approved.
 
 ### Server
 
@@ -234,14 +221,14 @@ The format-specific code describes and edits a document; the generic pipeline ch
 | `settings.py` | App configuration and public core config construction | Model inference |
 | `api/`, `mcp/` | REST/MCP request validation and response adaptation over `jobs/` | Direct database access or their own translation pipeline |
 | `auth/` | API keys, users and authentication (ADR-015) | Formatting or fit behavior |
-| `jobs/` | Submission, lookup, queue transitions, workers, progress, result/version publication and storage coordination | File-format internals |
+| `jobs/` | Submission, lookup, queue transitions, workers, progress, immutable job-result/current-pointer publication and storage coordination | File-format internals |
 | `db/` | SQLAlchemy models, sessions and repositories; Alembic owns schema changes | Document file contents |
 
 Only `jobs` calls the core pipeline; `settings` may construct public core configuration. Only `jobs`, `auth` and the composition root import `db`. REST and MCP never import each other. ORM objects stay behind job/auth boundaries; wire schemas are distinct from core and database models.
 
 ### Web UI
 
-`apps/web` is planned as a React/TypeScript SPA using the REST API only. P6 audits the existing agent-built mock and integrates its useful features with real authenticated user history, upload/options/progress/download views and diagnostics/fit reports. Each feature receives a keep/rework/drop/add decision against backend capabilities; fake production data and simulated completion are removed. It does not select adapter internals, call models or access storage directly. The [P6 plan](plans/P6-web-ui-integration.md) covers artifact discovery, browser sessions, API gaps and browser acceptance. P7 rendering/visual edits are not implied by a mock preview/comment control.
+`apps/web` is planned as a React/TypeScript SPA using the REST API only. P6 audits the existing agent-built mock and integrates its useful features with real authenticated user history, source-library/options/progress/download views with safe failures and skippable layout checking. Each feature receives a keep/rework/drop/add decision against backend capabilities; fake production data and simulated completion are removed. It does not select adapter internals, call models or access storage directly. The [P6 plan](plans/P6-web-ui-integration.md) covers artifact discovery, browser sessions, API gaps and browser acceptance. P7 rendering/visual edits are not implied by a mock preview/comment control.
 
 ### CLI
 
@@ -286,66 +273,56 @@ The dotted CLI/eval arrows indicate code reuse, not RPC to the worker. There is 
 
 ### Submission and Cache Lookup
 
-The following sequence expands the two cache checks. It omits transient-error and cancellation branches, which are shown in the job lifecycle below.
+The hosted saved-document path uses the owner's current result as its cache. Local export and hosted temporary requests always process. Request idempotency applies even when reuse is disabled.
 
 ```mermaid
 sequenceDiagram
-    participant C as UI or MCP client
-    participant J as Job service
-    participant B as Blob storage
+    participant C as Client
+    participant A as Authenticated API
     participant D as Database
     participant W as Worker
-    participant P as Core pipeline
-    C->>J: Submit file, languages, mode and options
-    J->>J: Authenticate, validate and calculate input hash / fingerprint
-    J->>B: Store immutable original
-    J->>D: Lookup successful result by hash + fingerprint
-    alt Reusable result and no force flag
-        J->>D: Create completed job and user's document/version reference
-        J-->>C: Completed job ID
-    else Miss or force flag
-        J->>D: Create queued job
-        J-->>C: Job ID without waiting for translation
-        W->>D: Atomically claim job with a lease
-        W->>D: Recheck cache unless force flag is set
-        alt Another job completed while this one waited
-            W->>D: Publish existing result reference under current ownership
-        else Translation still needed
-            W->>B: Read original
-            W->>P: Translate document with options and progress callback
-            loop Between batches / while worker owns the job
-                P-->>W: Progress callback
-                W->>D: Progress and cancellation check; separate lease heartbeat
-            end
-            P-->>W: Output file, diagnostics and fit report
-            W->>B: Store immutable output/report blobs
-            W->>D: Fenced transaction: cache result, document version, succeeded
+    participant B as File storage
+    C->>A: Submit request ID, input/reference and options
+    A->>D: Replay same request or admit owned job
+    alt Hosted saved, no force, compatible current result
+        A->>D: Bind completed job to existing result
+    else Fresh work needed
+        A->>D: Queue job; reserve saved target slot if applicable
+        W->>D: Claim with lease and attempt token
+        W->>W: Translate, apply, optional fit, write and verify
+        W->>B: Store verified new result
+        W->>D: Fenced commit: job result and success
+        opt Hosted saved mode
+            Note over W,D: Same commit swaps only this document's current pointer
         end
     end
-    C->>J: Poll status and request result
-    J->>D: Check document ownership and result reference
-    J->>B: Read referenced output
-    J-->>C: Translated file and report
+    C->>A: Get status and job output
+    A->>D: Verify owner, deletion, expiration and exact job result
+    A->>B: Read pinned result
+    A-->>C: Actual translated file
 ```
 
-Submission-time fingerprinting must use configured immutable engine identity without loading a translation runtime. The existing `EngineInfo` does not yet supply the complete identity. The P2 draft now proposes a metadata-only fingerprint function; its identity preparation and worker verification contracts still need design validation. See [open decisions](#design-review-and-open-decisions). A worker reuses loaded engines between jobs but verifies it is executing the requested engine/configuration identity.
+Saved mode rechecks compatibility at execution unless forced. Only one active job per logical document/target is admitted; different submissions conflict with an owned active-job reference. Fingerprints pin actual output-affecting behavior, not filenames, credentials or export locations. Keep worker lease/control checks independent of progress writes.
 
 ## Jobs, Reuse and Storage
 
 ### Reuse Rules
 
-| Layer | Scope | Rule |
-|-------|-------|------|
-| Text deduplication | Implemented within one text API call | Identical stripped inputs reach the engine once; whitespace is restored per occurrence |
-| Document deduplication | Accepted for P2 | Collect all segments first; deduplicate across all slides/paragraphs/sheets and pipeline batches, including formatting placeholders |
-| Whole-document cache | Accepted for P5 | Key is `(SHA-256(input bytes), output fingerprint)`; only complete successful core output is reusable |
-| Persistent segment reuse | Deferred | No reuse across near-identical/re-saved documents without a future ADR and evidence |
+| Scope | Behavior |
+|---|---|
+| Within a translation run | Deduplicate repeated engine inputs, including inline-format distinctions; retain model reuse |
+| Local export | Always translate on a new explicit run; no persistent document-result cache |
+| Hosted temporary | Always process; return exact job result until advertised expiry |
+| Hosted saved | Reuse selected owner's current result only when source bytes and output fingerprint match |
+| Persistent segment / cross-owner result cache | Deferred; byte deduplication does not require either |
 
-The fingerprint represents every output-affecting choice: requested source (including `auto`), target, mode, model/prompt identity, relevant engine settings, fit policy and core version. Exact schema, model revision identity and font/measurement identity are still design work. API credentials and output paths are not output behavior. A new filename does not invalidate a byte-identical input; changing target language does. Re-saving an otherwise equivalent Office document may change ZIP bytes and legitimately miss this cache.
+The fingerprint includes requested source (including auto), target, model/revision/prompt, protected terms, relevant settings, fit policy and core identity. Preserve requested and resolved source language separately. Current library slots use resolved language pairs; conservative active-target admission covers detection. No model ranking controls replacement.
 
-Cached results include unresolved fit findings when the pipeline completed successfully; the report travels with the file. Partial/failed outputs and later user/agent edits are not cached. A cache hit gives the new user a document/version reference with their own ownership, never access to another user's private edit history. Two concurrent misses may both translate; the unique result key chooses the reusable entry. This is accepted duplicate work, not an exactly-once execution promise.
+Force/Translate again bypasses reuse and replaces the current pointer only on success. Failure/cancel leaves the old result. Effective skipped fit may become current and downloadable, but cannot satisfy a later normal full-fit request. There is no hidden retained full-fit cache. Completed unresolved fit remains eligible when otherwise compatible. Partial/failed outputs and later edits never satisfy reuse.
 
 ### Job Lifecycle
+
+The proposed [P5-P6 progress contract](plans/P5-P6-document-progress.md) details the latest stored job snapshot and stage-specific UI feedback. It preserves the lifecycle below; proposed reporting additions are not yet implemented API guarantees.
 
 ```mermaid
 stateDiagram-v2
@@ -369,24 +346,32 @@ stateDiagram-v2
 
 ### Storage and Document Ownership
 
-The database starts as SQLite with SQLAlchemy 2.0 synchronous sessions, WAL, foreign keys and a busy timeout. Alembic manages all schema changes. Application queries go through repositories rather than SQLite-specific SQL. Files use an interchangeable storage interface and immutable content hashes; the laptop implementation uses local disk. Backups must include a consistent database plus its referenced blobs.
+Use the existing SQLite/SQLAlchemy/repository and immutable-file storage boundaries. The hosted database stores references and metadata, not document payloads. Files use SHA-256 content addresses; authorization always follows logical ownership. Hosted source bytes may be shared across independent user or case records.
 
 ```mermaid
 flowchart LR
-    JOB["jobs<br/>state, options, progress, lease"] --> INPUT[("Original blob")]
-    JOB --> RESULT["translation_results<br/>input hash + fingerprint"]
-    DOC["documents<br/>owner and original reference"] --> INPUT
-    DOC --> RESULT
-    DOC --> V0["document_versions: version 0"]
-    RESULT --> OUT[("Translated blob")]
-    RESULT --> REPORT[("Fit report blob")]
-    V0 --> OUT
-    DOC --> V1["document_versions: version 1"]
-    V1 --> EDIT[("Edited blob")]
-    V1 -.->|parent| V0
+    OWNER["Human or service owner"] --> DOC["Logical source document"]
+    DOC --> INPUT[("Source blob")]
+    DOC --> SLOT["One current translation per language pair"]
+    SLOT --> RESULT["Immutable job result"]
+    JOB["Processing attempt"] --> RESULT
+    RESULT --> OUTPUT[("Output and report blobs")]
+    OLDJOB["Earlier retained job"] --> OLD["Earlier result until expiry"]
 ```
 
-Cache rows and user documents have independent retention policies. Delete a blob only when no job, result or document version references it and no pin protects it (ADR-016). Expiring a cache entry cannot delete a user's translated file. Editing a document writes a new blob/version and never mutates a shared result. The implemented schema is in the [server reference](#server-reference).
+Library originals/current translations remain until deletion within quota. Jobs pin their own results for a bounded advertised period. Replacing a current pointer does not redirect older job downloads. Cleanup removes only unreferenced/unpinned blobs under publication-safe transactions; active downloads must not lose their files. Backups include consistent metadata and referenced files.
+
+```mermaid
+flowchart LR
+    FILES["Local files / folders"] --> TEMP["Temporary accepted inputs and job state"]
+    TEMP --> WORK["Always run shared translation pipeline"]
+    WORK --> STAGE["Write and verify temporary output"]
+    STAGE --> EXPORT["Publish to chosen folder with unique numbered name"]
+    EXPORT --> CLEAN["Remove working copies after confirmed export"]
+    EXPORT --> USER["User-controlled file; never app-GC deleted"]
+```
+
+Local export preserves relative folders and reserves collision-safe names, never overwrites existing files, and reconciles destination/digest on restart. It retains no hidden source/result library. Temporary snapshots and bounded job metadata support active work/recovery. Future Explorer integration uses this same path. See [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and the [storage transition plan](plans/P5-D2-storage-and-ownership.md) for deletion, identity, API and acceptance details.
 
 ## Core Document Pipeline
 
@@ -406,6 +391,7 @@ flowchart TD
     RESTORE --> LAYOUT["Adapter describes translated containers"]
     ORIGINAL --> FIT["Generic fit policy"]
     LAYOUT --> FIT
+    FIT -->|User skips remaining fit| WRITE
     FIT --> CHANGES["Size adjustments and unresolved issues"]
     CHANGES --> APPLY["Same adapter applies font changes"]
     APPLY --> WRITE["Write and verify output<br/>without modifying the input"]
@@ -420,11 +406,14 @@ The exact neutral document schema, paragraph segmentation, inline-token format, 
 
 [ADR-012](decisions/ADR-012-lightweight-fit-policy.md) supersedes the former absolute visual guarantee. Translation accuracy and faithful formatting lead; fit is lightweight best-effort overflow mitigation. Reuse the existing shared estimator/fitter and adapter boundaries. Only changed constrained containers need measurement. Normal reflow, DOCX body and unconstrained content need no fitting.
 
+The owner's 2026-09-28 amendment makes this a simple, skippable stage: normal UI shows **Checking layout** and **Skip layout check**, with no unresolved-section view, area counts or warning badges. A cooperative skip stops further measurements/adjustments, preserves translated text and already-applied adjustments, and proceeds through normal writing/verification/persistence. Successful output shows Ready to download. Detailed diagnostics may remain internal; no new per-area reporting work is required. The [progress/skip plan](plans/P5-P6-document-progress.md#skip-layout-check) specifies the durable job flag, owned endpoint and core control; implementation is pending. A skipped result never claims passed or not_applicable and is not entered in the normal reusable cache.
+
 For supported geometry/fonts, estimate source and translated extents with the same provisioned-font/shaping/wrapping implementation. Allowed extent is the larger of bounds and source extent on each constrained axis. Preserve source overflow. Unknown fonts, glyphs or layout behavior retain original sizes and report unresolved, never a false pass.
 
 ```mermaid
 flowchart TD
     INPUT["Translated container with source baseline"] --> NEED{"Changed and constrained?"}
+    INPUT -->|Skip requested at safe checkpoint| SKIP["Stop remaining optional fit; keep prior adjustments"]
     NEED -->|No| KEEP["Keep wording, formatting and natural reflow"]
     NEED -->|Yes| SUPPORT{"Supported geometry and fonts?"}
     SUPPORT -->|No| UNKNOWN["Retain original sizes; unresolved reason"]
@@ -440,13 +429,14 @@ flowchart TD
     UNKNOWN --> WRITE
     DONE --> WRITE
     ISSUE --> WRITE
+    SKIP --> WRITE
 ```
 
 Defaults remain 70% relative and 8pt absolute floors, 2.5% scale steps, half-point quantization and 1pt tolerance. Never enlarge or further shrink a source run at/below the absolute minimum. Bound candidate measurements to 40 per container, stop at first fit/floor/no further size change and reuse duplicate candidates. If the search cap is reached before a reliable floor result, retain original sizes and report search_limit; never invent a pass. Format adapters apply sizes; generic fit never imports format packages.
 
 Do not move objects, change row/column dimensions, force pagination or rephrase/truncate translations. No runtime renderer, vision/model calls or font downloads for fit. PDF should use its selected writer's placement/layout facilities where available rather than add a second independent measurement engine.
 
-Reports identify adjustments and unresolved locations/reasons, original/final sizes and measurable extents. Passed/adjusted mean estimator outcomes, not native-rendered approval. Missing layout capability is unresolved for a required format; not_applicable is reserved for TXT or proven absence of applicable containers. Preserve cache fingerprinting of policy, fonts and implementation identity.
+Existing technical reports may retain adjustment/unresolved details for troubleshooting; normal UI does not expose those lists and release work need not expand them. Passed/adjusted mean estimator outcomes, not native-rendered approval. Missing layout capability is unresolved for a required format; not_applicable is reserved for TXT or proven absence of applicable containers; skipped records an effective user bypass. Preserve normal cache fingerprinting of policy, fonts and implementation identity and exclude skipped outputs from that cache.
 
 [P3.0](plans/P3.0-fit-design-validation.md) now closes existing research using a fixed small corpus and explicit support limits; it does not require native line-count/pitch parity or continuing font-specific tuning. Native-open/visual spot checks remain acceptance work, not per-job production steps. Optional visual correction remains P7.
 
@@ -535,7 +525,7 @@ Shared strings may be referenced by many cells; retain their locations and rich 
 
 ### PDF
 
-Produce a translated PDF with page layout preserved as closely as practical. OCR is out of scope: text inside scanned images is not made translatable by this flow. [ADR-014](decisions/ADR-014-pdf-strategy.md) selects targeted replacement in the PDF with PyMuPDF: remove only the translated characters (artwork, images, links and untranslated text stay) and place each translation with MuPDF's HTML layout, which also performs the ADR-012 fit.
+Produce a translated PDF with page layout preserved as closely as practical. OCR is out of scope: text inside scanned images is not made translatable by this flow. [ADR-018](decisions/ADR-018-pdf-strategy.md) selects targeted replacement in the PDF with PyMuPDF: remove only the translated characters (artwork, images, links and untranslated text stay) and place each translation with MuPDF's HTML layout, which also performs the ADR-012 fit.
 
 ```mermaid
 flowchart TD
@@ -553,7 +543,7 @@ flowchart TD
     VERIFY --> OUT["Translated PDF and fit report"]
 ```
 
-Units, fonts, removal, placement, fit outcomes, kept/reported content (rotated, unmapped, image-heavy pages) and verification are specified in ADR-014; supported cases and evidence are in the [PDF strategy experiment](experiments/pdf-strategy/README.md). PyMuPDF (AGPL, accepted by the owner for the internal service; revisit before any distribution) is imported only by `formats.pdf` and `render`.
+Units, fonts, removal, placement, fit outcomes, kept/reported content (rotated, unmapped, image-heavy pages) and verification are specified in ADR-018; supported cases and evidence are in the [PDF strategy experiment](experiments/pdf-strategy/README.md). PyMuPDF (AGPL, accepted by the owner for the internal service; revisit before any distribution) is imported only by `formats.pdf` and `render`.
 
 ## MCP Visual Review
 
@@ -613,8 +603,8 @@ All six repository checks remain required. Unit tests do not need VPN/models. Re
 1. The core remains independent of all surfaces, database access and app configuration. Apps import only `doctranslator_core` and its public `types`; format/engine internals stay private.
 2. Format packages do not import one another; shared OOXML operations are below them. Generic fit/render code does not import formats. Add library containment checks when those imports actually enter production code.
 3. The database queue avoids a broker and duplicate job-state systems. It requires correctly implemented claims, leases, recovery and fencing, which must be tested rather than assumed.
-4. Whole-document caching is conservative: exact bytes plus behavior fingerprint. It misses near-duplicate documents and allows concurrent duplicate work. Persistent segment reuse is deferred until evidence justifies it.
-5. The core release version invalidates reuse broadly. Immutable blobs share bytes efficiently while keeping user ownership and edit history separate.
+4. Hosted saved-result reuse is conservative: owned current result, exact bytes and behavior fingerprint. A saved document has one active job per target; independent documents can still duplicate work. Persistent segment reuse is deferred until evidence justifies it.
+5. The core release version invalidates reuse broadly. Immutable blobs share bytes efficiently while keeping logical ownership separate; edit history is deferred.
 6. Best-effort geometric fit mitigates overflow but does not guarantee visual quality. Shrinking has a readability floor and does not fix all layout problems; unresolved findings are part of a successful result, not hidden errors.
 7. Models translate text, not native document structure. Formatting alignment and safe writeback are first-class requirements, especially for MT and rich text.
 
@@ -630,6 +620,7 @@ The high-level upload -> lookup -> job -> worker -> adapter -> model -> fit -> w
 | XLSX recalculation | Sheet names stay unchanged by owner decision; preserving formula caches is not the same as preserving their meaning after cell translation. | Finish proposed ADR-009 with native tests |
 | PPTX/DOCX serialization | Candidate libraries may not preserve unsupported structures; XLSX findings cannot establish their behavior. | P2.0 format-specific experiments |
 | Font measurement / shrink policy | Lightweight supported estimates with explicit uncertainty; no native parity guarantee. | ADR-012; bounded P3.0 closure |
+| Identity, retention and limits | Downloads/edits must be owned and uploads bounded before colleagues use the server. ADR-014 requires human/service isolation, owner-scoped reuse and no hash-based access. | P5.0 |
 | MCP transfer / rendering / edits | Logical file submission does not define transport, and vision review requires safely rendered pages and constrained edit operations. | P7, after P4/P5 and network verification |
 
 These are explicit gates, not hidden decisions for coders. The [delivery handoff](plans/P2-P6-delivery-handoff.md), [plan index](plans/README.md) and [roadmap](IMPLEMENTATION_PLAN.md) retain the implementation sequence. The owner's sheet-name and service-CLI decisions are incorporated; technical experiments and future phase implementations are still outstanding.

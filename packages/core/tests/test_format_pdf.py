@@ -1,4 +1,4 @@
-"""PDF adapter (ADR-014): replacement keeps artwork, removes source text, fits by placement."""
+"""PDF adapter (ADR-018): replacement keeps artwork, removes source text, fits by placement."""
 
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportMissingTypeStubs=false, reportAttributeAccessIssue=false
 

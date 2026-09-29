@@ -1,4 +1,4 @@
-"""PDF placement (ADR-014): where a translated unit may go, which font draws it, how it is written.
+"""PDF placement (ADR-018): where a translated unit may go, which font draws it, how it is written.
 
 Coordinates are PyMuPDF page coordinates in points (origin top left, unrotated page space, the
 space both text extraction and ``insert_htmlbox`` use). Nothing here moves or scales artwork.
@@ -182,7 +182,7 @@ class FontResolver:
         return data
 
     def choose(self, font: str, style: PdfStyle, text: str, target: Language) -> FontChoice:
-        """Deterministic font for ``text`` originally drawn with ``font`` (ADR-014)."""
+        """Deterministic font for ``text`` originally drawn with ``font`` (ADR-018)."""
         own = self.lookup(font, bold=style.bold, italic=style.italic)
         if own is not None and self.covers(own, text):
             return FontChoice(own.family, own, substituted=False)

@@ -1,6 +1,9 @@
 # Deployment and Local Operation
 
-Status (2026-09-29): this document distinguishes intended deployment profiles from implemented operations. The shared service (P5) and local CLI are implemented and verified on one Windows host; desktop packaging and non-loopback TLS deployment remain pending. See the release evidence for what has been verified.
+> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. The service described below predates that revision (shared exact-byte cache, version-0 documents, 90-day expiry); the transition is in progress on `release/p2-p6` and this guide changes with it.
+
+
+Status (2026-09-29): this document distinguishes intended deployment profiles from implemented operations. The shared service (P5) and local CLI are implemented and verified on one Windows host; desktop packaging and non-loopback TLS deployment remain pending.
 
 ## Intended Deployment Profiles
 
@@ -11,7 +14,7 @@ The owner-approved direction in [ADR-013](decisions/ADR-013-deployment-profiles.
 | Hosted web/API | Operator installs service/workers on approved company infrastructure, configures TLS/users/storage and models. Users sign in; internal apps use authorized API credentials. |
 | Desktop local | User runs installer, selects a supported model download, then opens the app and drops files/folders. Packaged per-user host/workers start automatically; no developer environment or web sign-in is needed for local processing. |
 | Desktop connected | User explicitly configures/signs into a company service. Documents are uploaded there; local history is not synchronized automatically and failures never silently switch modes. |
-| Internal-app integration | Use versioned REST for persistent jobs/cache/results. Public-core Python embedding is a separate deliberate choice without service persistence. |
+| Internal-app integration | Use versioned REST under a dedicated application service account; choose temporary results or a saved library explicitly. Public-core Python embedding is a separate deliberate choice without service persistence. |
 
 Desktop setup must document supported OS/architecture, installer signature, runtime/model sizes and licenses, download sources, integrity verification, retry/recovery, per-user data paths, output naming, retention, updates and uninstall. No model is ready until verification/load succeeds. Local MT works offline after assets are installed; internal Gemma requires company connectivity. Additional downloadable models require validated catalog entries, not arbitrary names.
 
@@ -47,7 +50,7 @@ Output defaults to `<name>.<target><suffix>` beside the input and is never overw
 
 Fit uses a font manifest built from `DOCTRANSLATOR_FONT_DIRS` (directories separated by `;` on Windows, `:` elsewhere). The default is the platform font directories; on Windows that includes the user font directory and Office's cloud-font cache, where Office keeps fonts such as Aptos and DengXian. The manifest is cached in `%LOCALAPPDATA%\doctranslator\font-manifest.json` (or `~/.cache/doctranslator/`) and rebuilt for changed files only. Missing fonts make affected containers unresolved; they never block translation. PDF output embeds (subset) the provisioned fonts it uses and falls back to PyMuPDF's built-in faces when none fits; provision the fonts your documents use (and Microsoft YaHei/DengXian, Yu Gothic or Noto CJK for Chinese/Japanese targets) for the closest look.
 
-PDF support uses PyMuPDF (AGPL-3.0), accepted by the owner for the internal service. Before distributing any application that contains it (for example the ADR-013 desktop app), comply with the AGPL for that application or obtain an Artifex commercial license ([ADR-014](decisions/ADR-014-pdf-strategy.md)).
+PDF support uses PyMuPDF (AGPL-3.0), accepted by the owner for the internal service. Before distributing any application that contains it (for example the ADR-013 desktop app), comply with the AGPL for that application or obtain an Artifex commercial license ([ADR-018](decisions/ADR-018-pdf-strategy.md)).
 
 ## Configuration and Secrets
 
@@ -130,4 +133,4 @@ Local check results do not establish CI success; record CI run IDs and the teste
 
 The [P2-P6 handoff](plans/P2-P6-delivery-handoff.md) requires a verified operating guide at implementation completion. P5 must document migrations, user/key provisioning/revocation, company TLS, model/font identity, worker lifecycle, manifest submissions, owned history/downloads, retention and a tested database-plus-blobs backup/restore. P6 adds browser sessions, the integrated static build, routed reloads and the same-user web workflow. Proposed command names in plans are not runnable instructions until implemented.
 
-Service CLI and REST use the same server. Local `translate` is a distinct mode without persistent cache/history; documentation must never imply local output is automatically saved to the service. Users own their batches/jobs/documents even when cache bytes are shared.
+Service CLI and REST use the same server. Local `translate` is a distinct mode without persistent cache/history; documentation must never imply local output is automatically saved to the service. Human and service accounts own their batches/jobs/documents even when physical bytes are shared. Saved originals/current translations have quotas, not automatic expiry; temporary results and superseded job outputs expose expiration. Configure cleanup, backup retention and recovery bounds before launch.

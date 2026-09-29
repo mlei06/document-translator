@@ -35,7 +35,7 @@ class LayoutSupport(ABC):
 
 
 class PlacementFit(ABC):
-    """Formats whose writer lays out translated text itself (PDF; ADR-012, ADR-014).
+    """Formats whose writer lays out translated text itself (PDF; ADR-012, ADR-018).
 
     Instead of describing containers for the shared estimator, the adapter places every changed
     text unit with its writer's layout facility, shrinking within the ADR-012 floors, and reports

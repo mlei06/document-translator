@@ -1,4 +1,4 @@
-"""PDF adapter (ADR-014): targeted text replacement that keeps every page's artwork.
+"""PDF adapter (ADR-018): targeted text replacement that keeps every page's artwork.
 
 Extraction reads PyMuPDF's text layout (blocks, lines, spans) and forms translation units:
 paragraphs of lines that stack vertically, split at list markers and at lines that end short.

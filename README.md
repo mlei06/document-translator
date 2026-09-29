@@ -10,7 +10,7 @@ Teams regularly receive and produce documents (slide decks, reports, spreadsheet
 - Translating by hand, which is slow and expensive.
 - Using tools that translate text but destroy the document: fonts, colors, tables, and slide layouts are lost, and translated text overflows its boxes because target-language text is often longer than the source.
 
-The output is a translated document with structure and formatting preserved, plus explicit warnings where layout could not be fitted reliably.
+The output is a translated document with structure and formatting preserved. Lightweight layout checking runs by default; the planned UI lets users skip that stage and continue saving their translated file.
 
 ## Solution
 
@@ -18,11 +18,17 @@ One shared translation capability, delivered in three forms:
 
 1. **Web service** - users sign in, submit documents, track jobs and download owned results.
 2. **Installed desktop app** - users select a supported model to download during setup, then open the app and drag in files or folders. Local translation works offline once its runtime/model is installed. The app manages its local service and workers; no terminal or web sign-in is required for local mode.
-3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with the same job/cache/storage behavior. Python applications may also use the public core when they own orchestration.
+3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with shared processing/jobs and explicit saved or temporary retention. Python applications may also use the public core when they own orchestration.
 
-The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; histories/caches are not automatically synchronized.
+The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; local exports are user-controlled files; they are not synchronized to a hosted library.
 
 The current implementation handoff remains P2-P6. The [desktop and internal-app plan](docs/plans/Desktop-and-internal-app-delivery.md) adds installer/model setup and drag/drop delivery. Explorer right-click translation is only a later consideration. Lenovo laptop integration/preload is a long-term ambition after a proven installable app, not a current shipping commitment.
+
+## Storage and Retranslation
+
+Under [ADR-014](docs/decisions/ADR-014-storage-ownership-and-retranslation.md), local desktop/future Explorer processing is files or folders in, files or folders out: always translate each new explicit run, export to the chosen destination with numbered filename collisions, and clean up temporary working copies. No hidden permanent local document library or translation cache is required.
+
+The shared website saves private source-document records and one current translation per language pair, deduplicating identical physical bytes underneath. Compatible current results can be reused; Translate again or Always generate a new translation bypasses reuse and replaces only that owner's result after success. Old results remain available while replacements run. Human accounts and application service accounts own their records; internal apps can use temporary results and store outputs themselves. Jobs retain their exact outputs only for their stated retention, independently of the library's current pointer. See the [implementation handoff](docs/plans/P5-D2-storage-and-ownership.md). These are accepted targets, not claims that the service is implemented.
 
 ## Users
 
@@ -35,7 +41,7 @@ The current implementation handoff remains P2-P6. The [desktop and internal-app 
 
 - Translate PPTX, DOCX, XLSX, PDF, and TXT files, producing output in the same format as the input.
 - Preserve formatting and structure: fonts, styles, colors, run-level formatting (bold, italic, etc.), tables, lists, slide layouts, and sheet structure.
-- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation and explicit unresolved warnings.
+- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation that users can skip.
 - Keep document content on the user's device or approved company infrastructure; never silently upload local-mode documents.
 - Translate in both directions between Chinese, English, Japanese, and Spanish, with Chinese -> English as the primary focus and highest quality bar, on technical and business content.
 - Offer more than one translation mode, so users can trade quality against speed and availability.
@@ -91,7 +97,9 @@ Translation quality and accuracy take priority. Automatic post-processing is a l
 
 *Layer 1 - automatic fit (all surfaces).* Preserve wording and formatting, allow natural reflow and inspect changed constrained containers. Use the same supported font/wrapping estimator for source and translation. Allow the larger of container bounds and source extent, then apply bounded proportional font shrinking only when overflow is reliably measurable. Defaults are 70% relative and 8pt absolute floors; original smaller text is not enlarged or further shrunk. Unknown measurements retain original sizes and produce unresolved warnings. Never rewrite, shorten or truncate translations to fit.
 
-Every result carries a fit report. A measured pass is not rendered visual approval. Unresolved fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
+Normal website/desktop screens show **Checking layout** with **Skip layout check**, then **Saving** and **Ready to download**. They do not show unresolved-section details or layout-warning badges. Skipping stops further optional fit work, keeps adjustments already applied and still writes/verifies/persists the full translation. Existing technical reports can remain for troubleshooting; effective bypass is recorded as `skipped` and is excluded from normal full-fit cache reuse. This owner-approved control is planned, not implemented yet; see the [progress/skip plan](docs/plans/P5-P6-document-progress.md#skip-layout-check).
+
+A measured pass is not rendered visual approval. Unresolved or user-skipped fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
 
 | Format | Minimum fit scope |
 |---|---|
@@ -155,7 +163,7 @@ Lenovo fleet deployment and eventual OEM preload require separate distribution, 
 ## Open Questions
 
 - Where do the domain benchmark's technical sentences and their reference translations come from (ADR-005)? Until sourced, quality is measured on the general-domain FLORES+ set only.
-- PDF strategy: resolved by [ADR-014](docs/decisions/ADR-014-pdf-strategy.md) (translate in place with PyMuPDF). PyMuPDF is AGPL-licensed: before a desktop, fleet or OEM build ships it, decide between AGPL compliance and an Artifex commercial license.
+- PDF strategy: resolved by [ADR-018](docs/decisions/ADR-018-pdf-strategy.md) (translate in place with PyMuPDF). PyMuPDF is AGPL-licensed: before a desktop, fleet or OEM build ships it, decide between AGPL compliance and an Artifex commercial license.
 - Deployment must supply the explicit font manifest used by best-effort fit; unavailable fonts produce unresolved diagnostics under ADR-012. Font installation/licensing is an operational concern, not a reason for runtime downloads.
 - Fit defaults are settled by ADR-012 (70% and 8pt) and implemented for PPTX, DOCX, XLSX and PDF with bounded acceptance evidence ([fit report](docs/experiments/fit-measurement/README.md), [PDF report](docs/experiments/pdf-strategy/README.md)); reviewed-commit CI remains pending.
 - Authentication: the REST API and service CLI use per-user API keys ([ADR-015](docs/decisions/ADR-015-authentication-and-ownership.md)); the web GUI exchanges a key for a browser session (P6). Still open: MCP authentication and platforms like Copilot, which typically expect OAuth.

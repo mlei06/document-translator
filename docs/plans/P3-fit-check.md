@@ -32,9 +32,11 @@ ADR-012 pins defaults and the stopping rule; unknown measurement retains origina
 
 ## Report and Result Contract
 
+The accepted ADR-012 owner amendment takes precedence: normal UI shows only **Checking layout** and **Skip layout check**. Existing technical diagnostics may remain; expanding per-container reports or building a report viewer is not release work. Implement the cooperative skip contract in [the progress plan](P5-P6-document-progress.md#skip-layout-check): preserve translations and prior adjustments, stop remaining optional fit, then write, verify and persist.
+
 Versioned report includes document format, measurement version, font manifest digest, options and counts for inspected/unchanged/adjusted/unresolved containers. Each adjustment/unresolved entry includes stable location, reason, original/final run sizes, original/translated/final extents and allowed extent where measurable. Do not embed full confidential text in ordinary reports/logs.
 
-Document `fit_status`: `not_applicable` for TXT or documents with no applicable containers, `passed` when all inspected containers fit without changes, `adjusted` when changes resolve all issues, `unresolved` if any issue remains. `not_run` exists only for intermediate P2 development and is unacceptable for final service success. Unknown measurement values are null with a reason, not zero.
+Document `fit_status`: `not_applicable` for TXT or documents with no applicable containers, `passed` when all inspected containers fit without changes, `adjusted` when changes resolve all issues, `unresolved` if any issue remains. `skipped` records a user-requested bypass actually observed by the worker and is a valid successful owned result, excluded from normal reusable fit-result cache. Do not fabricate unresolved entries for unvisited containers. `not_run` exists only for intermediate P2 development and is unacceptable for final service success. Unknown measurement values are null with a reason, not zero.
 
 ## Bounded Tasks
 
@@ -49,8 +51,8 @@ Document `fit_status`: `not_applicable` for TXT or documents with no applicable 
 ## Completion Criteria
 
 - Required container families are discovered and supported or explicitly unresolved. No entire required format is an unresolved-only stub. DOCX body and PPTX notes have no invented bounds.
-- TXT explicitly bypasses fit. Original files unchanged. No required container silently skipped.
-- Report identifies every adjustment and unresolved measurement/overflow. Cache identity includes font/layout/fitter versions and options.
+- TXT explicitly bypasses fit. Original files unchanged. No required container silently skipped; an explicit user bypass is recorded as `skipped`.
+- Retain existing technical reporting of performed adjustments and unresolved measurements; no expanded per-area reporting or user-facing warning view is required. Cache identity includes font/layout/fitter versions and options.
 - ADR-012 small corpus covers ordinary paths, growth, floors, Latin/CJK, rich runs, merged cells, missing fonts and reflow controls. Unsupported complex layout is unresolved; exact line/pitch parity is not a gate.
 - Saved outputs preserve content/structure; check false passes and unnecessary shrink, and record fit timing. No production renderer/vision/model calls or rewriting for fit.
 - All six checks and reviewed-commit CI pass. Record evidence under the pre-GUI release matrix; close P3 only when its actual criteria pass.

@@ -1,6 +1,21 @@
 # ADR-012 - Lightweight Best-Effort Fit
 
+> Superseded in part on 2026-09-29 by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): local exports always translate fresh with temporary working storage; hosted owners retain one current result per document/language pair, with owner-scoped reuse and immutable job results. Human and application service accounts are owners. Earlier global-cache, mandatory version-history, desktop-library and conflicting retention requirements below are historical; ADR-014 takes precedence. Fit skip remains supported, but no separate old full-fit cache is retained.
+
+
 Status: Accepted by owner on 2026-09-28; implementation reconciliation pending.
+
+## Owner amendment - Simple display and user skip (2026-09-28)
+
+The owner's latest instruction supersedes earlier requirements to expose unresolved locations/warnings in the normal UI or to require every successful document to finish fit checking.
+
+- Run lightweight fit by default. During that stage show only **Checking layout** and **Skip layout check**, with no container counts, unresolved-section list or layout-warning badge. On successful publication show **Ready to download**.
+- Skip stops further optional fit work at a safe checkpoint, preserves all translated text and already-applied adjustments, and continues writing/verifying/storing the document. It does not cancel the job, retranslate, roll back completed adjustments or make an unfinished file downloadable. The current native measurement may finish before the request takes effect.
+- Persist the user's skip request on the existing job so disconnect/retry does not lose it. Record an effective bypass as `fit_status=skipped`, distinct from `not_applicable`, a successful fit and the old `not_run` scaffold state. Existing technical diagnostics may remain for troubleshooting; do not add or expand per-section reporting as a release requirement.
+- Save skipped outputs as normal owned downloadable documents, but do not insert or replace the reusable full-fit cache entry. A fully fitted cached result remains usable. Normal completed fit with unresolved internal findings still follows ADR-007.
+- Skipping optional fit never skips required file construction, complete text placement, integrity verification, ownership checks or persistence. This also applies to PDF when placement and optional fitting share a writer.
+
+The [progress/skip implementation plan](../plans/P5-P6-document-progress.md#skip-layout-check) owns the button, endpoint, cooperative checkpoints and race tests. This amendment accepts product behavior, not a claim that the control exists yet. Where the original decision below requires visible warnings or exhaustive per-location reporting, this amendment takes precedence.
 
 ## Context
 

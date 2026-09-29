@@ -1,5 +1,8 @@
 # Implementation Plan
 
+> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. Implementation and migration are pending; no phase completion is implied.
+
+
 <!--
 This is the roadmap / dependency graph for the project, not the detailed how-to for any one phase - that level of detail goes in docs/plans/. Give every phase an ID (P0, P1, P2, ...) and subphases as needed (P2.1, P2.2). Those IDs are used to name files in docs/plans/, e.g. docs/plans/P2.1-authentication.md.
 -->
@@ -189,7 +192,7 @@ Planning revised 2026-09-28: [ADR-012](decisions/ADR-012-lightweight-fit-policy.
 
 ### Goal
 
-Prioritize translation accuracy and preserved formatting; mitigate obvious measured overflow in changed constrained PPTX/DOCX/XLSX containers with bounded shrinking and honest unresolved warnings. No native layout parity guarantee.
+Prioritize translation accuracy and preserved formatting; mitigate obvious measured overflow in changed constrained PPTX/DOCX/XLSX containers with bounded shrinking and truthful technical outcomes. Under the ADR-012 owner amendment, users see Checking layout with Skip layout check; they do not need per-section fit details or warning badges. No native layout parity guarantee.
 
 ### Dependencies
 
@@ -226,7 +229,7 @@ Translate PDF files with layout preserved as closely as practical, including the
 ### Deliverables
 
 - ADR for the PDF strategy (translating in place versus converting through an editable format).
-- `formats/pdf/`: `DocumentAdapter` and `PlacementFit` (the writer fits text itself; ADR-014 amends the earlier `LayoutSupport` expectation).
+- `formats/pdf/`: `DocumentAdapter` and `PlacementFit` (the writer fits text itself; ADR-018 amends the earlier `LayoutSupport` expectation).
 - PDF fixtures, including Chinese source documents.
 
 ### Completion Criteria
@@ -259,8 +262,8 @@ Run user-owned translations as persistent asynchronous jobs behind a REST API an
 - Service CLI HTTP commands for submission, history/status, cancellation and downloads; local synchronous `translate` remains explicit and separate.
 - `apps/server`: FastAPI app, settings, `cli.py` (`serve`, `worker`), `db/` (SQLAlchemy models, repositories), initial Alembic migration, `jobs/`, `auth/`, `api/` with OpenAPI schema.
 - Job execution per [ADR-008](decisions/ADR-008-job-execution-model.md): the jobs table as the queue, worker processes with leases, retries, recovery, progress, and cancellation; `serve --workers N` on the laptop.
-- Storage and reuse per [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md): content-addressed blob storage behind a storage interface (local disk implementation), `translation_results`, `documents`, and `document_versions`, the whole-document cache with `force_retranslate`, and cache hit/miss logging.
-- Retention per ADR-007 with decided default durations: cache entries and user documents expire independently, and blobs are deleted only when unreferenced.
+- Storage and reuse per [ADR-007](decisions/ADR-007-translation-reuse-and-document-storage.md): content-addressed blob storage behind a storage interface (local disk implementation), owned source/current-translation and immutable job-result records under ADR-014, owner-scoped current-result reuse with `force_retranslate`, and cache hit/miss logging.
+- Retention per ADR-014: saved originals/current results persist within quota until deletion; temporary/superseded job results and metadata expire on advertised bounds. Delete blobs only when unreferenced and unpinned.
 - `docs/Deployment.md` for laptop hosting: running the server, binding to the network, firewall, configuration and secrets, backup.
 
 ### Completion Criteria
@@ -284,6 +287,8 @@ Board: [Feature #9014](https://chintand.visualstudio.com/AI%20Projects/_workitem
 
 Plan: [P6 existing UI audit and integration](plans/P6-web-ui-integration.md). Locate the runnable mock artifact and preserve a baseline before editing.
 
+Progress detail: [P5-P6 document progress proposal](plans/P5-P6-document-progress.md). Implement persistent latest-job snapshots and truthful stage/count displays as part of P5/P6, without a separate event system or overall-percentage estimator.
+
 ### Goal
 
 Non-technical coworkers use the existing mock UI, audited and integrated with the real backend, to translate documents in a browser. Preserve useful features and deliberately rework/drop/add features to match actual backend behavior and the user-owned workflow.
@@ -297,7 +302,7 @@ Non-technical coworkers use the existing mock UI, audited and integrated with th
 - `apps/web`: React + TypeScript SPA with an API client generated from the server's OpenAPI schema.
 - Feature disposition audit of the existing artifact, including all screens/controls and mock-data dependencies.
 - Real browser authentication/session flow on the same stable users as CLI/API.
-- Mixed-file upload, language/mode selection, real job progress, owned history, download and fit report views, including failure/recovery states.
+- Mixed-file upload, language/mode selection, real job progress, owned history, download and a stage-specific Skip layout check control, including failure/recovery states. Follow the progress plan for cooperative stopping, saving and cache exclusion; no required fit-report view or unresolved-section UI.
 - Production mocks/simulated completion removed; unsupported previews/fix actions reworked or removed rather than implying P7 functionality.
 - Built SPA served by the server; web build, lint, and tests in CI.
 

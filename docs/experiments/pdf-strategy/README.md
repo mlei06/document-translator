@@ -1,6 +1,6 @@
 # PDF Strategy Experiment (P4.0, Closed)
 
-Closed 2026-09-29 with [ADR-014](../../decisions/ADR-014-pdf-strategy.md). Host: Windows 11 Pro 26200, Python 3.14.7, PyMuPDF 1.28.2 (MuPDF inside the wheel). All documents are synthetic.
+Closed 2026-09-29 with [ADR-018](../../decisions/ADR-018-pdf-strategy.md). Host: Windows 11 Pro 26200, Python 3.14.7, PyMuPDF 1.28.2 (MuPDF inside the wheel). All documents are synthetic.
 
 ## Inputs
 

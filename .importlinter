@@ -138,7 +138,7 @@ protected_modules =
 allowed_importers = doctranslator_core.engines.mt
 
 [importlinter:contract:pdf-library-contained]
-name = ADR-014: the PDF library is used only by the PDF format package (and rendering, P7)
+name = ADR-018: the PDF library is used only by the PDF format package (and rendering, P7)
 type = protected
 protected_modules = pymupdf
 allowed_importers =

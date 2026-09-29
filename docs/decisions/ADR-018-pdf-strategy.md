@@ -1,4 +1,4 @@
-# ADR-014 - PDF Strategy: Targeted Text Replacement with PyMuPDF
+# ADR-018 - PDF Strategy: Targeted Text Replacement with PyMuPDF
 
 Status: Accepted 2026-09-29 (P4.0 gate). The owner approved PyMuPDF on 2026-09-28 ("just use pymupdf"), accepting its AGPL-3.0 license for this internal service. Evidence: [PDF strategy experiment](../experiments/pdf-strategy/README.md).
 

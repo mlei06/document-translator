@@ -89,6 +89,8 @@ Visual design exploration and source assets gathered ahead of the phase that imp
 
 Small design experiments and their evidence, separate from production code. `xlsx-roundtrip/spike.py` is an isolated, dependency-pinned script comparing two XLSX write strategies. Its disposable workbooks and machine-readable results live in gitignored `data/experiments/xlsx-roundtrip/`; the report and script are tracked here. These scripts are outside the production test/typecheck paths and are verified separately using their documented commands.
 
+`desktop-packaging/` contains the D0 Python runtime packaging probe and build instructions. It exercises the existing CLI with a separately installed model; it is not a production desktop app or persistent server. Generated bundles and execution evidence stay in ignored `data/experiments/desktop-packaging/`.
+
 ## `/.agents`
 
 Agent role prompts (`prompts/`) and reusable skills (`skills/`). See `AGENTS.md`.
