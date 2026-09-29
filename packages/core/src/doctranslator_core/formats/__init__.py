@@ -102,4 +102,6 @@ def open_adapter(
 
             return XlsxAdapter(path, limits)
         case DocumentFormat.PDF:
-            raise UnsupportedDocumentError("PDF translation is not available in this build")
+            from doctranslator_core.formats.pdf import PdfAdapter
+
+            return PdfAdapter(path, limits)

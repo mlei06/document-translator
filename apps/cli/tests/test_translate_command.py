@@ -11,6 +11,7 @@ import pytest
 from support.fake_llm import FakeLlm, fake_llm_server
 from support.fakes import copy_fixture
 from support.fonts import synthetic_font_manifest
+from support.pdf import page_text, write_mixed
 
 CLI = [sys.executable, "-c", "from doctranslator_cli.main import main; main()"]
 
@@ -64,6 +65,17 @@ def test_translates_each_office_format(tmp_path: Path, llm: FakeLlm, fixture: st
     assert report["counts"]["unique_inputs"] > 0
     assert llm.requests
     assert "test-key" not in result.stderr + result.stdout
+
+
+def test_translates_pdf(tmp_path: Path, llm: FakeLlm) -> None:
+    source = write_mixed(tmp_path / "mixed.pdf")
+    result = run(["translate", source.name, "--to", "en", "--json"], tmp_path, llm_env(llm))
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["format"] == "pdf"
+    assert payload["source_resolved"] == "zh"
+    assert payload["fit_report"]["inspected"] == 10
+    assert "EN:" in page_text(tmp_path / "mixed.en.pdf")
 
 
 def test_txt_with_json_output_and_auto_detection(tmp_path: Path, llm: FakeLlm) -> None:

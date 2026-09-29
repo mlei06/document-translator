@@ -45,7 +45,9 @@ uv run doctranslator translate deck.pptx --to en --from zh --mode llm --json
 
 Output defaults to `<name>.<target><suffix>` beside the input and is never overwritten; `<output>.report.json` holds diagnostics and the fit report. Exit codes: 0 success (warnings possible), 2 invalid input/configuration, 3 engine failure, 4 output path, 130 interrupted. Nothing is stored on a server and there is no cache or history (ADR-010).
 
-Fit uses a font manifest built from `DOCTRANSLATOR_FONT_DIRS` (directories separated by `;` on Windows, `:` elsewhere). The default is the platform font directories; on Windows that includes the user font directory and Office's cloud-font cache, where Office keeps fonts such as Aptos and DengXian. The manifest is cached in `%LOCALAPPDATA%\doctranslator\font-manifest.json` (or `~/.cache/doctranslator/`) and rebuilt for changed files only. Missing fonts make affected containers unresolved; they never block translation.
+Fit uses a font manifest built from `DOCTRANSLATOR_FONT_DIRS` (directories separated by `;` on Windows, `:` elsewhere). The default is the platform font directories; on Windows that includes the user font directory and Office's cloud-font cache, where Office keeps fonts such as Aptos and DengXian. The manifest is cached in `%LOCALAPPDATA%\doctranslator\font-manifest.json` (or `~/.cache/doctranslator/`) and rebuilt for changed files only. Missing fonts make affected containers unresolved; they never block translation. PDF output embeds (subset) the provisioned fonts it uses and falls back to PyMuPDF's built-in faces when none fits; provision the fonts your documents use (and Microsoft YaHei/DengXian, Yu Gothic or Noto CJK for Chinese/Japanese targets) for the closest look.
+
+PDF support uses PyMuPDF (AGPL-3.0), accepted by the owner for the internal service. Before distributing any application that contains it (for example the ADR-013 desktop app), comply with the AGPL for that application or obtain an Artifex commercial license ([ADR-014](decisions/ADR-014-pdf-strategy.md)).
 
 ## Configuration and Secrets
 

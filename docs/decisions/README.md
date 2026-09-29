@@ -21,5 +21,6 @@ An ADR exists so that an agent working on this months later understands a decisi
 | [011 document translation contract](ADR-011-document-translation-contract.md) | Accepted (formatting, writers, detection, identity) |
 | [012 lightweight fit](ADR-012-lightweight-fit-policy.md) | Accepted by owner; implementation reconciliation pending |
 | [013 deployment profiles](ADR-013-deployment-profiles.md) | Accepted direction; desktop packaging/design gate pending |
+| [014 PDF strategy](ADR-014-pdf-strategy.md) | Accepted (PyMuPDF targeted replacement; amends ADR-003's capability table for PDF) |
 
 Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

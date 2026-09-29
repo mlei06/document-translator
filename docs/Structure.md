@@ -36,7 +36,7 @@ Reusable libraries.
 
 ### `/packages/core`
 
-`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Implemented: the text and document APIs, engines, `inline`/`protect`/`detect`/`identity`, the pipeline, TXT/PPTX/DOCX/XLSX format packages (each Office package has `adapter.py` and `layout.py`; `formats/_ooxml/` holds safe package access and run-style tables) and `fit/` (fonts, measure, fitter). `formats/pdf/` and `render/` are scaffolds (P4, P7).
+`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Implemented: the text and document APIs, engines, `inline`/`protect`/`detect`/`identity`, the pipeline, TXT/PPTX/DOCX/XLSX/PDF format packages (each Office package and PDF has `adapter.py` and `layout.py`; `formats/_ooxml/` holds safe package access and run-style tables) and `fit/` (fonts, measure, fitter). `render/` is a scaffold (P7).
 
 ## `/apps`
 
@@ -61,6 +61,7 @@ Development, migration, deployment, and maintenance scripts.
 - `convert_mt_model.py` converts SMALL-100 to CTranslate2 in a throwaway environment with PyTorch (ADR-006; usage in its docstring).
 - `native_office_check.ps1` opens documents read-only in native Word/Excel/PowerPoint, detects repair, optionally exports PDFs and reads Excel formula values (release evidence).
 - `render_pdf_pages.py` rasterizes PDFs to PNG for visual spot checks.
+- `pdf_independent_check.py` checks translated PDFs with PDFium (the Chrome/Edge PDF engine, in a throwaway environment): page geometry, remaining source text in PDFium's own extraction, and page renders (release evidence).
 - `acceptance_local.py` runs every fixture format through the real local CLI with both engines and records outcomes, fit reports and timings.
 
 ## `/docs`

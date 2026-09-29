@@ -79,9 +79,9 @@ Important qualifications:
 - A hit means the **same input bytes and output fingerprint**, not merely the same filename or some matching text. It reuses the already post-processed result and report, so no model or fit work is repeated.
 - `force_retranslate` bypasses both lookups. Concurrent misses can still perform duplicate work; the accepted design does not lock identical requests together.
 - The database stores job/cache metadata and blob references. Original documents, outputs and reports are files in blob storage, not database payloads.
-- A format adapter is a reader/writer with preserved document state. There is no agreed universal conversion to DOCX, PDF or plain text. PDF's strategy is still undecided.
+- A format adapter is a reader/writer with preserved document state. There is no universal conversion to DOCX, PDF or plain text. PDF uses targeted text replacement in the PDF itself ([ADR-014](decisions/ADR-014-pdf-strategy.md)).
 - The original text, styles and layout measurements must remain available throughout fitting. Fit never compares the translation with a source layout that has already been overwritten.
-- TXT bypasses fit because it has no fixed-size text containers. Document translation first arrives in P2; automatic fit arrives in P3, and PDF in P4. P2 output must say that fit has not run.
+- TXT bypasses fit because it has no fixed-size text containers. PPTX, DOCX and XLSX fit through the shared estimator (P3); PDF fits while its writer places each translation (ADR-014).
 - The MCP upload/download mechanism still needs a wire contract. The arrow above is a logical submission, not a claim that every MCP client can stream a file identically.
 
 ## Deployment Profiles
@@ -148,7 +148,7 @@ Lenovo managed rollout and eventual OEM preload follow a working installer app. 
 
 | Area | Implemented | Planned |
 |------|-------------|---------|
-| Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | PDF (P4); rendering/edits (P7) |
+| Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; PDF adapter with targeted replacement and writer-driven fit (ADR-014); ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | Rendering/edits (P7) |
 | Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
 | CLI | Local `doctranslator translate` (both engines, fit with a configured font manifest, JSON result and report file) | Service commands (P5) |
 | Server | Module scaffolds | Persistence, jobs/workers, auth and REST (P5); MCP (P7) |
@@ -222,7 +222,7 @@ The format-specific code describes and edits a document; the generic pipeline ch
 | `fit/` | Format-neutral measurement, font lookup and fit policy |
 | `render/` | Shared conversion/rasterization infrastructure used by format packages |
 
-`DocumentAdapter`, `LayoutSupport`, `RenderSupport` and `EditSupport` are separate capabilities, implemented only where applicable. Engines and formats never import one another. The [core API reference](#core-api-reference) retains the complete implemented text contract. Exact document API signatures remain in the [P2 draft](plans/P2-document-translation-and-cli.md) until approved.
+`DocumentAdapter`, `LayoutSupport`, `PlacementFit`, `RenderSupport` and `EditSupport` are separate capabilities, implemented only where applicable (`PlacementFit` replaces `LayoutSupport` for PDF, whose writer lays out and fits text itself; ADR-014). Engines and formats never import one another. The [core API reference](#core-api-reference) retains the complete implemented text contract. Exact document API signatures remain in the [P2 draft](plans/P2-document-translation-and-cli.md) until approved.
 
 ### Server
 
@@ -535,21 +535,25 @@ Shared strings may be referenced by many cells; retain their locations and rich 
 
 ### PDF
 
-Produce a translated PDF with page layout preserved as closely as practical. OCR is out of scope: text inside scanned images is not made translatable by this flow. P4 must select between editing text/layout in PDF and an intermediate editable representation followed by re-rendering. No universal converter or round-trip fidelity has been chosen.
+Produce a translated PDF with page layout preserved as closely as practical. OCR is out of scope: text inside scanned images is not made translatable by this flow. [ADR-014](decisions/ADR-014-pdf-strategy.md) selects targeted replacement in the PDF with PyMuPDF: remove only the translated characters (artwork, images, links and untranslated text stay) and place each translation with MuPDF's HTML layout, which also performs the ADR-012 fit.
 
 ```mermaid
 flowchart TD
-    IN["PDF input"] --> READ["PDF adapter using the<br/>strategy selected in P4"]
-    READ --> TEXT["Extract supported text blocks<br/>and source locations"]
-    READ --> BASE["Original block geometry,<br/>fonts and rendered extent"]
+    IN["PDF input"] --> CHECK{"Encrypted, signed<br/>or no text?"}
+    CHECK -->|Yes| REJECT["Typed rejection<br/>(no_extractable_text for scans)"]
+    CHECK -->|No| READ["Paragraph units from<br/>MuPDF text layout"]
+    READ --> TEXT["Units with inline styles,<br/>list markers held back"]
+    READ --> BASE["Original geometry, shapes,<br/>artwork and neighbours"]
     TEXT --> CORE["Shared translation"]
-    CORE --> FIT["Fit translated blocks<br/>against original allowance"]
-    BASE --> FIT
-    FIT --> WRITE["Place text / reconstruct PDF<br/>under the selected strategy"]
-    WRITE --> OUT["Translated PDF and fit report"]
+    CORE --> REMOVE["Redact translated characters<br/>and their underlines only"]
+    BASE --> REGION["Region per unit: enclosing shape<br/>or free space, alignment"]
+    REMOVE --> PLACE["insert_htmlbox with the<br/>ADR-012 floor as scale_low"]
+    REGION --> PLACE
+    PLACE --> VERIFY["Save (fonts subset), reopen,<br/>verify text and geometry"]
+    VERIFY --> OUT["Translated PDF and fit report"]
 ```
 
-Font embedding, reading order, complex scripts, clipping and reconstruction artifacts are strategy-selection criteria. PyMuPDF is the anticipated format/render dependency within ADR-003's import boundaries, not evidence that the PDF algorithm is implemented. The adapter must distinguish unsupported/no-extractable-text content from an empty successful translation.
+Units, fonts, removal, placement, fit outcomes, kept/reported content (rotated, unmapped, image-heavy pages) and verification are specified in ADR-014; supported cases and evidence are in the [PDF strategy experiment](experiments/pdf-strategy/README.md). PyMuPDF (AGPL, accepted by the owner for the internal service; revisit before any distribution) is imported only by `formats.pdf` and `render`.
 
 ## MCP Visual Review
 
@@ -626,7 +630,6 @@ The high-level upload -> lookup -> job -> worker -> adapter -> model -> fit -> w
 | XLSX recalculation | Sheet names stay unchanged by owner decision; preserving formula caches is not the same as preserving their meaning after cell translation. | Finish proposed ADR-009 with native tests |
 | PPTX/DOCX serialization | Candidate libraries may not preserve unsupported structures; XLSX findings cannot establish their behavior. | P2.0 format-specific experiments |
 | Font measurement / shrink policy | Lightweight supported estimates with explicit uncertainty; no native parity guarantee. | ADR-012; bounded P3.0 closure |
-| PDF read/write strategy | Reconstructing PDF text while preserving layout has different tradeoffs from Office package edits. | P4 strategy ADR |
 | Queue race and cancellation contract | Progress is not a lease heartbeat; stale attempts must never publish. Current ADR-008 needs exact predicates and tests. | P5.0 worker design |
 | Identity, retention and limits | Downloads/edits must be owned and uploads bounded before colleagues use the server. Shared-cache timing is an accepted signal that auth design must revisit. | P5.0 |
 | MCP transfer / rendering / edits | Logical file submission does not define transport, and vision review requires safely rendered pages and constrained edit operations. | P7, after P4/P5 and network verification |
@@ -813,10 +816,10 @@ Stable locations are strings built from part and structure, never Python object 
 | `identity.py` | `prepare_identity`, `output_fingerprint`, strategy version constants |
 | `document.py` | `Paragraph(id, location, nodes)` and the layout container types used by fit (P3) |
 | `pipeline.py` | Extract, detect, protect/encode, deduplicate, translate in batches with validation/projection/fallback, apply, fit, write-verify-publish |
-| `formats/base.py` | `DocumentAdapter` ABC: `paragraphs()`, `apply(paragraph_id, nodes, target)`, `save(path)`, `diagnostics`, `close()`; `LayoutSupport` ABC (P3) |
+| `formats/base.py` | `DocumentAdapter` ABC: `paragraphs()`, `apply(paragraph_id, nodes, target)`, `save(path)`, `verify_output(reopened)` (format checks on the written file, default none), `diagnostics`, `close()`; `LayoutSupport` ABC (P3); `PlacementFit` ABC: `place(options, fonts)` returns one `FitEntry` or `None` (fit at original sizes) per changed unit (PDF) |
 | `formats/__init__.py` | `detect_format(path)`, `open_adapter(format, path, limits)` |
 | `formats/_ooxml/` | Safe ZIP reading with limits, secure lxml parsing, relationship resolution, targeted part writer |
-| `formats/<format>/` | Format adapters (TXT, PPTX, DOCX, XLSX; PDF in P4); `layout.py` implements `LayoutSupport` for PPTX, DOCX and XLSX |
+| `formats/<format>/` | Format adapters (TXT, PPTX, DOCX, XLSX, PDF); `layout.py` implements `LayoutSupport` for PPTX, DOCX and XLSX; `formats/pdf/layout.py` holds PDF regions, alignment, font choice and placement |
 | `fit/fonts.py`, `fit/measure.py`, `fit/fitter.py` | Font manifest and resolution; HarfBuzz estimator; ADR-012 policy. Supported cases and limits: [fit experiment report](experiments/fit-measurement/README.md) |
 
 An adapter reads the file once and keeps its own parsed state. `paragraphs()` returns every translatable paragraph in document order with inline nodes whose style ids and object keys only the adapter interprets. `apply` replaces a paragraph's content: the adapter writes one run per `Text`/`Keep` with the style's saved properties, re-inserts the original object elements by identity and rebuilds wrappers. `save` writes the package, changing only parts that were modified.

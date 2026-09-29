@@ -6,9 +6,9 @@ Evidence for the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md). Every row 
 
 Branch: `release/p2-p6` (baseline commit `57a7671`, "Add P2-P6 release plans and design material").
 
-**Current phase and step:** P3 fit integrated under owner ADR-012 (PPTX/DOCX/XLSX, saved-output verification, corpus and native spot checks; see `docs/experiments/fit-measurement/README.md`). Next: P4 (PDF), then P5 (service), then P6 (web UI).
+**Current phase and step:** P4 PDF implemented and locally accepted (ADR-014; `docs/experiments/pdf-strategy/README.md`). Next: P5 (service), then the R01-R14 gate, then P6 (web UI).
 
-**Owner decisions during this run (2026-09-28):** ADR-012 lightweight best-effort fit (supersedes native-parity fit); ADR-013 deployment profiles and the desktop/internal-app plan (follow-on tracks, not part of P2-P6); P6 web UI keeps every mock feature except prompt/comment-driven document edits and fit-check notifications (fit runs silently; reports stay stored for diagnostics); all COMET scoring stopped by the owner.
+**Owner decisions during this run (2026-09-28):** ADR-012 lightweight best-effort fit (supersedes native-parity fit); ADR-013 deployment profiles and the desktop/internal-app plan (follow-on tracks, not part of P2-P6); P6 web UI keeps every mock feature except prompt/comment-driven document edits and fit-check notifications (fit runs silently; reports stay stored for diagnostics); all COMET scoring stopped by the owner; PyMuPDF approved for PDF (AGPL accepted for the internal service, recorded in ADR-014).
 
 **P1.1 baselines paused by the owner:** the SMALL-100 full run is translated but unscored (`data/eval/runs/20260928T055619Z-mt-alirezamsh--small100-ct2-int8`; rescore with `doctranslator-eval score <run_dir>`, no retranslation); the Gemma run was not captured. CPU-only COMET needed roughly 3 h and ~50 core-hours on this laptop. R02's engine-quality evidence depends on these baselines.
 
@@ -20,10 +20,12 @@ Branch: `release/p2-p6` (baseline commit `57a7671`, "Add P2-P6 release plans and
 - P2 implemented (`6c46841`, `68c67d6`): document API, detection, protection, tags/projection/per-span fallback, targeted OOXML adapters for PPTX/DOCX/XLSX, TXT adapter, local `doctranslator translate` CLI; 165 tests; six checks pass.
 - P2 real-engine local acceptance (`scripts/acceptance_local.py`, `data/acceptance/p2/local/summary.json`): all four formats x both engines exit 0, inputs unchanged, only reported out-of-scope parts keep source text; all six Office outputs open natively (Office 16 build 20326, `data/acceptance/p2/local/native.jsonl`). Two MT visual defects found in PowerPoint renders were fixed with regression tests.
 
+- P3 fit integrated under ADR-012 for PPTX/DOCX/XLSX with saved-output verification, corpus and native spot checks (`40d73af`..`d6e23c3`; `docs/experiments/fit-measurement/README.md`).
+- P4 PDF: strategy spike and ADR-014 (PyMuPDF 1.28.2 targeted replacement, writer-driven fit), `formats/pdf` adapter, pipeline `PlacementFit` and `verify_output`, CLI; 17 PDF tests plus a CLI PDF test. Real-engine acceptance (both engines, a PowerPoint-exported deck and a text page, zh to en): all exit 0, verification passed, inputs unchanged; independent PDFium 153.0.7999.0 check finds 0 source CJK characters and matching geometry (`data/acceptance/p4/local/`, `pdfium.jsonl`).
+
 **Next**
 
-- P3.0: measurement module (HarfBuzz + fontTools), PPTX/DOCX/XLSX layout descriptions, native comparison against PowerPoint/Word/Excel, ADR-012, then P3 implementation.
-- P1.1: MT run translated (`data/eval/runs/20260928T055619Z-mt-...`); COMET scoring and the LLM run are running as a detached process (log `scratchpad/baselines3.log`, see blockers). The first LLM run failed with HTTP 429 while the formatting experiment used the same server.
+- P5.0/P5: persistent service (users/API keys, jobs/workers/leases, blobs, cache, batches, REST `/v1`, service CLI, retention, backup/restore), then R01-R14.
 
 **Open blockers and environment limits**
 
@@ -83,3 +85,4 @@ Notes for a fresh session: background shells die with the session, so long jobs 
 | Commit | Six root checks | Frontend checks | CI run |
 |--------|-----------------|-----------------|--------|
 | `57a7671` | Pass (87 passed, 2 deselected) | n/a | Not run (branch not pushed) |
+| P4 commit (this row's commit) | Pass (197 passed, 2 deselected) | n/a | Not run (branch not pushed) |

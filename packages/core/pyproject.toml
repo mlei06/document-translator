@@ -9,6 +9,7 @@ dependencies = [
     "lingua-language-detector>=2.2,<2.3",
     "lxml>=6.1",
     "pydantic",
+    "pymupdf==1.28.2",
     "truststore",
     "uharfbuzz>=0.50",
 ]

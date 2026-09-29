@@ -6,9 +6,16 @@ from pathlib import Path
 
 from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.inline import Inline
-from doctranslator_core.types import DocumentDiagnostic, DocumentFormat, Language
+from doctranslator_core.types import (
+    DocumentDiagnostic,
+    DocumentFormat,
+    FitEntry,
+    FitOptions,
+    FontManifest,
+    Language,
+)
 
-__all__ = ["DocumentAdapter", "LayoutSupport"]
+__all__ = ["DocumentAdapter", "LayoutSupport", "PlacementFit"]
 
 
 class LayoutSupport(ABC):
@@ -25,6 +32,19 @@ class LayoutSupport(ABC):
 
     @abstractmethod
     def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None: ...
+
+
+class PlacementFit(ABC):
+    """Formats whose writer lays out translated text itself (PDF; ADR-012, ADR-014).
+
+    Instead of describing containers for the shared estimator, the adapter places every changed
+    text unit with its writer's layout facility, shrinking within the ADR-012 floors, and reports
+    one outcome per unit it placed.
+    """
+
+    @abstractmethod
+    def place(self, options: FitOptions, fonts: FontManifest | None) -> list[FitEntry | None]:
+        """Place every translated unit; ``None`` for a unit that fit at its original sizes."""
 
 
 class DocumentAdapter(ABC):
@@ -50,6 +70,12 @@ class DocumentAdapter(ABC):
     @abstractmethod
     def save(self, path: Path) -> None:
         """Write the (translated) document to ``path``, which does not exist yet."""
+
+    def verify_output(self, reopened: DocumentAdapter) -> None:  # noqa: B027
+        """Check the written file, reopened as ``reopened``, against what this adapter wrote.
+
+        Raise ``InvalidDocumentError`` on a mismatch. Default: no format-specific checks.
+        """
 
     def close(self) -> None:  # noqa: B027 - optional hook with a no-op default
         """Release resources. Default: nothing to release."""

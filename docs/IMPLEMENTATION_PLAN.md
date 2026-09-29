@@ -211,7 +211,7 @@ Prioritize translation accuracy and preserved formatting; mitigate obvious measu
 
 ## P4 - PDF Support
 
-Board: [Feature #9012](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9012) | Status: Not started
+Board: [Feature #9012](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9012) | Status: Implemented on `release/p2-p6` (2026-09-29); closure needs reviewed-commit CI and service acceptance with PDF
 
 Plan: [P4 strategy and implementation](plans/P4-pdf-support.md). Required before the combined backend release gate.
 
@@ -226,7 +226,7 @@ Translate PDF files with layout preserved as closely as practical, including the
 ### Deliverables
 
 - ADR for the PDF strategy (translating in place versus converting through an editable format).
-- `formats/pdf/`: `DocumentAdapter` and `LayoutSupport`.
+- `formats/pdf/`: `DocumentAdapter` and `PlacementFit` (the writer fits text itself; ADR-014 amends the earlier `LayoutSupport` expectation).
 - PDF fixtures, including Chinese source documents.
 
 ### Completion Criteria

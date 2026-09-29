@@ -25,7 +25,7 @@ STRATEGIES: dict[str, str] = {
     "pptx": "pptx-v1",
     "docx": "docx-v1",
     "xlsx": "xlsx-v1",
-    "pdf": "pdf-v1",
+    "pdf": "pdf-v1-pymupdf-1.28.2",
     "fit": "fit-v1",
     "measure": "harfbuzz-v1",
 }

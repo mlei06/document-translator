@@ -22,7 +22,7 @@ from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.fit.fitter import fit_container
 from doctranslator_core.fit.fonts import FontLibrary
 from doctranslator_core.formats import DocumentAdapter, detect_format, open_adapter
-from doctranslator_core.formats.base import LayoutSupport
+from doctranslator_core.formats.base import LayoutSupport, PlacementFit
 from doctranslator_core.identity import STRATEGIES
 from doctranslator_core.inline import (
     Encoded,
@@ -393,7 +393,7 @@ def _write_verify_publish(
     try:
         report(ProgressPhase.WRITE, 0, 1)
         adapter.save(temporary)
-        _verify(temporary, fmt, limits, options, expected)
+        _verify(adapter, temporary, fmt, limits, options, expected)
         report(ProgressPhase.WRITE, 1, 1)
         publish(temporary, output_path)
     finally:
@@ -402,14 +402,16 @@ def _write_verify_publish(
 
 
 def _verify(
+    adapter: DocumentAdapter,
     path: Path,
     fmt: DocumentFormat,
     limits: DocumentLimits,
     options: DocumentTranslationOptions,
     expected: dict[str, list[list[float]]] | None,
 ) -> None:
-    """Reopen the written file as the same format, read its paragraphs again and check that every
-    container's run sizes in the file are the sizes the fit check applied."""
+    """Reopen the written file as the same format, read its paragraphs again, check that every
+    container's run sizes in the file are the sizes the fit check applied, then run the format's
+    own output checks."""
     if detect_format(path, limits) is not fmt:
         raise InvalidDocumentError("the written output is not a valid document")
     reopened = open_adapter(fmt, path, limits, options)
@@ -417,6 +419,7 @@ def _verify(
         reopened.paragraphs()
         if expected is not None and _run_sizes(reopened) != expected:
             raise InvalidDocumentError("the written output does not contain the fitted font sizes")
+        adapter.verify_output(reopened)
     finally:
         reopened.close()
 
@@ -491,6 +494,8 @@ def _fit(
     shared: FontLibrary | None = None,
 ) -> FitReport:
     """Fit every container against its original and apply the chosen sizes (ADR-012)."""
+    if isinstance(adapter, PlacementFit):
+        return _placement_report(adapter.place(options, fonts), fmt, options, fonts, report)
     if originals is None or not isinstance(adapter, LayoutSupport):
         if fmt is DocumentFormat.TXT:  # no fixed-size containers
             return FitReport(
@@ -564,6 +569,39 @@ def _fit(
         options=options,
         inspected=len(originals),
         unchanged=unchanged,
+        adjusted=adjusted,
+        unresolved=unresolved,
+        entries=entries,
+    )
+
+
+def _placement_report(
+    outcomes: list[FitEntry | None],
+    fmt: DocumentFormat,
+    options: FitOptions,
+    fonts: FontManifest | None,
+    report: _Report,
+) -> FitReport:
+    """The fit report for a format whose writer placed and fitted every changed unit."""
+    report(ProgressPhase.FIT, len(outcomes), len(outcomes))
+    entries = [e for e in outcomes if e is not None]
+    adjusted = sum(1 for e in entries if e.status == "adjusted")
+    unresolved = len(entries) - adjusted
+    if not outcomes:
+        status = FitStatus.NOT_APPLICABLE
+    elif unresolved:
+        status = FitStatus.UNRESOLVED
+    elif adjusted:
+        status = FitStatus.ADJUSTED
+    else:
+        status = FitStatus.PASSED
+    return FitReport(
+        format=fmt,
+        status=status,
+        measurement=STRATEGIES[fmt.value],
+        font_manifest=fonts.digest if fonts is not None else None,
+        options=options,
+        inspected=len(outcomes),
         adjusted=adjusted,
         unresolved=unresolved,
         entries=entries,

@@ -136,3 +136,13 @@ protected_modules =
     ctranslate2
     sentencepiece
 allowed_importers = doctranslator_core.engines.mt
+
+[importlinter:contract:pdf-library-contained]
+name = ADR-014: the PDF library is used only by the PDF format package (and rendering, P7)
+type = protected
+protected_modules = pymupdf
+allowed_importers =
+    doctranslator_core.formats.pdf
+    doctranslator_core.formats.pdf.**
+    doctranslator_core.render
+    doctranslator_core.render.**

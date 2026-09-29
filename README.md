@@ -155,9 +155,9 @@ Lenovo fleet deployment and eventual OEM preload require separate distribution, 
 ## Open Questions
 
 - Where do the domain benchmark's technical sentences and their reference translations come from (ADR-005)? Until sourced, quality is measured on the general-domain FLORES+ set only.
-- PDF strategy: translate the PDF in place, or convert to an editable format, translate, and re-render?
+- PDF strategy: resolved by [ADR-014](docs/decisions/ADR-014-pdf-strategy.md) (translate in place with PyMuPDF). PyMuPDF is AGPL-licensed: before a desktop, fleet or OEM build ships it, decide between AGPL compliance and an Artifex commercial license.
 - Deployment must supply the explicit font manifest used by best-effort fit; unavailable fonts produce unresolved diagnostics under ADR-012. Font installation/licensing is an operational concern, not a reason for runtime downloads.
-- Fit defaults are settled by ADR-012 (70% and 8pt); implementation reconciliation and bounded acceptance remain pending.
+- Fit defaults are settled by ADR-012 (70% and 8pt) and implemented for PPTX, DOCX, XLSX and PDF with bounded acceptance evidence ([fit report](docs/experiments/fit-measurement/README.md), [PDF report](docs/experiments/pdf-strategy/README.md)); reviewed-commit CI remains pending.
 - What authentication do the web GUI and MCP server need when exposed on the laptop's IP, and later to platforms like Copilot (which typically expect OAuth or API key auth)?
 - Copilot runs in Microsoft's cloud, so documents submitted through it pass through the company's Microsoft 365 tenant. Does that count as "inside the company network" for the confidentiality requirement? Needs a decision before Copilot integration.
 - Maximum supported file size and expected job volume?
