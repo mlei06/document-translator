@@ -24,6 +24,7 @@ An ADR exists so that an agent working on this months later understands a decisi
 | [014 storage, ownership and retranslation](ADR-014-storage-ownership-and-retranslation.md) | Accepted; implementation in progress on `release/p2-p6` |
 | [015 authentication and ownership](ADR-015-authentication-and-ownership.md) | Accepted (per-user opaque API keys, owner-filtered queries, TLS for network binds); its cache side-channel section is superseded by ADR-014 (owner-scoped reuse) |
 | [016 service execution and operations](ADR-016-service-execution-and-operations.md) | Accepted (attempt claim tokens amending ADR-008; blob pins and GC; backup/restore); its cache and retention defaults are superseded by ADR-014 |
+| [017 web UI service extensions](ADR-017-web-ui-service-extensions.md) | Accepted (browser sessions, detection via saved documents, preview packages, bubble dismissal, SPA hosting) |
 | [018 PDF strategy](ADR-018-pdf-strategy.md) | Accepted (PyMuPDF targeted replacement; amends ADR-003's capability table for PDF) |
 
 Proposed ADRs are review material, not architecture authority over an accepted decision or the README. Accepted server decisions describe the intended design; they do not imply those features are implemented.

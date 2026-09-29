@@ -1,4 +1,10 @@
-"""Retention (ADR-016): expire rows transactionally, then delete unreferenced blobs safely."""
+"""Retention (ADR-014, ADR-016): expire rows transactionally, then delete unreferenced blobs.
+
+Saved documents and their current translations never expire (they count against the owner's
+quota). Temporary results and superseded translations stop being downloadable at their advertised
+``expires_at``; terminal job and batch metadata without a live result is kept for
+``job_retention_days``.
+"""
 
 import contextlib
 import logging
@@ -23,8 +29,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class RetentionReport:
-    documents: int
-    cache_entries: int
+    results: int
     jobs: int
     batches: int
     pins: int
@@ -37,16 +42,14 @@ def run_retention(
 ) -> RetentionReport:
     now = utcnow()
     with db.session() as session:
-        documents = result_repo.delete_expired_documents(session, now)
-    with db.session() as session:
-        cache_entries = result_repo.delete_stale_results(
-            session, now - timedelta(days=settings.cache_retention_days)
-        )
+        results = result_repo.delete_expired_results(session, now)
     job_cutoff = now - timedelta(days=settings.job_retention_days)
     with db.session() as session:
         batches = batch_repo.delete_old(session, job_cutoff)
     with db.session() as session:
         jobs = job_repo.delete_finished(session, job_cutoff)
+    with db.session() as session:
+        result_repo.purge_deleted_documents(session)
     with db.session() as session:
         pins = blob_repo.delete_expired_pins(session, now)
     grace = timedelta(hours=settings.staging_retention_hours)
@@ -59,6 +62,6 @@ def run_retention(
                 if path.stat().st_mtime < cutoff:
                     shutil.rmtree(path, ignore_errors=True)
     blobs = store.collect(holder=holder, pending_grace=grace, now=now)
-    report = RetentionReport(documents, cache_entries, jobs, batches, pins, staging, blobs)
+    report = RetentionReport(results, jobs, batches, pins, staging, blobs)
     logger.info("retention: %s", report)
     return report

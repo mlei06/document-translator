@@ -29,6 +29,7 @@ from doctranslator_core.types import (
 )
 from doctranslator_server.db import Database
 from doctranslator_server.jobs.engines import EngineCatalog
+from doctranslator_server.jobs.preview import build_preview
 from doctranslator_server.jobs.queue import Attempt, Output, Queue
 from doctranslator_server.jobs.storage import BlobStore
 from doctranslator_server.settings import ServerSettings
@@ -50,6 +51,7 @@ class DocumentRunner(Protocol):
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
+        should_skip_fit: Callable[[], bool],
     ) -> DocumentTranslationResult: ...
 
 
@@ -67,9 +69,14 @@ class _CatalogRunner:
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
+        should_skip_fit: Callable[[], bool],
     ) -> DocumentTranslationResult:
         return self._catalog.translator(mode).translate_document(
-            source, output, options=options, on_progress=on_progress
+            source,
+            output,
+            options=options,
+            on_progress=on_progress,
+            should_skip_fit=should_skip_fit,
         )
 
 
@@ -166,10 +173,12 @@ class Worker:
         return True
 
     def process(self, attempt: Attempt) -> None:
-        cached = self._queue.cached(attempt)
-        if cached is not None:
-            published = self._queue.publish(attempt, None, cache_result=cached)
-            logger.info("job %s cache hit at worker (published=%s)", attempt.job_id, published)
+        reusable = self._queue.reusable(attempt)
+        if reusable is not None:
+            published = self._queue.publish(attempt, None, reuse=reusable)
+            logger.info(
+                "job %s reused the current result (published=%s)", attempt.job_id, published
+            )
             if not published:
                 self._after_refused(attempt)
             return
@@ -218,24 +227,30 @@ class Worker:
         shutil.copyfile(self._store.path(attempt.input_hash), source)
         output = work / f"output.{attempt.format}"
         progress = _Progress(self._queue, attempt, heartbeat)
-        result = self._runner.translate(mode, source, output, options, progress)
+        result = self._runner.translate(mode, source, output, options, progress, progress.skip)
         progress.check()
         report = work / "report.json"
         payload = result.model_dump(mode="json", exclude={"output_path", "timings_s"})
         report.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        package = build_preview(attempt.format, source, output, work / "preview.zip")
         stored_output = self._store.put_file(output)
         stored_report = self._store.put_file(report)
+        stored_preview = self._store.put_file(package) if package is not None else None
+        pins = [stored_output.pin_id, stored_report.pin_id]
+        if stored_preview is not None:
+            pins.append(stored_preview.pin_id)
         published = self._queue.publish(
             attempt,
             Output(
                 output_blob=stored_output.sha256,
                 report_blob=stored_report.sha256,
-                pins=[stored_output.pin_id, stored_report.pin_id],
+                preview_blob=stored_preview.sha256 if stored_preview else None,
+                pins=pins,
                 source_resolved=result.source_resolved.value if result.source_resolved else None,
                 fit_status=result.fit_status.value,
                 engine=result.engine.model_dump(mode="json"),
             ),
-            cache_result=None,
+            reuse=None,
         )
         if published:
             logger.info(
@@ -245,7 +260,7 @@ class Worker:
                 result.counts.segments,
             )
             return
-        self._store.release_pins([stored_output.pin_id, stored_report.pin_id])
+        self._store.release_pins(pins)
         self._after_refused(attempt)
 
     def _after_refused(self, attempt: Attempt) -> None:
@@ -260,7 +275,8 @@ class _IdentityChangedError(Exception):
 
 
 class _Progress:
-    """The pipeline's progress callback: fenced, throttled writes and cooperative stopping."""
+    """The pipeline's progress callback and fit-skip control: fenced, throttled snapshots
+    (P5-P6 progress plan) and cooperative stopping."""
 
     MIN_INTERVAL = 1.0
 
@@ -269,7 +285,24 @@ class _Progress:
         self._attempt = attempt
         self._heartbeat = heartbeat
         self._last = 0.0
-        self._phase = ""
+        self._phase: str = ""
+        self._skip = False
+        self._checked = 0.0
+
+    def skip(self) -> bool:
+        """``should_skip_fit``: reads the durable request at most once per second."""
+        if self._skip:
+            return True
+        now = time.monotonic()
+        if now - self._checked >= self.MIN_INTERVAL:
+            self._checked = now
+            control = self._queue.control(self._attempt)
+            if not control.owned:
+                raise _StopError("lost")
+            if control.cancel:
+                raise _StopError("cancelled")
+            self._skip = control.skip_fit
+        return self._skip
 
     def check(self) -> None:
         if self._heartbeat.lost.is_set():
@@ -280,12 +313,13 @@ class _Progress:
     def __call__(self, progress: TranslationProgress) -> None:
         self.check()
         now = time.monotonic()
-        phase = progress.phase.value
+        phase = str(progress.phase)
         if phase == self._phase and now - self._last < self.MIN_INTERVAL:
             return
         self._phase, self._last = phase, now
-        owned, cancel = self._queue.progress(self._attempt, phase, progress.done, progress.total)
-        if not owned:
+        control = self._queue.progress(self._attempt, phase, progress.done, progress.total)
+        if not control.owned:
             raise _StopError("lost")
-        if cancel:
+        if control.cancel:
             raise _StopError("cancelled")
+        self._skip = self._skip or control.skip_fit

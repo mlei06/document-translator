@@ -13,6 +13,7 @@ from doctranslator_core.pipeline import translate_document
 from doctranslator_core.types import (
     DocumentTranslationOptions,
     DocumentTranslationResult,
+    FontManifest,
     TranslationMode,
     TranslationProgress,
 )
@@ -47,6 +48,8 @@ class FakeEngines:
         self.before = before
         self.calls = 0
         self.translator = FakeTranslator()
+        self.fonts: FontManifest | None = None
+        """Font manifest for fit (``None``: changed containers are unresolved)."""
 
     @property
     def modes(self) -> list[TranslationMode]:
@@ -72,6 +75,7 @@ class FakeEngines:
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
+        should_skip_fit: Callable[[], bool] | None = None,
     ) -> DocumentTranslationResult:
         self.calls += 1
         if self.before is not None:
@@ -84,6 +88,8 @@ class FakeEngines:
             fingerprint=self._fingerprint(self.loaded_version, mode, options),
             limits=DocumentLimits(),
             on_progress=on_progress,
+            fonts=self.fonts,
+            should_skip_fit=should_skip_fit,
         )
 
 
@@ -103,8 +109,9 @@ class _Runner:
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
+        should_skip_fit: Callable[[], bool],
     ) -> DocumentTranslationResult:
-        return self._engines.translate(mode, source, output, options, on_progress)
+        return self._engines.translate(mode, source, output, options, on_progress, should_skip_fit)
 
 
 def server_settings(tmp_path: Path, **overrides: Any) -> ServerSettings:
@@ -137,7 +144,8 @@ def make_queue(services: Services, clock: Callable[[], datetime] | None = None) 
         services.db,
         lease=timedelta(seconds=settings.lease_s),
         retry_delays=settings.retry_delays_s,
-        document_retention=timedelta(days=settings.document_retention_days),
+        temporary_retention=timedelta(hours=settings.temporary_retention_hours),
+        superseded_retention=timedelta(days=settings.superseded_retention_days),
         **kwargs,
     )
 

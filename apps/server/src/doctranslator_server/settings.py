@@ -39,6 +39,9 @@ class ServerSettings(BaseSettings):
     server_behind_proxy: bool = False
     """A trusted TLS-terminating reverse proxy is in front of a non-loopback bind (ADR-015)."""
 
+    web_dir: Path | None = None
+    """The built web UI (``apps/web/dist``); served at ``/`` when set (ADR-017)."""
+
     workers: int = Field(default=1, ge=0, le=32)
     poll_s: float = Field(default=1.0, gt=0)
     heartbeat_s: float = Field(default=20.0, gt=0)
@@ -50,10 +53,15 @@ class ServerSettings(BaseSettings):
     max_queued_jobs: int = Field(default=1000, ge=1)
     max_queued_jobs_per_user: int = Field(default=200, ge=1)
 
-    cache_retention_days: int = Field(default=30, ge=1)
-    document_retention_days: int = Field(default=90, ge=1)
-    job_retention_days: int = Field(default=90, ge=1)
+    temporary_retention_hours: int = Field(default=24, ge=1)
+    """Temporary job results (``retention=temporary``) are downloadable this long (ADR-014)."""
+    superseded_retention_days: int = Field(default=7, ge=0)
+    """A replaced current translation stays downloadable through its jobs this long."""
+    job_retention_days: int = Field(default=30, ge=1)
+    """Terminal job and batch metadata (without a live result) is kept this long."""
     staging_retention_hours: int = Field(default=24, ge=1)
+    owner_quota_bytes: int = Field(default=20 << 30, ge=1)
+    """Saved library limit per owner: sources plus current translations (no automatic expiry)."""
 
     llm_base_url: HttpUrl | None = None
     llm_api_key: SecretStr | None = None

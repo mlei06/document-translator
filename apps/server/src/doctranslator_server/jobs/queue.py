@@ -1,8 +1,10 @@
-"""Queue transitions as short transactions (ADR-008 as amended by ADR-016).
+"""Queue transitions as short transactions (ADR-008 as amended by ADR-016, storage per ADR-014).
 
 Each method is one database transaction. Everything after a claim is fenced by the attempt's
-claim token; ``publish`` is the only way a job becomes ``succeeded`` from a worker, and it
-publishes the cache row, the owner's document and version 0 together or not at all.
+claim token. ``publish`` is the only way a job becomes ``succeeded`` from a worker: it records the
+job's immutable result and, for a saved document, swaps that document's current translation for
+the language pair, together or not at all. Every terminal transition releases the saved
+document's active target slot.
 """
 
 import secrets
@@ -11,8 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from sqlalchemy import exists, select
+
 from doctranslator_server.db import Database
-from doctranslator_server.db.models import Job, TranslationResult, utcnow
+from doctranslator_server.db.models import Document, Job, utcnow
 from doctranslator_server.db.repositories import blobs as blob_repo
 from doctranslator_server.db.repositories import jobs as job_repo
 from doctranslator_server.db.repositories import results as result_repo
@@ -21,6 +25,8 @@ from doctranslator_server.db.repositories import users as user_repo
 __all__ = ["Attempt", "Output", "Queue"]
 
 type Clock = Callable[[], datetime]
+
+_RELEASE: dict[str, Any] = {"claim_token": None, "lease_until": None, "active_slot": None}
 
 
 class _NotPublishedError(Exception):
@@ -34,6 +40,9 @@ class Attempt:
     job_id: str
     token: str
     owner_id: str
+    document_id: str | None
+    retention: str
+    target: str
     mode: str
     options: dict[str, Any]
     fingerprint: str
@@ -50,10 +59,20 @@ class Output:
 
     output_blob: str
     report_blob: str
+    preview_blob: str | None
     pins: list[str]
     source_resolved: str | None
     fit_status: str
     engine: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class Control:
+    """What the running attempt should do: still owned, cancellation or fit skip requested."""
+
+    owned: bool
+    cancel: bool
+    skip_fit: bool
 
 
 class Queue:
@@ -63,13 +82,15 @@ class Queue:
         *,
         lease: timedelta,
         retry_delays: tuple[float, ...],
-        document_retention: timedelta,
+        temporary_retention: timedelta,
+        superseded_retention: timedelta,
         clock: Clock = utcnow,
     ) -> None:
         self._db = db
         self._lease = lease
         self._retry_delays = retry_delays
-        self._document_retention = document_retention
+        self._temporary = temporary_retention
+        self._superseded = superseded_retention
         self.now = clock
 
     def _retry_at(self, now: datetime, attempts: int) -> datetime:
@@ -115,6 +136,9 @@ class Queue:
                     job_id=job.id,
                     token=token,
                     owner_id=job.owner_id,
+                    document_id=job.document_id,
+                    retention=job.retention,
+                    target=job.target,
                     mode=job.mode,
                     options=dict(job.options),
                     fingerprint=job.fingerprint,
@@ -134,59 +158,85 @@ class Queue:
                 session, attempt.job_id, attempt.token, now, now + self._lease
             )
 
-    def progress(self, attempt: Attempt, phase: str, done: int, total: int) -> tuple[bool, bool]:
+    def control(self, attempt: Attempt) -> Control:
+        """The attempt's current control flags (read-only)."""
+        with self._db.session() as session:
+            job = job_repo.get(session, attempt.job_id)
+            owned = job is not None and job.status == "running" and job.claim_token == attempt.token
+            if not owned or job is None:
+                return Control(False, False, False)
+            return Control(True, job.cancel_requested, job.fit_skip_requested)
+
+    def progress(
+        self, attempt: Attempt, phase: str, done: int | None, total: int | None
+    ) -> Control:
+        """Store the latest progress snapshot (fenced) and return the control flags."""
         with self._db.session() as session:
             owned = job_repo.fenced(
                 session,
                 attempt.job_id,
                 attempt.token,
-                {"phase": phase, "progress_done": done, "progress_total": total},
+                {
+                    "phase": phase,
+                    "progress_done": done,
+                    "progress_total": total,
+                    "progress_updated_at": self.now(),
+                },
             )
             if not owned:
-                return False, False
+                return Control(False, False, False)
             job = job_repo.get(session, attempt.job_id)
-            return True, bool(job and job.cancel_requested)
+            if job is None:  # pragma: no cover
+                return Control(False, False, False)
+            return Control(True, job.cancel_requested, job.fit_skip_requested)
 
-    def cached(self, attempt: Attempt) -> str | None:
-        """The cache row for this attempt's input and fingerprint, if any (re-check, ADR-008)."""
-        if attempt.force:
+    def reusable(self, attempt: Attempt) -> str | None:
+        """The saved document's compatible current result (worker re-check, ADR-014); temporary
+        and forced jobs never reuse."""
+        if attempt.force or attempt.document_id is None:
             return None
         with self._db.session() as session:
-            result = result_repo.lookup(session, attempt.input_hash, attempt.fingerprint)
+            result = result_repo.reusable_result(
+                session, attempt.document_id, attempt.target, attempt.fingerprint
+            )
             return result.id if result else None
 
-    def publish(self, attempt: Attempt, output: Output | None, *, cache_result: str | None) -> bool:
-        """Fenced success: job, cache row, document and version 0 in one transaction.
-
-        ``output`` is a fresh translation; ``cache_result`` completes from an existing cache row.
-        Returns ``False`` (nothing published) if the attempt lost its claim or lease, the job was
-        cancelled, or its owner was disabled.
-        """
+    def publish(self, attempt: Attempt, output: Output | None, *, reuse: str | None) -> bool:
+        """Fenced success. ``output`` is a fresh translation; ``reuse`` completes the job with the
+        document's existing current result. Returns ``False`` (nothing published) if the attempt
+        lost its claim or lease, the job was cancelled, its owner was disabled or its saved
+        document was deleted."""
         now = self.now()
         try:
-            self._publish(attempt, output, cache_result, now)
+            self._publish(attempt, output, reuse, now)
         except _NotPublishedError:
             return False
         return True
 
     def _publish(
-        self, attempt: Attempt, output: Output | None, cache_result: str | None, now: datetime
+        self, attempt: Attempt, output: Output | None, reuse: str | None, now: datetime
     ) -> None:
         with self._db.session() as session:
-            if cache_result is not None:
-                cached = session.get(TranslationResult, cache_result)
-                if cached is None:
+            if attempt.document_id is not None:
+                live = session.scalar(
+                    select(
+                        exists().where(
+                            Document.id == attempt.document_id, Document.deleted_at.is_(None)
+                        )
+                    )
+                )
+                if not live:
                     raise _NotPublishedError
-                result_id = cached.id
-                output_blob, report_blob = cached.output_blob, cached.report_blob
-                source_resolved, fit_status = cached.source_resolved, cached.fit_status
-                result_repo.touch(session, cached.id, now)
-            else:
-                if output is None:  # pragma: no cover - callers pass one or the other
-                    raise ValueError("publish needs an output or a cache result")
-                output_blob, report_blob = output.output_blob, output.report_blob
+            if reuse is not None:
+                result = result_repo.get_result(session, reuse)
+                if result is None:
+                    raise _NotPublishedError
+                source_resolved, fit_status = result.source_resolved, result.fit_status
+            elif output is not None:
+                result = None
                 source_resolved, fit_status = output.source_resolved, output.fit_status
-                result_id = None
+            else:  # pragma: no cover - callers pass one or the other
+                raise ValueError("publish needs an output or a result to reuse")
             owned = job_repo.fenced(
                 session,
                 attempt.job_id,
@@ -194,56 +244,58 @@ class Queue:
                 {
                     "status": "succeeded",
                     "finished_at": now,
-                    "phase": "done",
+                    "phase": None,
+                    "progress_done": None,
+                    "progress_total": None,
+                    "progress_updated_at": now,
                     "source_resolved": source_resolved,
                     "fit_status": fit_status,
-                    "cache_hit": cache_result is not None,
-                    "claim_token": None,
-                    "lease_until": None,
-                },
+                    "cache_hit": reuse is not None,
+                }
+                | _RELEASE,
                 now=now,
                 success=True,
             )
             if not owned:
                 raise _NotPublishedError  # rolls the transaction back: nothing is published
-            if output is not None:
-                result = result_repo.store_result(
+            if result is None and output is not None:
+                saved = attempt.document_id is not None
+                result = result_repo.add_result(
                     session,
+                    job_id=attempt.job_id,
                     input_hash=attempt.input_hash,
                     fingerprint=attempt.fingerprint,
                     output_blob=output.output_blob,
                     report_blob=output.report_blob,
+                    preview_blob=output.preview_blob,
                     source_resolved=output.source_resolved,
                     fit_status=output.fit_status,
                     engine=output.engine,
-                    force=attempt.force,
-                    now=now,
+                    created_at=now,
+                    expires_at=None if saved else now + self._temporary,
                 )
-                result_id = result.id
+                if saved and attempt.document_id is not None:
+                    result_repo.set_current(
+                        session,
+                        attempt.document_id,
+                        output.source_resolved or "",
+                        attempt.target,
+                        result,
+                        now,
+                        now + self._superseded,
+                    )
                 blob_repo.release_pins(session, output.pins)
             job = job_repo.get(session, attempt.job_id)
-            if job is None:  # pragma: no cover - the fenced update just changed this row
+            if job is None or result is None:  # pragma: no cover
                 raise _NotPublishedError
-            session.refresh(job)
-            job.result_id = result_id
-            result_repo.add_document(
-                session,
-                job,
-                result_id=result_id,
-                source_resolved=source_resolved,
-                fit_status=fit_status,
-                output_blob=output_blob,
-                report_blob=report_blob,
-                now=now,
-                expires_at=now + self._document_retention,
-            )
+            job.result_id = result.id
             user_repo.audit(
                 session,
                 "job_succeeded",
                 actor=None,
                 target_type="job",
                 target_id=attempt.job_id,
-                outcome="cache_hit" if cache_result else "translated",
+                outcome="reused" if reuse else "translated",
             )
 
     def cancelled(self, attempt: Attempt) -> bool:
@@ -253,12 +305,7 @@ class Queue:
                 session,
                 attempt.job_id,
                 attempt.token,
-                {
-                    "status": "cancelled",
-                    "finished_at": now,
-                    "claim_token": None,
-                    "lease_until": None,
-                },
+                {"status": "cancelled", "finished_at": now} | _RELEASE,
             )
             if done:
                 user_repo.audit(
@@ -282,9 +329,8 @@ class Queue:
                     "finished_at": now,
                     "error_code": code,
                     "error_message": message[:2000],
-                    "claim_token": None,
-                    "lease_until": None,
-                },
+                }
+                | _RELEASE,
             )
             if done:
                 user_repo.audit(
@@ -315,6 +361,10 @@ class Queue:
                     "claim_token": None,
                     "worker_id": None,
                     "lease_until": None,
+                    "phase": None,
+                    "progress_done": None,
+                    "progress_total": None,
+                    "progress_updated_at": None,
                 },
             )
             return "requeued" if done else None

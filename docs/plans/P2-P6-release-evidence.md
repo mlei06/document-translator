@@ -6,6 +6,8 @@ Evidence for the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md). Every row 
 
 Branch: `release/p2-p6` (baseline commit `57a7671`, "Add P2-P6 release plans and design material").
 
+**Storage revision (2026-09-29):** the owner-approved ADR-014 (from the desktop/packaging documentation) replaced the shared cache and version-0 documents after R01-R13 were recorded. The service was migrated (commit after `70bb3f9`); rows R05, R06, R10 and R12 describe the earlier cache semantics and must be rerun against the ADR-014 service before release; the other rows' behaviours are covered again by the updated tests (271 passing).
+
 **Current phase and step:** P5 service implemented (ADR-015, ADR-016) with R01, R03-R13 evidence below; R02 waits on the paused P1.1 baselines and R14 on a second machine. Next: P6 (web UI).
 
 **Owner decisions during this run (2026-09-28):** ADR-012 lightweight best-effort fit (supersedes native-parity fit); ADR-013 deployment profiles and the desktop/internal-app plan (follow-on tracks, not part of P2-P6); P6 web UI keeps every mock feature except prompt/comment-driven document edits and fit-check notifications (fit runs silently; reports stay stored for diagnostics); all COMET scoring stopped by the owner; PyMuPDF approved for PDF (AGPL accepted for the internal service, recorded in ADR-018).

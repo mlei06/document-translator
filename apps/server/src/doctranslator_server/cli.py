@@ -228,7 +228,9 @@ def worker() -> None:
 @users_app.command("create")
 def users_create(
     display_name: str,
-    kind: Annotated[str, typer.Option(help="person or service")] = "person",
+    kind: Annotated[
+        str, typer.Option(help="human, or service for an application's own account")
+    ] = "human",
 ) -> None:
     """Create a user and print its ID."""
     services = _admin(_settings())
@@ -322,7 +324,8 @@ def keys_revoke(key_id: str) -> None:
 
 @retention_app.command("run")
 def retention_run() -> None:
-    """Expire documents, cache entries and old jobs, then delete unreferenced blobs."""
+    """Expire temporary/superseded results and old job metadata, then delete unreferenced blobs.
+    Saved documents never expire."""
     _logging()
     services = _admin(_settings())
     try:
@@ -332,8 +335,8 @@ def retention_run() -> None:
     finally:
         services.close()
     typer.echo(
-        f"documents {report.documents}, cache entries {report.cache_entries}, jobs {report.jobs}, "
-        f"batches {report.batches}, blobs {report.blobs}, staging files {report.staging_files}"
+        f"expired results {report.results}, jobs {report.jobs}, batches {report.batches}, "
+        f"blobs {report.blobs}, staging files {report.staging_files}"
     )
 
 

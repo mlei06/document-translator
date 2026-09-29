@@ -1,7 +1,10 @@
-"""The job service: submission, batches, owned history and downloads (P5, ADR-007/015/016).
+"""The job service: saved documents, submission, batches, owned history and downloads.
 
-Every method takes the authenticated owner ID from the caller and filters by it in the database;
-absent and other-user resources both raise ``NotFoundError``.
+Storage follows ADR-014: an owner's saved source documents each keep one current translation per
+language pair; reuse only considers that document's current compatible result; temporary jobs
+never create library entries or reuse anything; every job keeps its exact immutable result until
+the result's advertised expiry. Every method takes the authenticated owner ID and filters by it
+in the database; absent and other-owner resources both raise ``NotFoundError``.
 """
 
 import base64
@@ -11,15 +14,15 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from doctranslator_core import DocumentLimits, inspect_document
+from doctranslator_core import DocumentLimits, detect_document
 from doctranslator_core.types import (
     DocumentError,
     DocumentTranslationOptions,
@@ -29,7 +32,15 @@ from doctranslator_core.types import (
     UnsupportedDocumentError,
 )
 from doctranslator_server.db import Database
-from doctranslator_server.db.models import Batch, BatchItem, Document, Job, utcnow
+from doctranslator_server.db.models import (
+    Batch,
+    BatchItem,
+    Document,
+    DocumentTranslation,
+    Job,
+    JobResult,
+    utcnow,
+)
 from doctranslator_server.db.repositories import batches as batch_repo
 from doctranslator_server.db.repositories import blobs as blob_repo
 from doctranslator_server.db.repositories import jobs as job_repo
@@ -42,8 +53,10 @@ from doctranslator_server.jobs.errors import (
     DocumentRejectedError,
     InvalidRequestError,
     NotFoundError,
+    TooLargeError,
 )
-from doctranslator_server.jobs.storage import BlobStore
+from doctranslator_server.jobs.preview import read_manifest, read_member
+from doctranslator_server.jobs.storage import BlobStore, Staged
 from doctranslator_server.jobs.views import (
     BatchView,
     DocumentView,
@@ -51,11 +64,19 @@ from doctranslator_server.jobs.views import (
     ItemView,
     JobView,
     Page,
+    ProgressView,
     SubmitResult,
+    TranslationView,
 )
 from doctranslator_server.settings import ServerSettings
 
-__all__ = ["MEDIA_TYPES", "JobService", "SubmitOptions", "cancel_user_jobs", "safe_filename"]
+__all__ = [
+    "MEDIA_TYPES",
+    "JobService",
+    "SubmitOptions",
+    "cancel_user_jobs",
+    "safe_filename",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +88,8 @@ MEDIA_TYPES = {
     "pdf": "application/pdf",
 }
 _UNSAFE = re.compile(r"[\x00-\x1f\x7f<>:\"|?*]")
+type Retention = Literal["saved", "temporary"]
+type FileKind = Literal["output", "report"]
 
 
 def safe_filename(name: str) -> str:
@@ -83,7 +106,7 @@ def safe_filename(name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class SubmitOptions:
-    """What a caller chooses for one file (the REST ``options`` object)."""
+    """What a caller chooses for one translation (the REST ``options`` object)."""
 
     target: str
     source: str = "auto"
@@ -93,6 +116,7 @@ class SubmitOptions:
     min_scale: float | None = None
     min_size_pt: float | None = None
     force_retranslate: bool = False
+    retention: Retention = "saved"
 
 
 def _cursor(created: datetime, ident: str) -> str:
@@ -111,10 +135,42 @@ def _parse_cursor(cursor: str | None) -> tuple[datetime, str] | None:
         raise InvalidRequestError("invalid cursor", code="invalid_cursor") from exc
 
 
-def job_view(job: Job, document_id: str | None) -> JobView:
+def _progress(job: Job) -> ProgressView | None:
+    if job.phase is None:
+        return None
+    counted = (
+        job.phase == "translate"
+        and job.progress_total is not None
+        and job.progress_done is not None
+        and 0 <= job.progress_done <= job.progress_total
+    )
+    return ProgressView(
+        phase=job.phase,
+        done=job.progress_done if counted else None,
+        total=job.progress_total if counted else None,
+        updated_at=job.progress_updated_at,
+    )
+
+
+def _available(
+    result: JobResult | None, document: Document | None, job: Job, now: datetime
+) -> bool:
+    if job.status != "succeeded" or result is None:
+        return False
+    if job.document_id is not None and (document is None or document.deleted_at is not None):
+        return False
+    return result.expires_at is None or result.expires_at > now
+
+
+def job_view(session: Session, job: Job) -> JobView:
+    result = result_repo.get_result(session, job.result_id) if job.result_id else None
+    document = session.get(Document, job.document_id) if job.document_id else None
+    available = _available(result, document, job, utcnow())
     return JobView(
         id=job.id,
         batch_id=job.batch_id,
+        document_id=job.document_id,
+        retention=job.retention,
         status=job.status,
         original_name=job.original_name,
         format=job.format,
@@ -125,18 +181,19 @@ def job_view(job: Job, document_id: str | None) -> JobView:
         fingerprint=job.fingerprint,
         force=job.force,
         attempts=job.attempts,
-        phase=job.phase,
-        progress_done=job.progress_done,
-        progress_total=job.progress_total,
+        progress=_progress(job),
         cancel_requested=job.cancel_requested,
+        fit_skip_requested=job.fit_skip_requested,
         cache_hit=job.cache_hit,
         error_code=job.error_code,
         error_message=job.error_message,
-        document_id=document_id,
         fit_status=job.fit_status,
+        result_available=available,
+        result_expires_at=result.expires_at if result is not None and available else None,
         created_at=job.created_at,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        dismissed_at=job.dismissed_at,
     )
 
 
@@ -162,18 +219,26 @@ class JobService:
             "formats": sorted(MEDIA_TYPES),
             "modes": [m.value for m in self._catalog.modes],
             "languages": [lang.value for lang in Language],
-            "fit_statuses": ["not_applicable", "passed", "adjusted", "unresolved"],
+            "fit_statuses": ["not_applicable", "passed", "adjusted", "unresolved", "skipped"],
+            "retention": ["saved", "temporary"],
             "limits": {
                 "max_upload_bytes": self._settings.max_upload_bytes,
                 "max_queued_jobs_per_user": self._settings.max_queued_jobs_per_user,
-                "document_retention_days": self._settings.document_retention_days,
+                "owner_quota_bytes": self._settings.owner_quota_bytes,
+                "temporary_retention_hours": self._settings.temporary_retention_hours,
+                "superseded_retention_days": self._settings.superseded_retention_days,
                 "page_size_default": 50,
                 "page_size_max": 200,
             },
             "fit_defaults": FitOptions().model_dump(),
         }
 
-    # Submission
+    def storage(self, owner_id: str) -> dict[str, int]:
+        with self._db.session() as session:
+            used = result_repo.storage_used(session, owner_id)
+        return {"used_bytes": used, "quota_bytes": self._settings.owner_quota_bytes}
+
+    # Options and identity
 
     def _options(
         self, request: SubmitOptions
@@ -188,6 +253,10 @@ class JobService:
         if mode not in modes:
             raise InvalidRequestError(
                 f"mode {mode.value} is not available", code="mode_unavailable"
+            )
+        if request.retention not in ("saved", "temporary"):
+            raise InvalidRequestError(
+                "retention must be saved or temporary", code="invalid_options"
             )
         fit: dict[str, float] = {}
         if request.min_scale is not None:
@@ -217,19 +286,293 @@ class JobService:
 
     @staticmethod
     def _request_hash(
-        input_hash: str, mode: TranslationMode, options: DocumentTranslationOptions, force: bool
+        input_hash: str,
+        mode: TranslationMode,
+        options: DocumentTranslationOptions,
+        request: SubmitOptions,
+        document_id: str | None,
     ) -> str:
         canonical = json.dumps(
             {
                 "input": input_hash,
+                "document": document_id,
                 "mode": mode.value,
                 "options": options.model_dump(mode="json"),
-                "force": force,
+                "force": request.force_retranslate,
+                "retention": request.retention,
             },
             sort_keys=True,
             separators=(",", ":"),
         )
         return hashlib.sha256(canonical.encode()).hexdigest()
+
+    # Saved documents (ADR-014)
+
+    def _detect(self, staged: Staged) -> tuple[str, str | None, str]:
+        try:
+            detection = detect_document(staged.path, limits=self._limits)
+        except DocumentError as exc:
+            status = 415 if isinstance(exc, UnsupportedDocumentError) else 422
+            raise DocumentRejectedError(str(exc), code=exc.code, status=status) from None
+        source = detection.source.value if detection.source else None
+        return detection.format.value, source, detection.status
+
+    def create_document(
+        self,
+        owner_id: str,
+        filename: str,
+        stream: BinaryIO,
+        *,
+        new_document: bool = False,
+        external_ref: str | None = None,
+    ) -> tuple[DocumentView, bool]:
+        """Store, validate and detect a source document; returns (document, created).
+
+        Identical bytes resolve to the owner's existing document unless ``new_document`` (an
+        application's distinct attachment); another owner's identical bytes are only shared as
+        physical storage, never as a record.
+        """
+        name = safe_filename(filename)
+        staged = self._store.stage_stream(
+            stream, suffix=Path(name).suffix.lower(), max_bytes=self._settings.max_upload_bytes
+        )
+        try:
+            if not new_document:
+                with self._db.session() as session:
+                    existing = result_repo.document_by_blob(session, owner_id, staged.sha256)
+                    if existing is not None:
+                        return self._document_view(session, existing), False
+            fmt, source, status = self._detect(staged)
+            stored = self._store.put(staged)
+        finally:
+            staged.path.unlink(missing_ok=True)
+        try:
+            with self._db.session() as session:
+                used = result_repo.storage_used(session, owner_id)
+                if used + stored.size > self._settings.owner_quota_bytes:
+                    raise TooLargeError(
+                        "your saved documents would exceed your storage quota",
+                        code="quota_exceeded",
+                    )
+                document = result_repo.add_document(
+                    session,
+                    owner_id=owner_id,
+                    source_blob=stored.sha256,
+                    name=name,
+                    size=stored.size,
+                    format=fmt,
+                    detected_source=source,
+                    detection=status,
+                    external_ref=(external_ref or None) and external_ref[:200],
+                    created_at=utcnow(),
+                )
+                user_repo.audit(
+                    session,
+                    "document_created",
+                    actor=owner_id,
+                    target_type="document",
+                    target_id=document.id,
+                )
+                return self._document_view(session, document), True
+        finally:
+            self._store.release_pins([stored.pin_id])
+
+    def _document_view(self, session: Session, document: Document) -> DocumentView:
+        translations: list[TranslationView] = []
+        for slot in result_repo.slots_of(session, document.id):
+            result = result_repo.get_result(session, slot.current_result_id)
+            if result is None:  # pragma: no cover - slots always reference a result
+                continue
+            blob = blob_repo.get(session, result.output_blob)
+            translations.append(
+                TranslationView(
+                    id=slot.id,
+                    source=slot.source or None,
+                    target=slot.target,
+                    fit_status=result.fit_status,
+                    job_id=result.job_id,
+                    output_size=blob.size if blob else 0,
+                    output_sha256=result.output_blob,
+                    updated_at=slot.updated_at,
+                )
+            )
+        active = {
+            job.target: job.id
+            for job in job_repo.list_owned(
+                session,
+                document.owner_id,
+                after=None,
+                limit=100,
+                document_id=document.id,
+                active_only=True,
+            )
+        }
+        return DocumentView(
+            id=document.id,
+            name=document.name,
+            format=document.format,
+            size=document.size,
+            sha256=document.source_blob,
+            detected_source=document.detected_source,
+            detection=document.detection,
+            external_ref=document.external_ref,
+            created_at=document.created_at,
+            translations=translations,
+            active_jobs=active,
+        )
+
+    def _owned_document(self, session: Session, owner_id: str, document_id: str) -> Document:
+        document = result_repo.get_document_owned(session, owner_id, document_id)
+        if document is None:
+            raise NotFoundError("document")
+        return document
+
+    def get_document(self, owner_id: str, document_id: str) -> DocumentView:
+        with self._db.session() as session:
+            return self._document_view(
+                session, self._owned_document(session, owner_id, document_id)
+            )
+
+    def list_documents(
+        self, owner_id: str, cursor: str | None, limit: int, query: str | None = None
+    ) -> Page[DocumentView]:
+        with self._db.session() as session:
+            rows = result_repo.list_documents(
+                session, owner_id, after=_parse_cursor(cursor), limit=limit + 1, query=query
+            )
+            views = [self._document_view(session, d) for d in rows[:limit]]
+            more = len(rows) > limit
+            last = rows[limit - 1] if more else None
+            return Page(views, _cursor(last.created_at, last.id) if last else None)
+
+    def delete_document(self, owner_id: str, document_id: str) -> None:
+        """Delete the source and all its translations; cancel its unfinished jobs; job downloads
+        of it stop at once (ADR-014)."""
+        now = utcnow()
+        with self._db.session() as session:
+            document = self._owned_document(session, owner_id, document_id)
+            for job in job_repo.list_owned(
+                session,
+                owner_id,
+                after=None,
+                limit=1000,
+                document_id=document.id,
+                active_only=True,
+            ):
+                job_repo.request_cancel(session, job.id, now)
+            result_repo.mark_document_deleted(session, document, now)
+            user_repo.audit(
+                session,
+                "document_deleted",
+                actor=owner_id,
+                target_type="document",
+                target_id=document_id,
+            )
+
+    def delete_translation(self, owner_id: str, document_id: str, translation_id: str) -> None:
+        now = utcnow()
+        with self._db.session() as session:
+            slot = result_repo.slot_owned(session, owner_id, document_id, translation_id)
+            if slot is None:
+                raise NotFoundError("translation")
+            active = job_repo.active_in_slot(session, f"{document_id}:{slot.target}")
+            if active is not None:
+                job_repo.request_cancel(session, active.id, now)
+            result_repo.delete_slot(session, slot, now)
+            user_repo.audit(
+                session,
+                "translation_deleted",
+                actor=owner_id,
+                target_type="translation",
+                target_id=translation_id,
+            )
+
+    def _slot(
+        self, session: Session, owner_id: str, document_id: str, translation_id: str
+    ) -> tuple[Document, DocumentTranslation, JobResult]:
+        document = self._owned_document(session, owner_id, document_id)
+        slot = result_repo.slot_owned(session, owner_id, document_id, translation_id)
+        if slot is None:
+            raise NotFoundError("translation")
+        result = result_repo.get_result(session, slot.current_result_id)
+        if result is None:  # pragma: no cover
+            raise NotFoundError("translation")
+        return document, slot, result
+
+    def translation_file(
+        self, owner_id: str, document_id: str, translation_id: str, kind: FileKind
+    ) -> FileView:
+        with self._db.session() as session:
+            document, slot, result = self._slot(session, owner_id, document_id, translation_id)
+            return self._result_file(
+                session, document.name, document.format, slot.target, result, kind
+            )
+
+    def translation_preview(
+        self, owner_id: str, document_id: str, translation_id: str, name: str | None
+    ) -> dict[str, Any] | tuple[bytes, str]:
+        with self._db.session() as session:
+            _, _, result = self._slot(session, owner_id, document_id, translation_id)
+            preview = result.preview_blob
+        return self._preview(preview, name)
+
+    def document_original(self, owner_id: str, document_id: str) -> FileView:
+        with self._db.session() as session:
+            document = self._owned_document(session, owner_id, document_id)
+            return FileView(
+                self._store.path(document.source_blob),
+                document.name,
+                MEDIA_TYPES.get(document.format, "application/octet-stream"),
+                document.size,
+                document.source_blob,
+            )
+
+    # Submission
+
+    def translate_document(
+        self,
+        owner_id: str,
+        document_id: str,
+        request: SubmitOptions,
+        *,
+        submission_id: str | None = None,
+        batch_id: str | None = None,
+        client_item_id: str | None = None,
+    ) -> SubmitResult:
+        """Translate a saved document without re-uploading it (ADR-014)."""
+        self._identity(submission_id, batch_id, client_item_id)
+        if request.retention != "saved":
+            raise InvalidRequestError(
+                "saved documents translate with retention=saved", code="invalid_options"
+            )
+        mode, options = self._options(request)
+        with self._db.session() as session:
+            document = self._owned_document(session, owner_id, document_id)
+            name, fmt, digest, size = (
+                document.name,
+                document.format,
+                document.source_blob,
+                document.size,
+            )
+        request_hash = self._request_hash(digest, mode, options, request, document_id)
+        replay = self._replay(owner_id, request_hash, submission_id, batch_id, client_item_id)
+        if replay is not None:
+            return replay
+        return self._accept_with_retry(
+            owner_id,
+            name,
+            fmt,
+            digest,
+            size,
+            mode,
+            options,
+            request,
+            document_id,
+            request_hash,
+            submission_id,
+            batch_id,
+            client_item_id,
+        )
 
     def submit(
         self,
@@ -242,59 +585,109 @@ class JobService:
         batch_id: str | None = None,
         client_item_id: str | None = None,
     ) -> SubmitResult:
-        """Accept one file: a cache hit completes at once, a miss queues a job (never waits)."""
-        if (batch_id is None) == (submission_id is None):
-            raise InvalidRequestError("give either a batch item or a submission ID")
-        if batch_id is not None and client_item_id is None:
-            raise InvalidRequestError("a batch item needs client_item_id")
+        """Accept one uploaded file: saved mode files it in the owner's library first; a
+        compatible current result completes at once, otherwise a job is queued (never waits)."""
+        self._identity(submission_id, batch_id, client_item_id)
         name = safe_filename(filename)
         mode, options = self._options(request)
-        suffix = Path(name).suffix.lower()
         staged = self._store.stage_stream(
-            stream, suffix=suffix, max_bytes=self._settings.max_upload_bytes
+            stream, suffix=Path(name).suffix.lower(), max_bytes=self._settings.max_upload_bytes
         )
         try:
-            request_hash = self._request_hash(
-                staged.sha256, mode, options, request.force_retranslate
-            )
-            replay = self._replay(owner_id, request_hash, submission_id, batch_id, client_item_id)
-            if replay is not None:
-                return replay
-            try:
-                fmt = inspect_document(staged.path, limits=self._limits)
-            except DocumentError as exc:
-                status = 415 if isinstance(exc, UnsupportedDocumentError) else 422
-                return self._reject(
-                    owner_id, name, request_hash, exc, status, batch_id, client_item_id
+            if request.retention == "saved":
+                with self._db.session() as session:
+                    existing = result_repo.document_by_blob(session, owner_id, staged.sha256)
+                    document_id = existing.id if existing else None
+            else:
+                document_id = None
+            if document_id is not None or request.retention == "temporary":
+                request_hash = self._request_hash(
+                    staged.sha256, mode, options, request, document_id
                 )
-            fingerprint = self._catalog.fingerprint(mode, options)
+                replay = self._replay(
+                    owner_id, request_hash, submission_id, batch_id, client_item_id
+                )
+                if replay is not None:
+                    return replay
+            try:
+                fmt, source, status = self._detect(staged)
+            except DocumentRejectedError as exc:
+                hash_for_rejection = self._request_hash(staged.sha256, mode, options, request, None)
+                return self._reject(
+                    owner_id, name, hash_for_rejection, exc, batch_id, client_item_id
+                )
             stored = self._store.put(staged)
         finally:
             staged.path.unlink(missing_ok=True)
         try:
-            return self._accept(
+            if request.retention == "saved" and document_id is None:
+                document_id = self._file_document(
+                    owner_id, name, fmt, stored.sha256, stored.size, source, status
+                )
+            request_hash = self._request_hash(stored.sha256, mode, options, request, document_id)
+            replay = self._replay(owner_id, request_hash, submission_id, batch_id, client_item_id)
+            if replay is not None:
+                return replay
+            return self._accept_with_retry(
                 owner_id,
                 name,
-                fmt.value,
+                fmt,
                 stored.sha256,
                 stored.size,
                 mode,
                 options,
-                fingerprint,
-                request.force_retranslate,
+                request,
+                document_id,
                 request_hash,
                 submission_id,
                 batch_id,
                 client_item_id,
             )
-        except IntegrityError:
-            # A concurrent identical submission won the unique binding: answer with its outcome.
-            replay = self._replay(owner_id, request_hash, submission_id, batch_id, client_item_id)
-            if replay is None:
-                raise
-            return replay
         finally:
             self._store.release_pins([stored.pin_id])
+
+    def _file_document(
+        self,
+        owner_id: str,
+        name: str,
+        fmt: str,
+        digest: str,
+        size: int,
+        source: str | None,
+        status: str,
+    ) -> str:
+        with self._db.session() as session:
+            existing = result_repo.document_by_blob(session, owner_id, digest)
+            if existing is not None:
+                return existing.id
+            if (
+                result_repo.storage_used(session, owner_id) + size
+                > self._settings.owner_quota_bytes
+            ):
+                raise TooLargeError(
+                    "your saved documents would exceed your storage quota", code="quota_exceeded"
+                )
+            document = result_repo.add_document(
+                session,
+                owner_id=owner_id,
+                source_blob=digest,
+                name=name,
+                size=size,
+                format=fmt,
+                detected_source=source,
+                detection=status,
+                created_at=utcnow(),
+            )
+            return document.id
+
+    @staticmethod
+    def _identity(
+        submission_id: str | None, batch_id: str | None, client_item_id: str | None
+    ) -> None:
+        if (batch_id is None) == (submission_id is None):
+            raise InvalidRequestError("give either a batch item or a submission ID")
+        if batch_id is not None and client_item_id is None:
+            raise InvalidRequestError("a batch item needs client_item_id")
 
     def _replay(
         self,
@@ -314,7 +707,7 @@ class JobService:
                         "this submission ID was used with a different file or options",
                         code="idempotency_mismatch",
                     )
-                return SubmitResult(self._job_view(session, job), None, replayed=True)
+                return SubmitResult(job_view(session, job), None, replayed=True)
             batch = self._open_batch(session, owner_id, batch_id or "", for_replay=True)
             item = batch_repo.item_by_client_id(session, batch.id, client_item_id or "")
             if item is None:
@@ -349,14 +742,12 @@ class JobService:
         owner_id: str,
         name: str,
         request_hash: str,
-        exc: DocumentError,
-        status: int,
+        exc: DocumentRejectedError,
         batch_id: str | None,
         client_item_id: str | None,
     ) -> SubmitResult:
-        message = str(exc)
         if batch_id is None:
-            raise DocumentRejectedError(message, code=exc.code, status=status)
+            raise exc
         with self._db.session() as session:
             batch = self._open_batch(session, owner_id, batch_id)
             item = batch_repo.add_item(
@@ -366,7 +757,7 @@ class JobService:
                 original_name=name,
                 request_hash=request_hash,
                 rejection_code=exc.code,
-                rejection_message=message,
+                rejection_message=exc.message,
             )
             user_repo.audit(
                 session,
@@ -377,7 +768,63 @@ class JobService:
                 outcome=exc.code,
             )
             item_id = item.id
-        raise DocumentRejectedError(message, code=exc.code, status=status, item_id=item_id)
+        raise DocumentRejectedError(exc.message, code=exc.code, status=exc.status, item_id=item_id)
+
+    def _accept_with_retry(
+        self,
+        owner_id: str,
+        name: str,
+        fmt: str,
+        input_hash: str,
+        size: int,
+        mode: TranslationMode,
+        options: DocumentTranslationOptions,
+        request: SubmitOptions,
+        document_id: str | None,
+        request_hash: str,
+        submission_id: str | None,
+        batch_id: str | None,
+        client_item_id: str | None,
+    ) -> SubmitResult:
+        fingerprint = self._catalog.fingerprint(mode, options)
+        try:
+            return self._accept(
+                owner_id,
+                name,
+                fmt,
+                input_hash,
+                size,
+                mode,
+                options,
+                request,
+                document_id,
+                fingerprint,
+                request_hash,
+                submission_id,
+                batch_id,
+                client_item_id,
+            )
+        except IntegrityError:
+            # A concurrent request won a unique binding or the target slot: answer truthfully.
+            replay = self._replay(owner_id, request_hash, submission_id, batch_id, client_item_id)
+            if replay is not None:
+                return replay
+            if document_id is not None:
+                with self._db.session() as session:
+                    active = job_repo.active_in_slot(
+                        session, f"{document_id}:{options.target.value}"
+                    )
+                    if active is not None:
+                        raise self._active_conflict(active.id) from None
+            raise
+
+    @staticmethod
+    def _active_conflict(job_id: str) -> ConflictError:
+        return ConflictError(
+            "this document is already being translated into that language",
+            code="translation_active",
+            job_id=job_id,
+        )
 
     def _accept(
         self,
@@ -388,16 +835,26 @@ class JobService:
         size: int,
         mode: TranslationMode,
         options: DocumentTranslationOptions,
+        request: SubmitOptions,
+        document_id: str | None,
         fingerprint: str,
-        force: bool,
         request_hash: str,
         submission_id: str | None,
         batch_id: str | None,
         client_item_id: str | None,
     ) -> SubmitResult:
         now = utcnow()
+        target = options.target.value
+        slot = f"{document_id}:{target}" if document_id else None
         with self._db.session() as session:
             batch = self._open_batch(session, owner_id, batch_id) if batch_id else None
+            if document_id is not None:
+                document = session.get(Document, document_id)
+                if document is None or document.deleted_at is not None:
+                    raise NotFoundError("document")
+                active = job_repo.active_in_slot(session, slot or "")
+                if active is not None:
+                    raise self._active_conflict(active.id)
             if job_repo.count_nonterminal(session) >= self._settings.max_queued_jobs:
                 raise AdmissionError("the service queue is full; retry later")
             if (
@@ -409,6 +866,9 @@ class JobService:
                 session,
                 owner_id=owner_id,
                 batch_id=batch.id if batch else None,
+                document_id=document_id,
+                retention=request.retention,
+                active_slot=slot,
                 submission_id=submission_id,
                 request_hash=request_hash,
                 original_name=name,
@@ -418,33 +878,26 @@ class JobService:
                 options=options.model_dump(mode="json"),
                 mode=mode.value,
                 source_requested=str(options.source),
-                target=options.target.value,
+                target=target,
                 fingerprint=fingerprint,
-                force=force,
+                force=request.force_retranslate,
                 max_attempts=self._settings.max_attempts,
                 available_at=now,
                 created_at=now,
             )
-            cached = None if force else result_repo.lookup(session, input_hash, fingerprint)
-            if cached is not None:
+            reused = (
+                result_repo.reusable_result(session, document_id, target, fingerprint)
+                if document_id is not None and not request.force_retranslate
+                else None
+            )
+            if reused is not None:
                 job.status = "succeeded"
                 job.cache_hit = True
                 job.finished_at = now
-                job.result_id = cached.id
-                job.fit_status = cached.fit_status
-                job.source_resolved = cached.source_resolved
-                result_repo.touch(session, cached.id, now)
-                result_repo.add_document(
-                    session,
-                    job,
-                    result_id=cached.id,
-                    source_resolved=cached.source_resolved,
-                    fit_status=cached.fit_status,
-                    output_blob=cached.output_blob,
-                    report_blob=cached.report_blob,
-                    now=now,
-                    expires_at=now + timedelta(days=self._settings.document_retention_days),
-                )
+                job.result_id = reused.id
+                job.fit_status = reused.fit_status
+                job.source_resolved = reused.source_resolved
+                job.active_slot = None
             item = None
             if batch is not None:
                 item = batch_repo.add_item(
@@ -461,19 +914,15 @@ class JobService:
                 actor=owner_id,
                 target_type="job",
                 target_id=job.id,
-                outcome="cache_hit" if cached else "queued",
+                outcome="reused" if reused else "queued",
             )
             session.flush()
-            view = self._job_view(session, job)
+            view = job_view(session, job)
             item_view = self._item_view(session, item) if item is not None else None
-        logger.info("job %s %s", view.id, "cache hit" if view.cache_hit else "queued")
+        logger.info("job %s %s", view.id, "reused current result" if view.cache_hit else "queued")
         return SubmitResult(view, item_view, replayed=False)
 
     # Views
-
-    def _job_view(self, session: Session, job: Job) -> JobView:
-        document = result_repo.document_for_job(session, job.id)
-        return job_view(job, document.id if document else None)
 
     def _item_view(self, session: Session, item: BatchItem) -> ItemView:
         job = job_repo.get(session, item.job_id) if item.job_id else None
@@ -484,41 +933,18 @@ class JobService:
             original_name=item.original_name,
             rejection_code=item.rejection_code,
             rejection_message=item.rejection_message,
-            job=self._job_view(session, job) if job else None,
+            job=job_view(session, job) if job else None,
         )
 
     def _batch_view(self, session: Session, batch: Batch) -> BatchView:
-        counts = batch_repo.counts(session, batch.id)
         return BatchView(
             id=batch.id,
             label=batch.label,
             state=batch.state,
             items=batch.next_ordinal,
-            counts=counts,
+            counts=batch_repo.counts(session, batch.id),
             created_at=batch.created_at,
             sealed_at=batch.sealed_at,
-        )
-
-    def _document_view(self, session: Session, document: Document) -> DocumentView:
-        version = result_repo.version(session, document.id, 0)
-        if version is None:  # pragma: no cover - version 0 is created with the document
-            raise NotFoundError("document")
-        blob = blob_repo.get(session, version.output_blob)
-        return DocumentView(
-            id=document.id,
-            job_id=document.job_id,
-            original_name=document.original_name,
-            format=document.format,
-            mode=document.mode,
-            source_requested=document.source_requested,
-            source_resolved=document.source_resolved,
-            target=document.target,
-            fit_status=document.fit_status,
-            version=0,
-            output_size=blob.size if blob else 0,
-            output_sha256=version.output_blob,
-            created_at=document.created_at,
-            expires_at=document.expires_at,
         )
 
     # Batches
@@ -559,10 +985,8 @@ class JobService:
                 session, owner_id, after=_parse_cursor(cursor), limit=limit + 1
             )
             views = [self._batch_view(session, b) for b in rows[:limit]]
-            more = len(rows) > limit
-            return Page(
-                views, _cursor(rows[limit - 1].created_at, rows[limit - 1].id) if more else None
-            )
+            last = rows[limit - 1] if len(rows) > limit else None
+            return Page(views, _cursor(last.created_at, last.id) if last else None)
 
     def list_items(
         self,
@@ -590,9 +1014,9 @@ class JobService:
                     original_name=item.original_name,
                     rejection_code=item.rejection_code,
                     rejection_message=item.rejection_message,
-                    job=job_view(job, document.id if document else None) if job else None,
+                    job=job_view(session, job) if job else None,
                 )
-                for item, job, document in rows[:limit]
+                for item, job in rows[:limit]
             ]
             more = len(rows) > limit
             return Page(views, str(rows[limit - 1][0].ordinal) if more else None)
@@ -632,31 +1056,43 @@ class JobService:
 
     # Jobs
 
+    def _owned_job(self, session: Session, owner_id: str, job_id: str) -> Job:
+        job = job_repo.get_owned(session, owner_id, job_id)
+        if job is None:
+            raise NotFoundError("job")
+        return job
+
     def get_job(self, owner_id: str, job_id: str) -> JobView:
         with self._db.session() as session:
-            job = job_repo.get_owned(session, owner_id, job_id)
-            if job is None:
-                raise NotFoundError("job")
-            return self._job_view(session, job)
+            return job_view(session, self._owned_job(session, owner_id, job_id))
 
     def list_jobs(
-        self, owner_id: str, cursor: str | None, limit: int, status: str | None = None
+        self,
+        owner_id: str,
+        cursor: str | None,
+        limit: int,
+        status: str | None = None,
+        *,
+        query: str | None = None,
+        active: bool = False,
     ) -> Page[JobView]:
         with self._db.session() as session:
             rows = job_repo.list_owned(
-                session, owner_id, after=_parse_cursor(cursor), limit=limit + 1, status=status
+                session,
+                owner_id,
+                after=_parse_cursor(cursor),
+                limit=limit + 1,
+                status=status,
+                search=query,
+                active=active,
             )
-            views = [self._job_view(session, j) for j in rows[:limit]]
-            more = len(rows) > limit
-            return Page(
-                views, _cursor(rows[limit - 1].created_at, rows[limit - 1].id) if more else None
-            )
+            views = [job_view(session, j) for j in rows[:limit]]
+            last = rows[limit - 1] if len(rows) > limit else None
+            return Page(views, _cursor(last.created_at, last.id) if last else None)
 
     def cancel_job(self, owner_id: str, job_id: str) -> JobView:
         with self._db.session() as session:
-            job = job_repo.get_owned(session, owner_id, job_id)
-            if job is None:
-                raise NotFoundError("job")
+            job = self._owned_job(session, owner_id, job_id)
             if job.status in job_repo.NONTERMINAL:
                 job_repo.request_cancel(session, job.id, utcnow())
                 user_repo.audit(
@@ -667,66 +1103,86 @@ class JobService:
                     target_id=job.id,
                 )
                 session.refresh(job)
-            return self._job_view(session, job)
+            return job_view(session, job)
 
-    # Documents
+    def skip_fit(self, owner_id: str, job_id: str) -> tuple[JobView, bool]:
+        """Ask the worker to stop the remaining optional fit (ADR-012 amendment).
 
-    def list_documents(self, owner_id: str, cursor: str | None, limit: int) -> Page[DocumentView]:
+        Returns (job, newly requested). Raises ``ConflictError`` outside the fit stage.
+        """
         with self._db.session() as session:
-            rows = result_repo.list_documents(
-                session, owner_id, after=_parse_cursor(cursor), limit=limit + 1
+            job = self._owned_job(session, owner_id, job_id)
+            outcome = job_repo.request_skip_fit(session, job)
+            if outcome == "not_in_fit":
+                raise ConflictError(
+                    "the layout check is not running", code="not_in_fit", phase=job.phase or ""
+                )
+            session.refresh(job)
+            return job_view(session, job), outcome == "set"
+
+    def set_dismissed(self, owner_id: str, job_id: str, dismissed: bool) -> JobView:
+        """Move a job off (or back onto) the user's active view (ADR-017)."""
+        with self._db.session() as session:
+            job = self._owned_job(session, owner_id, job_id)
+            job.dismissed_at = utcnow() if dismissed else None
+            session.flush()
+            return job_view(session, job)
+
+    def _job_result(self, session: Session, owner_id: str, job_id: str) -> tuple[Job, JobResult]:
+        job = self._owned_job(session, owner_id, job_id)
+        result = result_repo.get_result(session, job.result_id) if job.result_id else None
+        document = session.get(Document, job.document_id) if job.document_id else None
+        if result is None or not _available(result, document, job, utcnow()):
+            raise NotFoundError("job result")
+        return job, result
+
+    def job_file(self, owner_id: str, job_id: str, kind: FileKind) -> FileView:
+        """The job's exact output or report, until the result expires (ADR-014)."""
+        with self._db.session() as session:
+            job, result = self._job_result(session, owner_id, job_id)
+            return self._result_file(
+                session, job.original_name, job.format, job.target, result, kind
             )
-            views = [self._document_view(session, d) for d in rows[:limit]]
-            more = len(rows) > limit
-            return Page(
-                views, _cursor(rows[limit - 1].created_at, rows[limit - 1].id) if more else None
-            )
 
-    def get_document(self, owner_id: str, document_id: str) -> DocumentView:
+    def job_preview(
+        self, owner_id: str, job_id: str, name: str | None
+    ) -> dict[str, Any] | tuple[bytes, str]:
         with self._db.session() as session:
-            document = result_repo.get_document_owned(session, owner_id, document_id)
-            if document is None:
-                raise NotFoundError("document")
-            return self._document_view(session, document)
+            _, result = self._job_result(session, owner_id, job_id)
+            preview = result.preview_blob
+        return self._preview(preview, name)
 
-    def document_file(self, owner_id: str, document_id: str, kind: str) -> FileView:
-        """``kind`` is ``output``, ``report`` or ``original``."""
-        with self._db.session() as session:
-            document = result_repo.get_document_owned(session, owner_id, document_id)
-            if document is None:
-                raise NotFoundError("document")
-            version = result_repo.version(session, document.id, 0)
-            if version is None:  # pragma: no cover
-                raise NotFoundError("document")
-            stem = Path(document.original_name).stem or "document"
-            if kind == "original":
-                digest, filename = document.original_blob, document.original_name
-                media = MEDIA_TYPES.get(document.format, "application/octet-stream")
-            elif kind == "report":
-                digest = version.report_blob
-                filename = f"{stem}.{document.target}.{document.format}.report.json"
-                media = "application/json"
-            else:
-                digest = version.output_blob
-                filename = f"{stem}.{document.target}.{document.format}"
-                media = MEDIA_TYPES.get(document.format, "application/octet-stream")
-            blob = blob_repo.get(session, digest)
-            size = blob.size if blob else 0
-        return FileView(self._store.path(digest), filename, media, size, digest)
+    def _result_file(
+        self,
+        session: Session,
+        original_name: str,
+        fmt: str,
+        target: str,
+        result: JobResult,
+        kind: FileKind,
+    ) -> FileView:
+        stem = Path(original_name).stem or "document"
+        if kind == "report":
+            digest = result.report_blob
+            filename = f"{stem}.{target}.{fmt}.report.json"
+            media = "application/json"
+        else:
+            digest = result.output_blob
+            filename = f"{stem}.{target}.{fmt}"
+            media = MEDIA_TYPES.get(fmt, "application/octet-stream")
+        blob = blob_repo.get(session, digest)
+        return FileView(self._store.path(digest), filename, media, blob.size if blob else 0, digest)
 
-    def delete_document(self, owner_id: str, document_id: str) -> None:
-        with self._db.session() as session:
-            document = result_repo.get_document_owned(session, owner_id, document_id)
-            if document is None:
-                raise NotFoundError("document")
-            result_repo.delete_document(session, document)
-            user_repo.audit(
-                session,
-                "document_deleted",
-                actor=owner_id,
-                target_type="document",
-                target_id=document_id,
-            )
+    def _preview(self, blob: str | None, name: str | None) -> dict[str, Any] | tuple[bytes, str]:
+        if blob is None:
+            raise NotFoundError("preview")
+        package = self._store.path(blob)
+        if name is None:
+            return read_manifest(package)
+        data = read_member(package, name)
+        if data is None:
+            raise NotFoundError("preview page")
+        return data, "image/jpeg"
 
 
 def cancel_user_jobs(db: Database, user_id: str) -> int:

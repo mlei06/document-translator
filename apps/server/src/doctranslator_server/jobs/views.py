@@ -11,14 +11,29 @@ __all__ = [
     "ItemView",
     "JobView",
     "Page",
+    "ProgressView",
     "SubmitResult",
+    "TranslationView",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressView:
+    """The latest stored progress snapshot (P5-P6 progress plan). Counts are only reported for
+    the translate phase; other phases are indeterminate."""
+
+    phase: str
+    done: int | None
+    total: int | None
+    updated_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
 class JobView:
     id: str
     batch_id: str | None
+    document_id: str | None
+    retention: str
     status: str
     original_name: str
     format: str
@@ -29,36 +44,54 @@ class JobView:
     fingerprint: str
     force: bool
     attempts: int
-    phase: str | None
-    progress_done: int
-    progress_total: int
+    progress: ProgressView | None
     cancel_requested: bool
+    fit_skip_requested: bool
     cache_hit: bool
     error_code: str | None
     error_message: str | None
-    document_id: str | None
     fit_status: str | None
+    result_available: bool
+    """The job's exact output can be downloaded now."""
+    result_expires_at: datetime | None
+    """When the job's output stops being downloadable (``None``: while it is current)."""
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    dismissed_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationView:
+    """A saved document's current translation for one language pair (ADR-014)."""
+
+    id: str
+    source: str | None
+    target: str
+    fit_status: str
+    job_id: str
+    """The job that produced the current result."""
+    output_size: int
+    output_sha256: str
+    updated_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
 class DocumentView:
+    """An owned source document in the library, with its current translations."""
+
     id: str
-    job_id: str
-    original_name: str
+    name: str
     format: str
-    mode: str
-    source_requested: str
-    source_resolved: str | None
-    target: str
-    fit_status: str
-    version: int
-    output_size: int
-    output_sha256: str
+    size: int
+    sha256: str
+    detected_source: str | None
+    detection: str
+    external_ref: str | None
     created_at: datetime
-    expires_at: datetime
+    translations: list[TranslationView]
+    active_jobs: dict[str, str]
+    """Unfinished job per target language (at most one each, ADR-014)."""
 
 
 @dataclass(frozen=True, slots=True)

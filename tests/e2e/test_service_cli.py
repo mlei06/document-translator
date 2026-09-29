@@ -156,16 +156,16 @@ def test_a_long_manifest_drains_through_admission_backpressure(tmp_path: Path) -
 def test_download_never_overwrites_without_consent(tmp_path: Path, service: Service) -> None:
     (tmp_path / "a.txt").write_bytes(TXT)
     submitted = run(["submit", "a.txt", "--to", "en", "--wait", "--json"], tmp_path, service)
-    document = str(lines(submitted.stdout)[0]["document_id"])
-    first = run(["download", "--document", document, "--output-dir", "out"], tmp_path, service)
+    job_id = str(lines(submitted.stdout)[0]["job_id"])
+    first = run(["download", "--job", job_id, "--output-dir", "out"], tmp_path, service)
     assert first.returncode == 0, first.stderr
     output = Path(first.stdout.strip())
     output.write_text("my edits", encoding="utf-8")
-    again = run(["download", "--document", document, "--output-dir", "out"], tmp_path, service)
+    again = run(["download", "--job", job_id, "--output-dir", "out"], tmp_path, service)
     assert again.returncode == 1
     assert output.read_text(encoding="utf-8") == "my edits"
     forced = run(
-        ["download", "--document", document, "--output-dir", "out", "--overwrite"],
+        ["download", "--job", job_id, "--output-dir", "out", "--overwrite"],
         tmp_path,
         service,
     )

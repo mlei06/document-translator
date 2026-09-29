@@ -9,9 +9,8 @@ from doctranslator_server.db.models import (
     Blob,
     BlobPin,
     Document,
-    DocumentVersion,
     Job,
-    TranslationResult,
+    JobResult,
     new_id,
 )
 from doctranslator_server.db.repositories._rows import rowcount
@@ -60,11 +59,10 @@ def release_pins(session: Session, pin_ids: list[str]) -> None:
 def _referenced(digest: InstrumentedAttribute[str]) -> ColumnElement[bool]:
     return or_(
         exists().where(Job.input_blob == digest),
-        exists().where(Document.original_blob == digest),
-        exists().where(DocumentVersion.output_blob == digest),
-        exists().where(DocumentVersion.report_blob == digest),
-        exists().where(TranslationResult.output_blob == digest),
-        exists().where(TranslationResult.report_blob == digest),
+        exists().where(Document.source_blob == digest),
+        exists().where(JobResult.output_blob == digest),
+        exists().where(JobResult.report_blob == digest),
+        exists().where(JobResult.preview_blob == digest),
     )
 
 

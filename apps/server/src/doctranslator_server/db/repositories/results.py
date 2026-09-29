@@ -1,183 +1,255 @@
-"""The shared exact-byte cache (ADR-007 layer 2) and user documents with their versions."""
+"""Owned source documents, their current translations and immutable job results (ADR-014)."""
 
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, exists, func, select, update
 from sqlalchemy.orm import Session
 
 from doctranslator_server.db.models import (
+    Blob,
     Document,
-    DocumentVersion,
+    DocumentTranslation,
     Job,
-    TranslationResult,
+    JobResult,
 )
 from doctranslator_server.db.repositories._rows import rowcount
 
 __all__ = [
     "add_document",
-    "delete_document",
-    "delete_expired_documents",
-    "delete_stale_results",
-    "document_for_job",
+    "add_result",
+    "delete_expired_results",
+    "delete_slot",
+    "document_by_blob",
     "get_document_owned",
+    "get_result",
     "list_documents",
-    "lookup",
-    "store_result",
-    "touch",
-    "version",
+    "mark_document_deleted",
+    "purge_deleted_documents",
+    "reusable_result",
+    "set_current",
+    "slot_owned",
+    "slots_of",
+    "storage_used",
 ]
 
 
-def lookup(session: Session, input_hash: str, fingerprint: str) -> TranslationResult | None:
-    return session.scalar(
-        select(TranslationResult).where(
-            TranslationResult.input_hash == input_hash,
-            TranslationResult.fingerprint == fingerprint,
-        )
-    )
+# Documents
 
 
-def touch(session: Session, result_id: str, now: datetime) -> None:
-    session.execute(
-        update(TranslationResult).where(TranslationResult.id == result_id).values(last_used_at=now)
-    )
-
-
-def store_result(
-    session: Session,
-    *,
-    input_hash: str,
-    fingerprint: str,
-    output_blob: str,
-    report_blob: str,
-    source_resolved: str | None,
-    fit_status: str,
-    engine: dict[str, Any],
-    force: bool,
-    now: datetime,
-) -> TranslationResult:
-    """Cache a successful output: the first ordinary winner stays; a forced run replaces it."""
-    existing = lookup(session, input_hash, fingerprint)
-    if existing is not None and not force:
-        existing.last_used_at = now
-        return existing
-    if existing is not None:
-        existing.output_blob = output_blob
-        existing.report_blob = report_blob
-        existing.source_resolved = source_resolved
-        existing.fit_status = fit_status
-        existing.engine = engine
-        existing.created_at = now
-        existing.last_used_at = now
-        return existing
-    result = TranslationResult(
-        input_hash=input_hash,
-        fingerprint=fingerprint,
-        output_blob=output_blob,
-        report_blob=report_blob,
-        source_resolved=source_resolved,
-        fit_status=fit_status,
-        engine=engine,
-        created_at=now,
-        last_used_at=now,
-    )
-    session.add(result)
-    session.flush()
-    return result
-
-
-def delete_stale_results(session: Session, unused_before: datetime) -> int:
-    return rowcount(
-        session.execute(
-            delete(TranslationResult).where(TranslationResult.last_used_at < unused_before)
-        )
-    )
-
-
-def add_document(
-    session: Session,
-    job: Job,
-    *,
-    result_id: str | None,
-    source_resolved: str | None,
-    fit_status: str,
-    output_blob: str,
-    report_blob: str,
-    now: datetime,
-    expires_at: datetime,
-) -> Document:
-    document = Document(
-        owner_id=job.owner_id,
-        job_id=job.id,
-        original_name=job.original_name,
-        format=job.format,
-        original_blob=job.input_blob,
-        source_requested=job.source_requested,
-        source_resolved=source_resolved,
-        target=job.target,
-        mode=job.mode,
-        fingerprint=job.fingerprint,
-        result_id=result_id,
-        fit_status=fit_status,
-        created_at=now,
-        expires_at=expires_at,
-    )
+def add_document(session: Session, **fields: Any) -> Document:
+    document = Document(**fields)
     session.add(document)
     session.flush()
-    session.add(
-        DocumentVersion(
-            document_id=document.id,
-            version_no=0,
-            output_blob=output_blob,
-            report_blob=report_blob,
-            created_by="translation",
-            created_at=now,
-        )
-    )
     return document
+
+
+def document_by_blob(session: Session, owner_id: str, blob: str) -> Document | None:
+    """The owner's existing (not deleted) document for these bytes, newest first."""
+    return session.scalar(
+        select(Document)
+        .where(
+            Document.owner_id == owner_id,
+            Document.source_blob == blob,
+            Document.deleted_at.is_(None),
+        )
+        .order_by(Document.created_at.desc())
+        .limit(1)
+    )
 
 
 def get_document_owned(session: Session, owner_id: str, document_id: str) -> Document | None:
     return session.scalar(
-        select(Document).where(Document.id == document_id, Document.owner_id == owner_id)
-    )
-
-
-def document_for_job(session: Session, job_id: str) -> Document | None:
-    return session.scalar(select(Document).where(Document.job_id == job_id))
-
-
-def version(session: Session, document_id: str, version_no: int) -> DocumentVersion | None:
-    return session.scalar(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document_id, DocumentVersion.version_no == version_no
+        select(Document).where(
+            Document.id == document_id,
+            Document.owner_id == owner_id,
+            Document.deleted_at.is_(None),
         )
     )
 
 
 def list_documents(
-    session: Session, owner_id: str, *, after: tuple[datetime, str] | None, limit: int
+    session: Session,
+    owner_id: str,
+    *,
+    after: tuple[datetime, str] | None,
+    limit: int,
+    query: str | None = None,
 ) -> list[Document]:
-    query = select(Document).where(Document.owner_id == owner_id)
+    """Newest first; ``query`` matches names case-insensitively."""
+    statement = select(Document).where(Document.owner_id == owner_id, Document.deleted_at.is_(None))
+    if query:
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        statement = statement.where(Document.name.ilike(f"%{escaped}%", escape="\\"))
     if after is not None:
         created, ident = after
-        query = query.where(
+        statement = statement.where(
             (Document.created_at < created)
             | and_(Document.created_at == created, Document.id < ident)
         )
     return list(
-        session.scalars(query.order_by(Document.created_at.desc(), Document.id.desc()).limit(limit))
+        session.scalars(
+            statement.order_by(Document.created_at.desc(), Document.id.desc()).limit(limit)
+        )
     )
 
 
-def delete_document(session: Session, document: Document) -> None:
-    session.execute(delete(DocumentVersion).where(DocumentVersion.document_id == document.id))
-    session.execute(delete(Document).where(Document.id == document.id))
+def mark_document_deleted(session: Session, document: Document, now: datetime) -> None:
+    """Delete the source and all its translations from the owner's library.
+
+    Job downloads of this document stop at once because they check the document (ADR-014).
+    """
+    for slot in slots_of(session, document.id):
+        delete_slot(session, slot, now)
+    document.deleted_at = now
 
 
-def delete_expired_documents(session: Session, now: datetime) -> int:
-    expired = list(session.scalars(select(Document).where(Document.expires_at <= now)))
-    for document in expired:
-        delete_document(session, document)
-    return len(expired)
+def storage_used(session: Session, owner_id: str) -> int:
+    """Bytes the owner's saved library holds: sources plus current translation outputs."""
+    sources = session.scalar(
+        select(func.coalesce(func.sum(Document.size), 0)).where(
+            Document.owner_id == owner_id, Document.deleted_at.is_(None)
+        )
+    )
+    outputs = session.scalar(
+        select(func.coalesce(func.sum(Blob.size), 0))
+        .select_from(DocumentTranslation)
+        .join(Document, Document.id == DocumentTranslation.document_id)
+        .join(JobResult, JobResult.id == DocumentTranslation.current_result_id)
+        .join(Blob, Blob.hash == JobResult.output_blob)
+        .where(Document.owner_id == owner_id, Document.deleted_at.is_(None))
+    )
+    return int(sources or 0) + int(outputs or 0)
+
+
+# Results and current translations
+
+
+def add_result(session: Session, **fields: Any) -> JobResult:
+    result = JobResult(**fields)
+    session.add(result)
+    session.flush()
+    return result
+
+
+def get_result(session: Session, result_id: str) -> JobResult | None:
+    return session.get(JobResult, result_id)
+
+
+def reusable_result(
+    session: Session, document_id: str, target: str, fingerprint: str
+) -> JobResult | None:
+    """The document's current translation to ``target`` if it was produced with exactly this
+    fingerprint and completed its fit (a skipped fit is never reused)."""
+    return session.scalar(
+        select(JobResult)
+        .join(DocumentTranslation, DocumentTranslation.current_result_id == JobResult.id)
+        .where(
+            DocumentTranslation.document_id == document_id,
+            DocumentTranslation.target == target,
+            JobResult.fingerprint == fingerprint,
+            JobResult.fit_status != "skipped",
+        )
+        .limit(1)
+    )
+
+
+def slots_of(session: Session, document_id: str) -> list[DocumentTranslation]:
+    return list(
+        session.scalars(
+            select(DocumentTranslation)
+            .where(DocumentTranslation.document_id == document_id)
+            .order_by(DocumentTranslation.target, DocumentTranslation.source)
+        )
+    )
+
+
+def slot_owned(
+    session: Session, owner_id: str, document_id: str, slot_id: str
+) -> DocumentTranslation | None:
+    return session.scalar(
+        select(DocumentTranslation)
+        .join(Document, Document.id == DocumentTranslation.document_id)
+        .where(
+            DocumentTranslation.id == slot_id,
+            DocumentTranslation.document_id == document_id,
+            Document.owner_id == owner_id,
+            Document.deleted_at.is_(None),
+        )
+    )
+
+
+def set_current(
+    session: Session,
+    document_id: str,
+    source: str,
+    target: str,
+    result: JobResult,
+    now: datetime,
+    superseded_until: datetime,
+) -> None:
+    """Make ``result`` the current translation; the previous one keeps serving its jobs until
+    ``superseded_until``."""
+    slot = session.scalar(
+        select(DocumentTranslation).where(
+            DocumentTranslation.document_id == document_id,
+            DocumentTranslation.source == source,
+            DocumentTranslation.target == target,
+        )
+    )
+    result.expires_at = None
+    if slot is None:
+        session.add(
+            DocumentTranslation(
+                document_id=document_id,
+                source=source,
+                target=target,
+                current_result_id=result.id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        return
+    if slot.current_result_id != result.id:
+        session.execute(
+            update(JobResult)
+            .where(JobResult.id == slot.current_result_id)
+            .values(expires_at=superseded_until)
+        )
+        slot.current_result_id = result.id
+        slot.updated_at = now
+
+
+def delete_slot(session: Session, slot: DocumentTranslation, now: datetime) -> None:
+    """Remove one language's current translation; job downloads of it end now."""
+    session.execute(
+        update(JobResult).where(JobResult.id == slot.current_result_id).values(expires_at=now)
+    )
+    session.execute(delete(DocumentTranslation).where(DocumentTranslation.id == slot.id))
+
+
+def delete_expired_results(session: Session, now: datetime) -> int:
+    """Results past their expiry that are nobody's current translation."""
+    current = exists().where(DocumentTranslation.current_result_id == JobResult.id)
+    expired = list(
+        session.scalars(
+            select(JobResult.id).where(
+                JobResult.expires_at.is_not(None), JobResult.expires_at <= now, ~current
+            )
+        )
+    )
+    if not expired:
+        return 0
+    session.execute(update(Job).where(Job.result_id.in_(expired)).values(result_id=None))
+    return rowcount(session.execute(delete(JobResult).where(JobResult.id.in_(expired))))
+
+
+def purge_deleted_documents(session: Session) -> int:
+    """Remove deleted documents once no job refers to them (their bytes can then be freed)."""
+    referenced = exists().where(Job.document_id == Document.id)
+    gone = list(
+        session.scalars(select(Document.id).where(Document.deleted_at.is_not(None), ~referenced))
+    )
+    if not gone:
+        return 0
+    return rowcount(session.execute(delete(Document).where(Document.id.in_(gone))))

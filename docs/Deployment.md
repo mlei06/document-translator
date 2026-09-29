@@ -1,6 +1,6 @@
 # Deployment and Local Operation
 
-> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. The service described below predates that revision (shared exact-byte cache, version-0 documents, 90-day expiry); the transition is in progress on `release/p2-p6` and this guide changes with it.
+> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. The hosted parts (saved documents with current translations, temporary jobs, owner-scoped reuse, immutable job results) are implemented in the service below; the desktop local-export profile is a desktop-track deliverable.
 
 
 Status (2026-09-29): this document distinguishes intended deployment profiles from implemented operations. The shared service (P5) and local CLI are implemented and verified on one Windows host; desktop packaging and non-loopback TLS deployment remain pending.
@@ -77,7 +77,9 @@ Settings come from the environment or a `.env` file in the working directory (`-
 | `DOCTRANSLATOR_WORKERS` | `1` | Worker processes started by `serve` (each MT worker loads its own model) |
 | `DOCTRANSLATOR_MAX_UPLOAD_BYTES` | 100 MiB | Per-file upload limit |
 | `DOCTRANSLATOR_MAX_QUEUED_JOBS`, `_PER_USER` | 1000, 200 | Admission limits (429 with `Retry-After` when full) |
-| `DOCTRANSLATOR_DOCUMENT_RETENTION_DAYS`, `_CACHE_RETENTION_DAYS`, `_JOB_RETENTION_DAYS`, `_STAGING_RETENTION_HOURS` | 90, 30, 90, 24 | Retention (ADR-016) |
+| `DOCTRANSLATOR_TEMPORARY_RETENTION_HOURS`, `_SUPERSEDED_RETENTION_DAYS`, `_JOB_RETENTION_DAYS`, `_STAGING_RETENTION_HOURS` | 24, 7, 30, 24 | Retention (ADR-014): temporary results, replaced translations, terminal job metadata, abandoned uploads. Saved documents never expire |
+| `DOCTRANSLATOR_OWNER_QUOTA_BYTES` | 20 GiB | Saved library limit per owner (sources plus current translations); new documents beyond it are rejected (`quota_exceeded`) |
+| `DOCTRANSLATOR_WEB_DIR` | none | Built web UI (`apps/web/dist`) served at `/` |
 | `DOCTRANSLATOR_LEASE_S`, `_HEARTBEAT_S`, `_POLL_S`, `_MAX_ATTEMPTS` | 120, 20, 1, 3 | Worker lease, heartbeat, idle poll and attempt budget |
 
 The server refuses to start on a non-loopback address without TLS or the proxy declaration. With TLS, issue the certificate from the company CA; clients verify it through their OS trust store.
@@ -108,9 +110,11 @@ uv run doctranslator submit --manifest files.jsonl --to en --mode llm --resume-s
 uv run doctranslator batches status <batch-id>
 uv run doctranslator jobs list --status failed
 uv run doctranslator download --batch <batch-id> --output-dir out
+uv run doctranslator download --job <job-id> --output-dir out
+uv run doctranslator submit report.pdf --to en --temporary --wait --download-dir out   # no saved document, never reused
 ```
 
-A manifest is UTF-8 JSON Lines, one `{"path": ..., "source": ..., "target": ..., "mode": ...}` per file (paths relative to the manifest; per-line values override the command options). `--resume-state` records each file's submission identity before uploading, so rerunning the same command after an interruption or lost response reuses identities and never creates duplicate jobs; a file that changed since is reported as a conflict. Submission uploads at most `--concurrency` files at a time (default 2) and backs off on 429. Without `--wait`, files are accepted but not yet translated. CTRL+C stops submitting or waiting but never cancels accepted jobs; `batches cancel` does. Downloads are named `<stem>.<target>.<document-id-prefix><suffix>` with `.report.json` beside them, verified by SHA-256 and published atomically; an existing file is never replaced without `--overwrite`. Exit codes: 0 success, 1 some items failed/rejected/cancelled/unsubmitted or could not be downloaded (and unresolved fit with `--fail-on-unresolved`), 2 configuration/authentication/usage, 3 service unreachable, 130 interrupted. Raw HTTP clients use the same endpoints with `Authorization: Bearer <key>` (example: `scripts/acceptance_http_client.py`).
+A manifest is UTF-8 JSON Lines, one `{"path": ..., "source": ..., "target": ..., "mode": ...}` per file (paths relative to the manifest; per-line values override the command options). `--resume-state` records each file's submission identity before uploading, so rerunning the same command after an interruption or lost response reuses identities and never creates duplicate jobs; a file that changed since is reported as a conflict. Submission uploads at most `--concurrency` files at a time (default 2) and backs off on 429. Without `--wait`, files are accepted but not yet translated. CTRL+C stops submitting or waiting but never cancels accepted jobs; `batches cancel` does. Downloads are named `<stem>.<target>.<job-id-prefix><suffix>` with `.report.json` beside them, verified by SHA-256 and published atomically; an existing file is never replaced without `--overwrite`. Exit codes: 0 success, 1 some items failed/rejected/cancelled/unsubmitted or could not be downloaded (and unresolved fit with `--fail-on-unresolved`), 2 configuration/authentication/usage, 3 service unreachable, 130 interrupted. Saved mode (the default) files each upload in your library: submitting the same bytes and options again reuses the current translation at once; `--force` translates again and replaces it after success, while earlier job downloads stay available for 7 days. Two files with identical bytes in one batch share one saved document; the second waits for the first and reuses its result. Raw HTTP clients use the same endpoints with `Authorization: Bearer <key>` (example: `scripts/acceptance_http_client.py`).
 
 ### Operate
 

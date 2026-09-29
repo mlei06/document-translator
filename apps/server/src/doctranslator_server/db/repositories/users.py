@@ -7,11 +7,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from doctranslator_server.db.models import ApiKey, AuditEvent, Lock, User
+from doctranslator_server.db.models import Session as SessionRow
 from doctranslator_server.db.repositories._rows import rowcount
 
 __all__ = [
     "acquire_lock",
     "add_key",
+    "add_session",
     "add_user",
     "audit",
     "get_user",
@@ -20,8 +22,11 @@ __all__ = [
     "list_users",
     "release_lock",
     "revoke_key",
+    "revoke_session",
+    "session_by_digest",
     "set_active",
     "touch_key",
+    "touch_session",
 ]
 
 
@@ -123,3 +128,32 @@ def acquire_lock(session: Session, name: str, holder: str, until: datetime, now:
 
 def release_lock(session: Session, name: str, holder: str) -> None:
     session.execute(delete(Lock).where(Lock.name == name, Lock.holder == holder))
+
+
+def add_session(session: Session, **fields: object) -> SessionRow:
+    row = SessionRow(**fields)
+    session.add(row)
+    session.flush()
+    return row
+
+
+def session_by_digest(session: Session, digest: str) -> tuple[SessionRow, ApiKey, User] | None:
+    row = session.execute(
+        select(SessionRow, ApiKey, User)
+        .join(ApiKey, ApiKey.id == SessionRow.api_key_id)
+        .join(User, User.id == SessionRow.user_id)
+        .where(SessionRow.token_digest == digest)
+    ).first()
+    return None if row is None else (row[0], row[1], row[2])
+
+
+def touch_session(session: Session, session_id: str, now: datetime) -> None:
+    session.execute(update(SessionRow).where(SessionRow.id == session_id).values(last_seen_at=now))
+
+
+def revoke_session(session: Session, session_id: str, now: datetime) -> None:
+    session.execute(
+        update(SessionRow)
+        .where(SessionRow.id == session_id, SessionRow.revoked_at.is_(None))
+        .values(revoked_at=now)
+    )

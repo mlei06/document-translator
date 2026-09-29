@@ -140,6 +140,13 @@ def register(app: typer.Typer) -> None:
         overwrite: Annotated[bool, typer.Option(help="Replace existing downloads.")] = False,
         concurrency: Annotated[int, typer.Option(min=1, max=8, help="Uploads in flight.")] = 2,
         label: Annotated[str, typer.Option(help="Batch label.")] = "",
+        temporary: Annotated[
+            bool,
+            typer.Option(
+                "--temporary",
+                help="Temporary results (expire; no saved document or reuse). Default: saved.",
+            ),
+        ] = False,
         force: Annotated[bool, typer.Option("--force", help="Bypass the service cache.")] = False,
         protect: Annotated[
             list[str] | None, typer.Option("--protect", help="Term never translated.")
@@ -169,6 +176,8 @@ def register(app: typer.Typer) -> None:
                 defaults["target"] = to
             if force:
                 defaults["force_retranslate"] = True
+            if temporary:
+                defaults["retention"] = "temporary"
             if protect:
                 defaults["protected_terms"] = list(protect)
             state = ResumeState(resume_state)
@@ -394,8 +403,11 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"{job['id']} {job['status']}{progress} {job['original_name']}")
         if job["error_code"]:
             typer.echo(f"error {job['error_code']}: {job['error_message']}")
+        if job["result_available"]:
+            expires = job["result_expires_at"] or "while it is the current translation"
+            typer.echo(f"result available (fit {job['fit_status']}); downloadable until {expires}")
         if job["document_id"]:
-            typer.echo(f"document {job['document_id']} (fit {job['fit_status']})")
+            typer.echo(f"saved document {job['document_id']}")
 
     @jobs.command("cancel")
     def jobs_cancel(job_id: str, server: Server = None, config: Config = None) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -409,30 +421,20 @@ def register(app: typer.Typer) -> None:
         batch: Annotated[
             str | None, typer.Option("--batch", help="All successes of a batch.")
         ] = None,
-        document: Annotated[str | None, typer.Option("--document", help="One document.")] = None,
+        job: Annotated[str | None, typer.Option("--job", help="One job's result.")] = None,
         report: Annotated[bool, typer.Option("--report/--no-report")] = True,
         overwrite: Annotated[bool, typer.Option(help="Replace existing files.")] = False,
         server: Server = None,
         config: Config = None,
     ) -> None:
-        """Download translated files (and fit reports) you own."""
-        if bool(batch) == bool(document):
-            _fail(EXIT_INVALID, "give --batch or --document")
+        """Download translated files (and fit reports) you own: each job's exact result."""
+        if bool(batch) == bool(job):
+            _fail(EXIT_INVALID, "give --batch or --job")
         failures = 0
         with _client(server, config) as (client, _, _url):
-            if document:
-                doc = client.get(f"/documents/{document}")
-                items = [
-                    {
-                        "id": doc["id"],
-                        "original_name": doc["original_name"],
-                        "job": {
-                            "status": "succeeded",
-                            "document_id": doc["id"],
-                            "target": doc["target"],
-                        },
-                    }
-                ]
+            if job:
+                found = client.get(f"/jobs/{job}")
+                items = [{"id": found["id"], "original_name": found["original_name"], "job": found}]
             else:
                 items = list(client.pages(f"/batches/{batch}/items"))
             for _, path, error in download_items(

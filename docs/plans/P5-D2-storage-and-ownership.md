@@ -1,6 +1,8 @@
 # P5-D2 - Storage and Ownership Transition
 
-Status: Implementation handoff for accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md), 2026-09-29. Documentation only. This amends P5/P6 and D0/D2, not translation algorithms or model integration.
+Status: Implementation handoff for accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md), 2026-09-29.
+
+Progress (2026-09-29, `release/p2-p6`): items 1-7 and 10's hosted parts are implemented in the service (owner kinds, `documents`/`document_translations`/`job_results`, saved and temporary retention, retranslation without re-upload, one active job per document and target, fenced publication with current-pointer swap, deletion fencing, retention and quota, migration 0002 converting existing data). Item 8 (desktop local export) is desktop-track work; item 9 (P6 library UI) is in progress. The routes use `/v1/documents/{id}/translations` and `/v1/jobs/{id}/file` as proposed; the earlier `/versions/0` routes were never released and are removed. This amends P5/P6 and D0/D2, not translation algorithms or model integration.
 
 ## Starting point and precedence
 

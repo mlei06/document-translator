@@ -1,6 +1,6 @@
 # ADR-016 - Service Execution, Storage Safety and Operations
 
-Status: Accepted 2026-09-29 (P5.0). Amends [ADR-008](ADR-008-job-execution-model.md) (worker-ID fence replaced by an attempt claim token; exact transaction predicates) and makes [ADR-004](ADR-004-job-storage.md)/[ADR-007](ADR-007-translation-reuse-and-document-storage.md) storage and retention concrete. Contracts come from the [P5 plan](../plans/P5-server-and-service-cli.md).
+Status: Accepted 2026-09-29 (P5.0). Its cache publication, document/version rows and retention defaults are superseded by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): publication records an immutable job result and swaps only the saved document's current translation; one unfinished job per saved document and target (`jobs.active_slot`); retention is temporary results 24 h, superseded results 7 days, terminal job metadata 30 days, saved documents never (per-owner quota). The claim-token fence, heartbeat, cancellation ordering, pins/GC and backup/restore below are unchanged. Amends [ADR-008](ADR-008-job-execution-model.md) (worker-ID fence replaced by an attempt claim token; exact transaction predicates) and makes [ADR-004](ADR-004-job-storage.md)/[ADR-007](ADR-007-translation-reuse-and-document-storage.md) storage and retention concrete. Contracts come from the [P5 plan](../plans/P5-server-and-service-cli.md).
 
 ## Context
 

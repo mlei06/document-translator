@@ -6,7 +6,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from doctranslator_server.jobs.views import BatchView, DocumentView, ItemView, JobView
+from doctranslator_server.jobs.views import (
+    BatchView,
+    DocumentView,
+    ItemView,
+    JobView,
+)
 
 __all__ = [
     "BatchCreate",
@@ -21,7 +26,12 @@ __all__ = [
     "JobOut",
     "JobPage",
     "Me",
+    "ProgressOut",
+    "SessionCreate",
+    "SessionOut",
     "SubmitOptionsIn",
+    "TranslateIn",
+    "TranslationOut",
 ]
 
 
@@ -40,7 +50,23 @@ class ErrorOut(BaseModel):
 class Me(BaseModel):
     id: str
     display_name: str
-    kind: Literal["person", "service"]
+    kind: Literal["human", "service"]
+    storage_used_bytes: int
+    storage_quota_bytes: int
+
+
+class SessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=200)
+    """A provisioned API key; exchanged once for a session and never stored by the browser."""
+
+
+class SessionOut(BaseModel):
+    user: Me
+    csrf_token: str
+    """Send as ``X-CSRF-Token`` on every state-changing request made with the session cookie."""
+    expires_at: datetime
 
 
 class Capabilities(BaseModel):
@@ -48,6 +74,7 @@ class Capabilities(BaseModel):
     modes: list[str]
     languages: list[str]
     fit_statuses: list[str]
+    retention: list[str]
     limits: dict[str, int]
     fit_defaults: dict[str, float]
     service_version: str
@@ -55,7 +82,7 @@ class Capabilities(BaseModel):
 
 
 class SubmitOptionsIn(BaseModel):
-    """The ``options`` form field (JSON) of a submission."""
+    """Translation options (the ``options`` form field of uploads, or the JSON body fields)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -67,6 +94,16 @@ class SubmitOptionsIn(BaseModel):
     min_scale: float | None = None
     min_size_pt: float | None = None
     force_retranslate: bool = False
+    """Translate again even when the document's current translation is compatible."""
+    retention: Literal["saved", "temporary"] = "saved"
+
+
+class TranslateIn(SubmitOptionsIn):
+    """Translate a saved document: options plus exactly one submission identity."""
+
+    submission_id: UUID | None = None
+    batch_id: str | None = None
+    client_item_id: UUID | None = None
 
 
 class BatchCreate(BaseModel):
@@ -76,9 +113,18 @@ class BatchCreate(BaseModel):
     label: str = Field(default="", max_length=200)
 
 
+class ProgressOut(_Out):
+    phase: Literal["prepare", "extract", "translate", "apply", "fit", "write"]
+    done: int | None
+    total: int | None
+    updated_at: datetime | None
+
+
 class JobOut(_Out):
     id: str
     batch_id: str | None
+    document_id: str | None
+    retention: Literal["saved", "temporary"]
     status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
     original_name: str
     format: str
@@ -89,21 +135,51 @@ class JobOut(_Out):
     fingerprint: str
     force: bool
     attempts: int
-    phase: str | None
-    progress_done: int
-    progress_total: int
+    progress: ProgressOut | None
     cancel_requested: bool
+    fit_skip_requested: bool
     cache_hit: bool
     error_code: str | None
     error_message: str | None
-    document_id: str | None
     fit_status: str | None
+    result_available: bool
+    result_expires_at: datetime | None
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    dismissed_at: datetime | None
 
     @classmethod
     def of(cls, view: JobView) -> JobOut:
+        return cls.model_validate(view)
+
+
+class TranslationOut(_Out):
+    id: str
+    source: str | None
+    target: str
+    fit_status: str
+    job_id: str
+    output_size: int
+    output_sha256: str
+    updated_at: datetime
+
+
+class DocumentOut(_Out):
+    id: str
+    name: str
+    format: str
+    size: int
+    sha256: str
+    detected_source: str | None
+    detection: Literal["detected", "ambiguous", "no_text"]
+    external_ref: str | None
+    created_at: datetime
+    translations: list[TranslationOut]
+    active_jobs: dict[str, str]
+
+    @classmethod
+    def of(cls, view: DocumentView) -> DocumentOut:
         return cls.model_validate(view)
 
 
@@ -118,15 +194,7 @@ class ItemOut(_Out):
 
     @classmethod
     def of(cls, view: ItemView) -> ItemOut:
-        return cls(
-            id=view.id,
-            ordinal=view.ordinal,
-            client_item_id=view.client_item_id,
-            original_name=view.original_name,
-            rejection_code=view.rejection_code,
-            rejection_message=view.rejection_message,
-            job=JobOut.of(view.job) if view.job else None,
-        )
+        return cls.model_validate(view)
 
 
 class BatchOut(_Out):
@@ -140,27 +208,6 @@ class BatchOut(_Out):
 
     @classmethod
     def of(cls, view: BatchView) -> BatchOut:
-        return cls.model_validate(view)
-
-
-class DocumentOut(_Out):
-    id: str
-    job_id: str
-    original_name: str
-    format: str
-    mode: str
-    source_requested: str
-    source_resolved: str | None
-    target: str
-    fit_status: str
-    version: int
-    output_size: int
-    output_sha256: str
-    created_at: datetime
-    expires_at: datetime
-
-    @classmethod
-    def of(cls, view: DocumentView) -> DocumentOut:
         return cls.model_validate(view)
 
 

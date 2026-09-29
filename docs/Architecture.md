@@ -155,7 +155,7 @@ Lenovo managed rollout and eventual OEM preload follow a working installer app. 
 | Core | Text API and both engines; document API (`translate_document`, `prepare_identity`, `output_fingerprint`, `inspect_document`, `build_font_manifest`); detection, protection, tagged translation with projection/per-span fallback; TXT/PPTX/DOCX/XLSX adapters with targeted OOXML writes; PDF adapter with targeted replacement and writer-driven fit (ADR-018); ADR-012 fit with PPTX/DOCX/XLSX layout support; saved-output verification | Rendering/edits (P7) |
 | Eval | Dataset loaders, run recording, COMET/chrF, comparison and baseline commands | Full committed baselines before the first prompt/model change |
 | CLI | Local `doctranslator translate`; service commands `whoami`, `submit` (files or manifest, resume state, wait, download), `batches`, `jobs`, `download` over REST | - |
-| Server | Users and API keys (ADR-015), SQLite/Alembic persistence, blob storage with pins and GC, REST `/v1`, attempt-fenced queue and workers, retention, backup/restore, `doctranslator-server` administration (ADR-016) | Browser sessions (P6); MCP (P7); PostgreSQL/multi-host (later) |
+| Server | Owners and API keys (ADR-015), browser sessions (ADR-017), ADR-014 saved documents with current translations and immutable job results, temporary jobs, SQLite/Alembic persistence, blob storage with pins and GC, REST `/v1`, attempt-fenced queue and workers with progress snapshots and fit skip, retention, backup/restore, `doctranslator-server` administration | ADR-014 local-export profile (desktop tracks); MCP (P7); PostgreSQL/multi-host (later) |
 | Web | Design exploration | React application (P6) |
 
 P2 and the ADR-012 fit integration (P3) are implemented on `release/p2-p6`; the [release evidence](plans/P2-P6-release-evidence.md) records what has been verified. P1 remains in progress pending delivery verification/closure. Its deferred baselines are separate from that closure. Local engine tests and the XLSX serialization experiment are not proof that the full document system is implemented.
@@ -627,42 +627,48 @@ These are explicit gates, not hidden decisions for coders. The [delivery handoff
 
 ## Server Reference
 
-Implemented in `apps/server` (P5). Decisions: [ADR-015](decisions/ADR-015-authentication-and-ownership.md), [ADR-016](decisions/ADR-016-service-execution-and-operations.md). Operation: [Deployment](Deployment.md#shared-service-implemented).
+Implemented in `apps/server`. Decisions: [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) (storage, ownership, retranslation), [ADR-015](decisions/ADR-015-authentication-and-ownership.md) (keys, ownership), [ADR-016](decisions/ADR-016-service-execution-and-operations.md) (queue fence, GC, backup), [ADR-017](decisions/ADR-017-web-ui-service-extensions.md) (sessions, detection, previews, dismissal, SPA). Progress and fit skip follow the [P5-P6 progress plan](plans/P5-P6-document-progress.md). Operation: [Deployment](Deployment.md#shared-service-implemented). The ADR-014 local-export profile belongs to the desktop tracks and is not part of this service yet.
 
 ### REST `/v1`
 
-Every route except `GET /v1/health` requires `Authorization: Bearer <key>`; failures are 401 `unauthenticated`. Errors use `{code, message, request_id, retryable, details}` (400 malformed, 401, 404 absent or not owned, 409 conflict/idempotency mismatch/closed batch, 413 too large, 415 unsupported format, 422 invalid options or document, 429 queue full with `Retry-After`, 503 temporarily unavailable). Lists are newest first with opaque cursors (`limit` 1-200, default 50). OpenAPI: `/v1/openapi.json`.
+Every route except `GET /v1/health` and `POST /v1/sessions` requires `Authorization: Bearer <key>` or the `dt_session` cookie (state-changing cookie requests also need `X-CSRF-Token`); failures are 401 `unauthenticated` or 403 `csrf_failed`. Errors use `{code, message, request_id, retryable, details}` (401, 403, 404 absent or not owned, 409 conflict / idempotency mismatch / `translation_active` with `details.job_id` / closed batch / `not_in_fit`, 413 too large or `quota_exceeded`, 415 unsupported format, 422 invalid options or document, 429 queue full or sign-in rate limit with `Retry-After`). Lists are newest first with opaque cursors (`limit` 1-200, default 50). OpenAPI: `/v1/openapi.json`.
 
 | Route | Contract |
 |---|---|
-| `GET /me`, `GET /capabilities` | Caller identity; formats, modes, languages, fit statuses, limits, versions |
-| `POST /batches` `{idempotency_key, label}` | 201 created, 200 replay; `GET /batches`, `GET /batches/{id}` with counts by outcome |
-| `POST /batches/{id}/items` multipart `file`, `options` (JSON), `client_item_id` | 202 queued, 201 completed from cache, 200 replay; 415/422 record a rejected member (`details.item_id`) |
-| `GET /batches/{id}/items?client_item_id=` | Members in submission order with job summaries; cursor is the last ordinal |
-| `POST /batches/{id}/seal`, `/cancel` | Stop accepting members; cancel also cancels unfinished jobs |
-| `POST /jobs` multipart `file`, `options`, `submission_id` | Standalone submission with the same status codes |
-| `GET /jobs?status=`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel` | Status, phase/progress, attempts, cache hit, safe error, document ID and fit status |
-| `GET /documents`, `GET /documents/{id}` | Owned results with fit status, output size/SHA-256 and expiry |
-| `GET /documents/{id}/versions/0/file`, `.../fit-report`, `/original` | Streamed with `X-Content-SHA256` and a safe filename |
-| `DELETE /documents/{id}` | 204; removes the user's access |
+| `POST /sessions` `{key}`, `DELETE /sessions/current` | Browser sign-in (cookie + CSRF token) and sign-out |
+| `GET /me`, `GET /capabilities` | Owner identity (`human`/`service`) with storage used/quota; formats, modes, languages, fit statuses, retention modes, limits, versions |
+| `POST /documents` multipart `file` (+`new_document`, `external_ref`) | Save a source document: validated and language-detected before translation; identical bytes return the owner's existing document (200) unless `new_document` |
+| `GET /documents?q=`, `GET /documents/{id}`, `DELETE /documents/{id}`, `GET /documents/{id}/original` | The owner's library: documents with current translations per language pair and active jobs per target; deleting cancels active work and revokes job downloads |
+| `POST /documents/{id}/translations` JSON options + `submission_id` or `batch_id`/`client_item_id` | Translate without re-upload: 201 when the compatible current translation is reused, 202 queued, 409 `translation_active` when that target already has an unfinished job; `force_retranslate` bypasses reuse and replaces the current translation on success |
+| `GET/DELETE /documents/{id}/translations/{tid}`, `.../file`, `.../fit-report`, `.../preview[/{name}]` | The current translation of one language pair |
+| `POST /batches` `{idempotency_key, label}`, `GET /batches`, `GET /batches/{id}`, `POST .../seal`, `POST .../cancel` | Owned batches with counts by outcome |
+| `POST /batches/{id}/items` multipart `file`, `options` (JSON), `client_item_id` | Upload into a batch (saved documents, or `retention: temporary`); 415/422 record a rejected member |
+| `GET /batches/{id}/items?client_item_id=` | Members in submission order with job summaries |
+| `POST /jobs` multipart `file`, `options`, `submission_id` | Standalone upload with the same semantics |
+| `GET /jobs?status=&q=&active=`, `GET /jobs/{id}` | Status, `progress {phase, done, total, updated_at}` (counts only while translating), attempts, reuse, safe error, `fit_status`, `result_available`, `result_expires_at`, `dismissed_at` |
+| `POST /jobs/{id}/cancel`, `/skip-fit`, `/dismiss`, `/restore` | Cancel; stop the remaining layout check (202, 200 when repeated, 409 outside fit); move off / back onto the active view |
+| `GET /jobs/{id}/file`, `/fit-report`, `/preview[/{name}]` | The job's exact immutable result until it expires (never a later replacement) |
 
-Submission `options`: `target`, `source` (`auto` default), `mode`, `protected_terms`, `txt_encoding`, `min_scale`, `min_size_pt`, `force_retranslate`.
+Options: `target`, `source` (`auto` default), `mode`, `protected_terms`, `txt_encoding`, `min_scale`, `min_size_pt`, `force_retranslate`, `retention` (`saved` default, or `temporary`).
 
-### Schema (Alembic revision 0001)
+### Schema (Alembic revisions 0001, 0002)
 
 | Table | Purpose and key constraints |
 |---|---|
-| `users`, `api_keys` | Stable user IDs (`person`/`service`, active flag, reserved `(issuer, subject)`); keys by unique prefix with SHA-256 digest and revocation |
-| `blobs`, `blob_pins` | Content-addressed files (`pending`/`available`/`deleting`) and pins protecting unreferenced new blobs |
-| `translation_results` | Shared cache, unique `(input_hash, fingerprint)`, output/report blobs; never exposed |
+| `users`, `api_keys`, `sessions` | Owners (`human`/`service`, active flag, reserved `(issuer, subject)`); keys by unique prefix with SHA-256 digest and revocation; browser sessions by token digest with idle/absolute expiry |
+| `blobs`, `blob_pins` | Content-addressed files (`pending`/`available`/`deleting`) and pins protecting new blobs until referenced |
+| `documents` | Owner's logical source documents: source blob, name, format, detection, optional external reference, soft deletion |
+| `document_translations` | One current translation per document, resolved source and target (unique), pointing at a job result |
+| `job_results` | Immutable output/report/preview blobs, fingerprint, fit status, producing job; `expires_at` null while current, else when job downloads end |
+| `jobs` | ADR-016 queue fields, retention, document, `active_slot` (unique while unfinished), canonical options, fingerprint, request hash, progress snapshot, `fit_skip_requested`, `result_id`, `dismissed_at` |
 | `batches`, `batch_items` | Owned batches (unique `(owner_id, idempotency_key)`); members unique by `(batch_id, client_item_id)` and ordinal, with a job or a rejection |
-| `jobs` | ADR-016 queue fields, canonical options, fingerprint, unique `(owner_id, submission_id)`, request hash for idempotency |
-| `documents`, `document_versions` | Owned results; version 0 references output and report blobs independent of the cache |
 | `audit_events`, `locks` | Audit trail; the GC/backup lock |
+
+Migration 0002 converts 0001 data: per-job documents become owner documents (merged by owner and bytes), each version 0 becomes its job's result, the newest result per language pair becomes current and older ones get the superseded expiry; the global cache is dropped.
 
 ### Process model
 
-`doctranslator-server serve` runs uvicorn (REST) and supervises worker subprocesses; each worker keeps one `Translator` per mode, heartbeats in a separate thread and publishes results in one fenced transaction. Submission never loads models: fingerprints come from `prepare_identity` and the font manifest, and the worker checks its loaded identity before translating (`identity_mismatch` otherwise).
+`doctranslator-server serve` runs uvicorn (REST, and the built web UI when `DOCTRANSLATOR_WEB_DIR` is set) and supervises worker subprocesses. Each worker keeps one `Translator` per mode, heartbeats in a separate thread, stores throttled progress snapshots, reads the skip-fit flag at most once a second during fit, and publishes in one fenced transaction (result, current-translation swap for saved documents, active-slot release). Submission never loads models: fingerprints come from `prepare_identity` and the font manifest, and the worker checks its loaded identity before translating (`identity_mismatch` otherwise). Retention: temporary results 24 h, superseded results 7 days, terminal job/batch metadata 30 days, saved documents never (per-owner quota, default 20 GiB).
 
 ## Core API Reference
 

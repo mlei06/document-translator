@@ -3,7 +3,7 @@
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
-Status: Proposed implementation plan requested by the owner. No production behavior is implemented by this document. Applies to the shared service used by the website, service CLI and future desktop app.
+Status: Implementation plan requested by the owner. Progress (2026-09-29, `release/p2-p6`): core `ProgressPhase.APPLY`, early extract event, `should_skip_fit` and `FitStatus.SKIPPED`; service `prepare` phase, progress snapshots with `progress_updated_at`, `fit_skip_requested`, `POST /v1/jobs/{id}/skip-fit`, nested `progress` in job responses and skipped results excluded from reuse are implemented and tested. The web display is P6 work in progress. Applies to the shared service used by the website, service CLI and future desktop app.
 
 ## Objective and scope
 

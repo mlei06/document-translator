@@ -47,7 +47,8 @@ class Services:
             self.db,
             lease=timedelta(seconds=self.settings.lease_s),
             retry_delays=self.settings.retry_delays_s,
-            document_retention=timedelta(days=self.settings.document_retention_days),
+            temporary_retention=timedelta(hours=self.settings.temporary_retention_hours),
+            superseded_retention=timedelta(days=self.settings.superseded_retention_days),
         )
 
     def close(self) -> None:
@@ -128,6 +129,7 @@ def create_app(services: Services) -> FastAPI:
             service_version=package_version("doctranslator-server"),
             core_version=package_version("doctranslator-core"),
             max_upload_bytes=services.settings.max_upload_bytes,
+            web_dir=services.settings.web_dir,
         ),
     )
     return app

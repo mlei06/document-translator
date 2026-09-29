@@ -11,11 +11,12 @@ from typing import Any
 from sqlalchemy import and_, delete, exists, func, select, update
 from sqlalchemy.orm import Session
 
-from doctranslator_server.db.models import Document, Job, User
+from doctranslator_server.db.models import Job, JobResult, User
 from doctranslator_server.db.repositories._rows import rowcount
 
 __all__ = [
     "NONTERMINAL",
+    "active_in_slot",
     "by_submission",
     "cancel_for_user",
     "claim",
@@ -31,6 +32,7 @@ __all__ = [
     "next_candidates",
     "recover",
     "request_cancel",
+    "request_skip_fit",
 ]
 
 NONTERMINAL = ("queued", "running")
@@ -65,19 +67,38 @@ def list_owned(
     limit: int,
     status: str | None = None,
     batch_id: str | None = None,
+    search: str | None = None,
+    active: bool = False,
+    document_id: str | None = None,
+    active_only: bool = False,
 ) -> list[Job]:
-    """Newest first; ``after`` is the (created_at, id) of the last row of the previous page."""
-    query = select(Job).where(Job.owner_id == owner_id)
+    """Newest first; ``after`` is the (created_at, id) of the last row of the previous page.
+
+    ``search`` matches file names (case-insensitive); ``active`` keeps unfinished jobs and
+    finished jobs the user has not dismissed; ``active_only`` keeps unfinished jobs only.
+    """
+    statement = select(Job).where(Job.owner_id == owner_id)
+    if document_id is not None:
+        statement = statement.where(Job.document_id == document_id)
+    if active_only:
+        statement = statement.where(Job.status.in_(NONTERMINAL))
+    if search:
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        statement = statement.where(Job.original_name.ilike(f"%{escaped}%", escape="\\"))
+    if active:
+        statement = statement.where(Job.status.in_(NONTERMINAL) | Job.dismissed_at.is_(None))
     if status is not None:
-        query = query.where(Job.status == status)
+        statement = statement.where(Job.status == status)
     if batch_id is not None:
-        query = query.where(Job.batch_id == batch_id)
+        statement = statement.where(Job.batch_id == batch_id)
     if after is not None:
         created, ident = after
-        query = query.where(
+        statement = statement.where(
             (Job.created_at < created) | and_(Job.created_at == created, Job.id < ident)
         )
-    return list(session.scalars(query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)))
+    return list(
+        session.scalars(statement.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit))
+    )
 
 
 def count_nonterminal(session: Session, owner_id: str | None = None) -> int:
@@ -117,9 +138,10 @@ def claim(
             lease_until=lease_until,
             heartbeat_at=now,
             started_at=now,
-            phase=None,
-            progress_done=0,
-            progress_total=0,
+            phase="prepare",
+            progress_done=None,
+            progress_total=None,
+            progress_updated_at=now,
         )
     )
     return rowcount(result) == 1
@@ -173,15 +195,27 @@ def recover(session: Session, job: Job, now: datetime, retry_at: datetime) -> st
     if job.claim_token is None:
         return None
     if job.cancel_requested:
-        values: dict[str, Any] = {"status": "cancelled", "finished_at": now}
+        values: dict[str, Any] = {
+            "status": "cancelled",
+            "finished_at": now,
+            "active_slot": None,
+        }
         outcome = "cancelled"
     elif job.attempts < job.max_attempts:
-        values = {"status": "queued", "available_at": retry_at}
+        values = {
+            "status": "queued",
+            "available_at": retry_at,
+            "phase": None,
+            "progress_done": None,
+            "progress_total": None,
+            "progress_updated_at": None,
+        }
         outcome = "requeued"
     else:
         values = {
             "status": "failed",
             "finished_at": now,
+            "active_slot": None,
             "error_code": "worker_lost",
             "error_message": "The worker processing this job stopped repeatedly.",
         }
@@ -206,7 +240,7 @@ def request_cancel(session: Session, job_id: str, now: datetime) -> None:
     session.execute(
         update(Job)
         .where(Job.id == job_id, Job.status == "queued")
-        .values(status="cancelled", cancel_requested=True, finished_at=now)
+        .values(status="cancelled", cancel_requested=True, finished_at=now, active_slot=None)
         .execution_options(synchronize_session=False)
     )
     session.execute(
@@ -218,20 +252,44 @@ def request_cancel(session: Session, job_id: str, now: datetime) -> None:
 
 
 def delete_finished(session: Session, before: datetime) -> int:
-    """Standalone terminal jobs that finished before ``before`` and left no document."""
+    """Standalone terminal jobs that finished before ``before`` and whose own result is gone
+    (a current translation's producing job is kept as its provenance, ADR-014)."""
     old = list(
         session.scalars(
             select(Job.id).where(
                 Job.batch_id.is_(None),
                 Job.status.not_in(NONTERMINAL),
                 Job.finished_at < before,
-                ~exists().where(Document.job_id == Job.id),
+                ~exists().where(JobResult.job_id == Job.id),
             )
         )
     )
     if old:
         session.execute(delete(Job).where(Job.id.in_(old)))
     return len(old)
+
+
+def request_skip_fit(session: Session, job: Job) -> str:
+    """Record a skip-fit request (ADR-012 amendment): ``set``, ``already`` or ``not_in_fit``."""
+    if job.fit_skip_requested:
+        return "already"
+    result = session.execute(
+        update(Job)
+        .where(
+            Job.id == job.id,
+            Job.status == "running",
+            Job.phase == "fit",
+            ~Job.cancel_requested,
+            ~Job.fit_skip_requested,
+        )
+        .values(fit_skip_requested=True)
+        .execution_options(synchronize_session=False)
+    )
+    return "set" if rowcount(result) == 1 else "not_in_fit"
+
+
+def active_in_slot(session: Session, slot: str) -> Job | None:
+    return session.scalar(select(Job).where(Job.active_slot == slot))
 
 
 def cancel_for_user(session: Session, owner_id: str, now: datetime) -> int:

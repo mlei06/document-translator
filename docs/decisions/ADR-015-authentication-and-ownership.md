@@ -1,6 +1,6 @@
 # ADR-015 - Authentication and Ownership for the Internal Service
 
-Status: Accepted 2026-09-29 (P5.0). Ratifies the recommended contract in the [P5 plan](../plans/P5-server-and-service-cli.md#p50-authentication-decision-to-ratify) for the internal pre-GUI release. Browser sessions (P6) and company identity integration extend this user model; they do not replace it.
+Status: Accepted 2026-09-29 (P5.0). Amended by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): owner kinds are `human` and `service`, reuse is scoped to the owner's own saved document (the cache side-channel section below no longer applies), and by [ADR-017](ADR-017-web-ui-service-extensions.md) (browser sessions). Ratifies the recommended contract in the [P5 plan](../plans/P5-server-and-service-cli.md#p50-authentication-decision-to-ratify) for the internal pre-GUI release. Browser sessions (P6) and company identity integration extend this user model; they do not replace it.
 
 ## Context
 

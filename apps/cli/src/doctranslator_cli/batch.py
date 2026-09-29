@@ -197,8 +197,9 @@ def _submit_one(
     if prior is None:
         state.record(item)  # the identity is durable before any network I/O
     name = entry.path.name
-    try:
-        _, body = with_retries(
+
+    def upload() -> tuple[int, dict[str, Any]]:
+        return with_retries(
             lambda: client.submit_item(
                 batch_id, entry.path, name, entry.options, item.client_item_id
             ),
@@ -206,6 +207,19 @@ def _submit_one(
                 f"{name}: {reason}; retrying in {seconds:.0f} s"
             ),
         )
+
+    try:
+        try:
+            _, body = upload()
+        except ServiceError as exc:
+            if exc.code != "translation_active" or not exc.details.get("job_id"):
+                raise
+            # The same saved document is already being translated into this language (for
+            # example an identical file earlier in the batch): wait for it, then submit again
+            # with the same identity, which reuses the new current translation (ADR-014).
+            notify(f"{name}: waiting for the identical document already being translated")
+            _wait_for_job(client, str(exc.details["job_id"]))
+            _, body = upload()
         item.status, item.item_id = "accepted", body["id"]
         item.job_id = (body.get("job") or {}).get("id")
     except ServiceError as exc:
@@ -227,6 +241,18 @@ def _submit_one(
                 item.status, item.error = "rejected", found["rejection_code"]
     state.record(item)
     return item
+
+
+def _wait_for_job(
+    client: ServiceClient, job_id: str, *, sleep: Callable[[float], None] = time.sleep
+) -> None:
+    interval = 1.0
+    while True:
+        job = with_retries(lambda: client.get(f"/jobs/{job_id}"), attempts=10)
+        if job["status"] in TERMINAL:
+            return
+        sleep(interval)
+        interval = min(interval * 1.5, 10.0)
 
 
 def _recover(client: ServiceClient, batch_id: str, client_item_id: str) -> dict[str, Any] | None:
@@ -287,14 +313,14 @@ def wait_for(
         interval = min(interval * 1.5, 10.0)
 
 
-def output_name(original_name: str, target: str, document_id: str) -> str:
-    """``<stem>.<target>.<document id prefix><suffix>``: distinct for same-named inputs."""
+def output_name(original_name: str, target: str, job_id: str) -> str:
+    """``<stem>.<target>.<job id prefix><suffix>``: distinct for same-named inputs."""
     base = original_name.replace("\\", "/").rsplit("/", 1)[-1] or "document"
     stem, dot, suffix = base.rpartition(".")
     if not dot:
         stem, suffix = base, ""
     stem = "".join(ch if ch.isprintable() and ch not in '<>:"|?*' else "_" for ch in stem)
-    return f"{stem or 'document'}.{target}.{document_id[:8]}{'.' + suffix if suffix else ''}"
+    return f"{stem or 'document'}.{target}.{job_id[:8]}{'.' + suffix if suffix else ''}"
 
 
 def download_items(
@@ -306,18 +332,19 @@ def download_items(
     overwrite: bool,
     notify: Notify,
 ) -> Iterator[tuple[dict[str, Any], Path | None, str | None]]:
-    """Download each succeeded item's document; yields (item, path or None, error or None)."""
+    """Download each succeeded item's exact job result (ADR-014); yields (item, path or None,
+    error or None)."""
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     for item in items:
         job = item.get("job") or {}
-        document_id = job.get("document_id")
-        if job.get("status") != "succeeded" or not document_id:
+        job_id = job.get("id")
+        if job.get("status") != "succeeded" or not job_id or not job.get("result_available", True):
             continue
-        name = output_name(item["original_name"], job["target"], document_id)
+        name = output_name(item["original_name"], job["target"], job_id)
         destination = directory / name
-        file_path = f"/documents/{document_id}/versions/0/file"
-        report_path = f"/documents/{document_id}/versions/0/fit-report"
+        file_path = f"/jobs/{job_id}/file"
+        report_path = f"/jobs/{job_id}/fit-report"
         try:
             with_retries(
                 functools.partial(client.download, file_path, destination, overwrite=overwrite),

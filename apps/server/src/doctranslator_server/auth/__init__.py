@@ -18,10 +18,14 @@ from doctranslator_server.db.models import ApiKey, utcnow
 from doctranslator_server.db.repositories import users as repo
 
 __all__ = [
+    "SESSION_ABSOLUTE",
+    "SESSION_IDLE",
     "AuthenticationError",
     "Authenticator",
+    "CsrfError",
     "IssuedKey",
     "KeyInfo",
+    "NewSession",
     "Principal",
     "UserInfo",
     "UserNotFoundError",
@@ -37,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 _KEY = re.compile(r"^dt_([a-z2-7]{12})_([A-Za-z0-9_-]{43})$")
 _TOUCH_INTERVAL = timedelta(minutes=1)
+SESSION_IDLE = timedelta(minutes=30)
+SESSION_ABSOLUTE = timedelta(hours=12)
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 class AuthenticationError(Exception):
@@ -47,6 +54,10 @@ class UserNotFoundError(Exception):
     pass
 
 
+class CsrfError(Exception):
+    """A cookie-authenticated change without a matching CSRF token or from another origin."""
+
+
 @dataclass(frozen=True, slots=True)
 class Principal:
     """The authenticated caller. ``user_id`` is the only owner source (ADR-015)."""
@@ -54,6 +65,17 @@ class Principal:
     user_id: str
     display_name: str
     kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class NewSession:
+    """A signed-in browser session: ``token`` goes in the cookie, ``csrf`` to the page."""
+
+    principal: Principal
+    session_id: str
+    token: str
+    csrf: str
+    expires_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +106,7 @@ class IssuedKey:
 
 
 def _digest(secret: str) -> str:
-    return hashlib.sha256(secret.encode("ascii")).hexdigest()
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
 def _new_key() -> tuple[str, str, str]:
@@ -105,7 +127,12 @@ class Authenticator:
         """The principal for an ``Authorization`` header value, or ``AuthenticationError``."""
         if not authorization or not authorization.startswith("Bearer "):
             raise AuthenticationError
-        match = _KEY.match(authorization.removeprefix("Bearer ").strip())
+        principal, _ = self._key(authorization.removeprefix("Bearer ").strip())
+        return principal
+
+    def _key(self, value: str) -> tuple[Principal, str]:
+        """Validate an API key; returns the principal and the key's ID."""
+        match = _KEY.match(value)
         if match is None:
             raise AuthenticationError
         prefix, secret = match.groups()
@@ -125,14 +152,77 @@ class Authenticator:
                 repo.audit(
                     session, "auth_failed", actor=None, target_type="api_key", target_id=key.id
                 )
+            key_id = key.id
         if principal is None:
             raise AuthenticationError
-        return principal
+        return principal, key_id
+
+    # Browser sessions (ADR-017)
+
+    def start_session(self, key: str) -> NewSession:
+        """Exchange a valid API key for a new browser session (the key is not kept)."""
+        principal, key_id = self._key(key.strip())
+        token = secrets.token_urlsafe(32)
+        csrf = secrets.token_urlsafe(32)
+        now = utcnow()
+        expires = now + SESSION_ABSOLUTE
+        with self._db.session() as session:
+            row = repo.add_session(
+                session,
+                token_digest=_digest(token),
+                csrf_digest=_digest(csrf),
+                user_id=principal.user_id,
+                api_key_id=key_id,
+                created_at=now,
+                last_seen_at=now,
+                expires_at=expires,
+            )
+            repo.audit(
+                session,
+                "session_started",
+                actor=principal.user_id,
+                target_type="session",
+                target_id=row.id,
+            )
+            session_id = row.id
+        return NewSession(principal, session_id, token, csrf, expires)
+
+    def from_session(
+        self, token: str, *, method: str, csrf: str | None, origin: str | None, own_origin: str
+    ) -> tuple[Principal, str]:
+        """The principal for a session cookie; state-changing requests need the CSRF token and a
+        same-origin ``Origin`` (when sent). Returns the principal and the session ID."""
+        now = utcnow()
+        with self._db.session() as session:
+            found = repo.session_by_digest(session, _digest(token))
+            if found is None:
+                raise AuthenticationError
+            row, key, user = found
+            if (
+                row.revoked_at is not None
+                or row.expires_at <= now
+                or now - row.last_seen_at >= SESSION_IDLE
+                or key.revoked_at is not None
+                or not user.active
+            ):
+                raise AuthenticationError
+            if method.upper() in _UNSAFE_METHODS:
+                if csrf is None or not hmac.compare_digest(row.csrf_digest, _digest(csrf)):
+                    raise CsrfError
+                if origin is not None and origin.rstrip("/") != own_origin.rstrip("/"):
+                    raise CsrfError
+            if now - row.last_seen_at >= _TOUCH_INTERVAL:
+                repo.touch_session(session, row.id, now)
+            return Principal(user.id, user.display_name, user.kind), row.id
+
+    def end_session(self, session_id: str) -> None:
+        with self._db.session() as session:
+            repo.revoke_session(session, session_id, utcnow())
 
 
-def create_user(db: Database, display_name: str, kind: str = "person") -> UserInfo:
-    if kind not in ("person", "service"):
-        raise ValueError("kind must be person or service")
+def create_user(db: Database, display_name: str, kind: str = "human") -> UserInfo:
+    if kind not in ("human", "service"):
+        raise ValueError("kind must be human or service")
     with db.session() as session:
         user = repo.add_user(session, display_name, kind)
         repo.audit(session, "user_created", actor=None, target_type="user", target_id=user.id)

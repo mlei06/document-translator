@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.orm import Session
 
-from doctranslator_server.db.models import Batch, BatchItem, Document, Job
+from doctranslator_server.db.models import Batch, BatchItem, Job, JobResult
 
 __all__ = [
     "add_item",
@@ -72,11 +72,10 @@ def add_item(session: Session, batch: Batch, **fields: Any) -> BatchItem:
 
 def items(
     session: Session, batch_id: str, *, after: int | None, limit: int, client_item_id: str | None
-) -> list[tuple[BatchItem, Job | None, Document | None]]:
+) -> list[tuple[BatchItem, Job | None]]:
     query = (
-        select(BatchItem, Job, Document)
+        select(BatchItem, Job)
         .outerjoin(Job, Job.id == BatchItem.job_id)
-        .outerjoin(Document, Document.job_id == Job.id)
         .where(BatchItem.batch_id == batch_id)
     )
     if client_item_id is not None:
@@ -84,7 +83,7 @@ def items(
     if after is not None:
         query = query.where(BatchItem.ordinal > after)
     rows = session.execute(query.order_by(BatchItem.ordinal).limit(limit)).all()
-    return [(row[0], row[1], row[2]) for row in rows]
+    return [(row[0], row[1]) for row in rows]
 
 
 def counts(session: Session, batch_id: str) -> dict[str, int]:
@@ -121,8 +120,8 @@ def set_state(session: Session, batch_id: str, state: str, now: datetime) -> Non
 
 
 def delete_old(session: Session, before: datetime) -> int:
-    """Batches created before ``before`` whose jobs all finished before it and left no document,
-    with their members and jobs (ADR-016 retention)."""
+    """Batches created before ``before`` whose jobs all finished before it and whose results are
+    gone, with their members and jobs (ADR-014 retention)."""
     unfinished = (
         select(Job.id)
         .where(
@@ -132,7 +131,7 @@ def delete_old(session: Session, before: datetime) -> int:
         .exists()
     )
     documented = (
-        select(Document.id).join(Job, Job.id == Document.job_id).where(Job.batch_id == Batch.id)
+        select(JobResult.id).join(Job, Job.id == JobResult.job_id).where(Job.batch_id == Batch.id)
     ).exists()
     old = list(
         session.scalars(select(Batch.id).where(Batch.created_at < before, ~unfinished, ~documented))
