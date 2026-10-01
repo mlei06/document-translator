@@ -1,16 +1,18 @@
 # P4 - PDF Design and Implementation
 
-Accepted follow-on (2026-09-29): [Offline fit v2](offline-fit-v2.md) and [ADR-026](../decisions/ADR-026-offline-fit-v2.md) amend PDF extraction, right anchors and safe placement. See that plan for implementation evidence; historical phase/board state below is unchanged.
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
+Accepted follow-on (2026-09-29): [Offline fit v2](offline-fit-v2.md) and [ADR-026](../../decisions/ADR-026-offline-fit-v2.md) amend PDF extraction, right anchors and safe placement. See that plan for implementation evidence; historical phase/board state below is unchanged.
 
 Status: Execution plan for the pre-GUI handoff; the PDF strategy must be validated and recorded before production implementation. Parent: Feature #9012.
 
-Progress (2026-09-29): P4.0 closed with [ADR-018](../decisions/ADR-018-pdf-strategy.md) and the [strategy experiment](../experiments/pdf-strategy/README.md); P4.1-P4.3 implemented (`formats/pdf`, pipeline `PlacementFit`/`verify_output`, CLI; tests in `packages/core/tests/test_format_pdf.py` and the CLI suite); P4.4 local acceptance with both engines and an independent PDFium check recorded in the experiment report. Remaining for closure: reviewed-commit CI (branch not pushed) and service acceptance with PDF (P5).
+Progress (2026-09-29): P4.0 closed with [ADR-018](../../decisions/ADR-018-pdf-strategy.md) and the [strategy experiment](../../experiments/pdf-strategy/README.md); P4.1-P4.3 implemented (`formats/pdf`, pipeline `PlacementFit`/`verify_output`, CLI; tests in `packages/core/tests/test_format_pdf.py` and the CLI suite); P4.4 local acceptance with both engines and an independent PDFium check recorded in the experiment report. Remaining for closure: reviewed-commit CI (branch not pushed) and service acceptance with PDF (P5).
 
 ## Scope and Dependencies
 
 P2 core and P3 measurement/fit contracts are complete. Translate extractable text in text-based PDF through both engines; preserve page size, artwork and reading content, write PDF and run fit on all supported text blocks. No OCR. Scanned/image-only content must be explicitly reported, not falsely counted as translated.
 
-Fit scope follows [ADR-012](../decisions/ADR-012-lightweight-fit-policy.md): use the selected PDF writer's placement/layout facilities where available, with bounded shrinking and explicit uncertainty. Do not add a second independent layout engine or render/vision correction loop. Never shorten translations for fit. Use ADR-012's two-document fit corpus; the structural/source-removal tests below remain required because they protect document integrity.
+Fit scope follows [ADR-012](../../decisions/ADR-012-lightweight-fit-policy.md): use the selected PDF writer's placement/layout facilities where available, with bounded shrinking and explicit uncertainty. Do not add a second independent layout engine or render/vision correction loop. Never shorten translations for fit. Use ADR-012's two-document fit corpus; the structural/source-removal tests below remain required because they protect document integrity.
 
 ## P4.0 Strategy Gate
 

@@ -55,7 +55,7 @@ Cons:
 - **Profiles: `DOCTRANSLATOR_PAGE_PREVIEWS`.**
   - `eager` (default, the website): queue every non-TXT result at publication.
   - `on_open` (API-heavy services): queue a result only when its preview is first opened.
-  - `off` (file-in, file-out: the desktop app, see [D0](../plans/D0-desktop-runtime-contract.md)): never queue, run no renderer thread; the manifest reports `none`.
+  - `off` (file-in, file-out: the desktop app, see [D0](../archive/plans/D0-desktop-runtime-contract.md)): never queue, run no renderer thread; the manifest reports `none`.
   Under `eager` and `on_open`, a result with no render yet (including results from before migration 0006) is queued when its preview is opened.
 
 ## Consequences

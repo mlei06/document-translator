@@ -1,6 +1,6 @@
 # Web GUI Design Material
 
-Design exploration for the web GUI ([P6](../../IMPLEMENTATION_PLAN.md#p6---web-gui)), gathered ahead of that phase. Nothing here is decided architecture; it is input for the P6 plan and the web UI section of `docs/Architecture.md`.
+Design exploration for the web GUI ([P6](../../archive/IMPLEMENTATION_PLAN-2026-09.md#p6---web-gui)), gathered ahead of that phase. Nothing here is decided architecture; it is input for the P6 plan and the web UI section of `docs/Architecture.md`.
 
 ## Concept
 
@@ -36,7 +36,7 @@ Open items:
 
 ## Runnable Prototype
 
-This is the existing mock that [P6](../../plans/P6-web-ui-integration.md) audits and integrates. It is a design prototype with a simulated backend, not a working product.
+This is the existing mock that [P6](../../archive/plans/P6-web-ui-integration.md) audits and integrates. It is a design prototype with a simulated backend, not a working product.
 
 ### Source of record
 
@@ -122,4 +122,4 @@ These are inputs for the P6.0 audit, not decisions:
 
 ## P6 Integration Contract
 
-The owner has requested audit and integration of the existing runnable mock, preserving useful features and reworking/dropping/adding features as needed. Follow [P6](../../plans/P6-web-ui-integration.md), inventory the exact artifact source (the [runnable prototype](#runnable-prototype) above) in `AUDIT.md`, and connect real authenticated data from the P5 service. These concept notes/assets are not proof of a runnable UI or backend integration. Do not leave simulated production progress, fake history or placeholder downloads. Preview/fix concepts need real in-scope support or explicit rework; they do not automatically authorize P7 rendering/editing.
+The owner has requested audit and integration of the existing runnable mock, preserving useful features and reworking/dropping/adding features as needed. Follow [P6](../../archive/plans/P6-web-ui-integration.md), inventory the exact artifact source (the [runnable prototype](#runnable-prototype) above) in `AUDIT.md`, and connect real authenticated data from the P5 service. These concept notes/assets are not proof of a runnable UI or backend integration. Do not leave simulated production progress, fake history or placeholder downloads. Preview/fix concepts need real in-scope support or explicit rework; they do not automatically authorize P7 rendering/editing.

@@ -1,19 +1,21 @@
 # P0 Project Foundation
 
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
 Board: [Feature #9008](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9008)
 
 ## Objective
 
-Create the empty but fully working workspace defined by [ADR-003](../decisions/ADR-003-source-structure.md), with formatting, linting, type checking, import boundary contracts, and tests all enforced in CI, so that every later phase lands inside enforced boundaries from its first commit.
+Create the empty but fully working workspace defined by [ADR-003](../../decisions/ADR-003-source-structure.md), with formatting, linting, type checking, import boundary contracts, and tests all enforced in CI, so that every later phase lands inside enforced boundaries from its first commit.
 
 P0 contains no product behavior. Every package is an importable skeleton.
 
 ## Relevant Architecture
 
-- [`docs/Architecture.md`](../Architecture.md)
-- [ADR-002: Language and Stack](../decisions/ADR-002-language-and-stack.md)
-- [ADR-003: Source Structure and Core Separation](../decisions/ADR-003-source-structure.md) - layout and dependency rules this phase implements
-- [ADR-005: Translation Quality Evaluation](../decisions/ADR-005-translation-quality-evaluation.md) - why COMET is not a workspace dependency
+- [`docs/Architecture.md`](../../Architecture.md)
+- [ADR-002: Language and Stack](../../decisions/ADR-002-language-and-stack.md)
+- [ADR-003: Source Structure and Core Separation](../../decisions/ADR-003-source-structure.md) - layout and dependency rules this phase implements
+- [ADR-005: Translation Quality Evaluation](../../decisions/ADR-005-translation-quality-evaluation.md) - why COMET is not a workspace dependency
 
 ## Dependencies
 

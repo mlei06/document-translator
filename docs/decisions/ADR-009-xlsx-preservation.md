@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-28). The owner approved preserving sheet names and translating cell text for this release (2026-09-27). The writer and calculation contract were accepted in the architect role under the [P2-P6 handoff](../plans/P2-P6-delivery-handoff.md) after the native recalculation evidence below.
+Accepted (2026-09-28). The owner approved preserving sheet names and translating cell text for this release (2026-09-27). The writer and calculation contract were accepted in the architect role under the [P2-P6 handoff](../archive/plans/P2-P6-delivery-handoff.md) after the native recalculation evidence below.
 
 ## Context
 

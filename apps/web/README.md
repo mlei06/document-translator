@@ -31,4 +31,4 @@ There are no source-language, model, decoding, protected-word, force-retranslati
 
 Completed groups offer direct Download. History is private and downloads resolve the currently available shared translation. Eviction or a revoked grant removes availability without triggering inference; the user supplies the original for new work. There are no preview requests or bubble-body navigation. Standard fitting remains internal under Translating.
 
-Implementation decisions, measured contrast and verification are recorded in [website evidence](../../docs/plans/unified-web-evidence.md). Selected acceptance screenshots are retained in `verification/screenshots`.
+Implementation decisions, measured contrast and verification are recorded in [website evidence](../../docs/verification/web.md). Selected acceptance screenshots are retained in `verification/screenshots`.

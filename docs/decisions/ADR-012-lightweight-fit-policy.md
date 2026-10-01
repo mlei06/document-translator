@@ -19,7 +19,7 @@ The owner's latest instruction supersedes earlier requirements to expose unresol
 - Save skipped outputs as normal owned downloadable documents, but do not insert or replace the reusable full-fit cache entry. A fully fitted cached result remains usable. Normal completed fit with unresolved internal findings still follows ADR-007.
 - Skipping optional fit never skips required file construction, complete text placement, integrity verification, ownership checks or persistence. This also applies to PDF when placement and optional fitting share a writer.
 
-The [progress/skip implementation plan](../plans/P5-P6-document-progress.md#skip-layout-check) owns the button, endpoint, cooperative checkpoints and race tests. This amendment accepts product behavior, not a claim that the control exists yet. Where the original decision below requires visible warnings or exhaustive per-location reporting, this amendment takes precedence.
+The [progress/skip implementation plan](../archive/plans/P5-P6-document-progress.md#skip-layout-check) owns the button, endpoint, cooperative checkpoints and race tests. This amendment accepts product behavior, not a claim that the control exists yet. Where the original decision below requires visible warnings or exhaustive per-location reporting, this amendment takes precedence.
 
 ## Context
 

@@ -66,7 +66,7 @@ Page translation is a separate text-block interface using the existing text core
 
 ## Consequences and execution
 
-The [storage transition plan](../plans/P5-D2-storage-and-ownership.md) defines implementation order and acceptance. Architecture diagrams live only in [Architecture](../Architecture.md). Update schemas, OpenAPI, clients and recovery tests together; inspect the implementation agent's branch before migration. Do not destructively collapse existing owned versions or job results to match this decision. P7 must revisit explicit edit/version requirements when it starts.
+The [storage transition plan](../archive/plans/P5-D2-storage-and-ownership.md) defines implementation order and acceptance. Architecture diagrams live only in [Architecture](../Architecture.md). Update schemas, OpenAPI, clients and recovery tests together; inspect the implementation agent's branch before migration. Do not destructively collapse existing owned versions or job results to match this decision. P7 must revisit explicit edit/version requirements when it starts.
 
 ## Research informing this decision
 

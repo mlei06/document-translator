@@ -1,10 +1,12 @@
 # P2-P6 - Document Translation Delivery Handoff
 
-> Latest simplification: [ADR-029](../decisions/ADR-029-standard-fit-direct-download.md) and [direct downloads](standard-fit-direct-download.md) supersede thorough fit, previews and product LibreOffice requirements in earlier plans. Standard fit/integrity checks remain; no implementation completion is implied.
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
 
-> Latest website direction: ADR-027/028 and the [routing](automatic-website-translation.md) / [storage](website-cache-and-retention.md) specifications supersede older website model-picker and permanent-library targets. Implementation is pending; preserve legacy saved files and explicit API/desktop contracts.
+> Latest simplification: [ADR-029](../../decisions/ADR-029-standard-fit-direct-download.md) and [direct downloads](../../plans/unified-translator-design.md) supersede thorough fit, previews and product LibreOffice requirements in earlier plans. Standard fit/integrity checks remain; no implementation completion is implied.
 
-> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+> Latest website direction: ADR-027/028 and the [routing](../../plans/unified-translator-design.md) / [storage](../../plans/unified-translator-design.md) specifications supersede older website model-picker and permanent-library targets. Implementation is pending; preserve legacy saved files and explicit API/desktop contracts.
+
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
 ## Start Here
@@ -15,13 +17,13 @@ The owner explicitly chose a shared service for CLI/API and preservation of XLSX
 
 ## Owner Revision - Lightweight Fit (2026-09-28)
 
-[ADR-012](../decisions/ADR-012-lightweight-fit-policy.md) is the accepted fit policy and supersedes the earlier native-layout parity/absolute visual guarantee. Prioritize translation accuracy, complete content, protected values and formatting. Retain useful fit code, close current research, and proceed through P3-P6. No font-by-font tuning, production rendering loop, vision calls or shortening translations for fit.
+[ADR-012](../../decisions/ADR-012-lightweight-fit-policy.md) is the accepted fit policy and supersedes the earlier native-layout parity/absolute visual guarantee. Prioritize translation accuracy, complete content, protected values and formatting. Retain useful fit code, close current research, and proceed through P3-P6. No font-by-font tuning, production rendering loop, vision calls or shortening translations for fit.
 
 Use changed constrained containers, supported font/wrap estimates, bounded size changes and truthful technical outcomes. Apply the accepted ADR-012 owner amendment: normal UI shows Checking layout with Skip layout check, with no per-section fit details or fit-warning badges. Follow [the progress plan](P5-P6-document-progress.md#skip-layout-check) for cooperative skip, persistence and cache exclusion. Missing support is not not_applicable or a pass; no required format may be an unresolved-only stub. Native acceptance is a fixed small corpus of open/visual spot checks, not exhaustive parity. Service ownership, cache, persistence, all five formats and P6 real UI integration remain required.
 
 ## Deployment Extension (2026-09-28)
 
-[ADR-013](../decisions/ADR-013-deployment-profiles.md) adds an installed laptop app with installer model selection/file-folder drag/drop, plus internal-app REST integration. Preserve reusable core/job contracts while completing this handoff. Desktop packaging is a separate [D0-D2/I1 plan](Desktop-and-internal-app-delivery.md), not a reason to delay or expand P2-P6. Do not couple translation to browser sessions or require app-to-app Python imports. Right-click integration is optional later work; Lenovo preload is aspirational.
+[ADR-013](../../decisions/ADR-013-deployment-profiles.md) adds an installed laptop app with installer model selection/file-folder drag/drop, plus internal-app REST integration. Preserve reusable core/job contracts while completing this handoff. Desktop packaging is a separate [D0-D2/I1 plan](Desktop-and-internal-app-delivery.md), not a reason to delay or expand P2-P6. Do not couple translation to browser sessions or require app-to-app Python imports. Right-click integration is optional later work; Lenovo preload is aspirational.
 
 ## Required Outcome
 
@@ -44,7 +46,7 @@ A user supplies one file or a mixed-format batch through the CLI or REST API. Ev
 
 ## Existing Mock UI
 
-The owner's "Lenny" prototype is the input to P6. [Runnable Prototype](../design/web-gui/README.md#runnable-prototype) in the design README has the source hash, run instructions, code map, full feature inventory, owner decisions and known gaps. In summary:
+The owner's "Lenny" prototype is the input to P6. [Runnable Prototype](../../design/web-gui/README.md#runnable-prototype) in the design README has the source hash, run instructions, code map, full feature inventory, owner decisions and known gaps. In summary:
 
 - **Flow it demonstrates:**
   - shadcn `login-02` sign-in, uncropping into a full-screen meadow (day/night)
@@ -86,7 +88,7 @@ No coder receives an unresolved architecture question. This is a complete multi-
 
 | Step | Contract | Required exit evidence |
 |------|----------|------------------------|
-| 0 | P1 delivery review; [P1.1](P1.1-baseline-capture.md) before prompt/model changes | Existing behavior understood; reviewed-commit checks/CI; baselines when triggered |
+| 0 | P1 delivery review; [P1.1](../../plans/quality-baselines.md) before prompt/model changes | Existing behavior understood; reviewed-commit checks/CI; baselines when triggered |
 | 1 | [P2.0](P2.0-document-design-validation.md) | Serializer/formatting/detection choices validated; XLSX recalculation policy settled; exact public types and identity preparation specified |
 | 2 | [P2](P2-document-translation-and-cli.md) | Four formats through local CLI, required text surfaces and formatting preserved, native-open evidence |
 | 3 | [P3.0](P3.0-fit-design-validation.md), then [P3](P3-fit-check.md) | Bounded experiment closed; supported best-effort fit and honest reports on all Office formats |
@@ -135,7 +137,7 @@ Real-backend tests are required for R01/R02; deterministic fake engines are addi
 
 ## Delivery Evidence and Stop Line
 
-Create `docs/plans/P2-P6-release-evidence.md` during implementation with a row for each R01-R14 and P6's W01-W08: tested commit, command/test, engine/runtime/font versions, outcome and artifact location. Record CI run ID for the delivered commit and native-open/repair/visual checks. Do not prefill successes.
+Create `docs/archive/plans/P2-P6-release-evidence.md` during implementation with a row for each R01-R14 and P6's W01-W08: tested commit, command/test, engine/runtime/font versions, outcome and artifact location. Record CI run ID for the delivered commit and native-open/repair/visual checks. Do not prefill successes.
 
 Update README, Architecture, Deployment, phase plans, roadmap and board in the same changes. Run all six root checks from AGENTS.md, relevant real-backend and native acceptance tests, and CI. The deployment guide must let a fresh authorized user migrate/bootstrap credentials, start service/workers, submit a multi-file manifest, inspect outcomes, download files/reports and restore a backup.
 
@@ -143,4 +145,4 @@ After the backend gate, complete P6 using that working REST/OpenAPI contract. St
 
 ## Copyable Prompt for the Next Agent
 
-> Implement the release described in docs/plans/P2-P6-delivery-handoff.md. Read AGENTS.md and the linked architecture/ADRs/plans first, inspect the existing code and preserve unrelated changes. Work through the technical design gates in the architect role, record evidence and accepted contracts, then implement and review each bounded phase. CLI and API must use the same persistent service; every batch, job and document belongs to an authenticated user. Preserve XLSX sheet names. Support TXT/PPTX/DOCX/XLSX/text-based PDF, resumable mixed batches, both engines, lightweight best-effort fit under ADR-012, owner-scoped compatible current-result reuse and durable owned results under ADR-014. Support human/service accounts and temporary integration jobs. Local desktop exports always process fresh, use numbered destinations and retain no hidden document library. Implement the storage transition plan before wiring library/retranslation UI. Close the current fit experiment with existing evidence and a small acceptance corpus; do not pursue exhaustive native parity or additional font-specific tuning. Preserve wording and keep existing technical fit outcomes truthful. Normal UI shows Checking layout with Skip layout check, not unresolved-section details or warning badges. Implement the progress plan: skip stops remaining optional fit, retains prior adjustments, then saves a real owned result excluded from normal cache. Complete R01-R14, then audit the existing mock web UI (docs/design/web-gui/prototype/lenny.html, documented in the design README's Runnable Prototype section) and integrate it against the real backend under P6. Preserve useful features and deliberately rework/drop/add features as needed; remove fake production data and simulated job success. Complete W01-W08 and publish truthful release evidence. Do not implement P7 MCP/visual edits, weaken preservation requirements, claim skipped tests passed, or stop at scaffolds. Escalate concrete product conflicts/environment blockers while continuing independent authorized work.
+> Implement the release described in docs/archive/plans/P2-P6-delivery-handoff.md. Read AGENTS.md and the linked architecture/ADRs/plans first, inspect the existing code and preserve unrelated changes. Work through the technical design gates in the architect role, record evidence and accepted contracts, then implement and review each bounded phase. CLI and API must use the same persistent service; every batch, job and document belongs to an authenticated user. Preserve XLSX sheet names. Support TXT/PPTX/DOCX/XLSX/text-based PDF, resumable mixed batches, both engines, lightweight best-effort fit under ADR-012, owner-scoped compatible current-result reuse and durable owned results under ADR-014. Support human/service accounts and temporary integration jobs. Local desktop exports always process fresh, use numbered destinations and retain no hidden document library. Implement the storage transition plan before wiring library/retranslation UI. Close the current fit experiment with existing evidence and a small acceptance corpus; do not pursue exhaustive native parity or additional font-specific tuning. Preserve wording and keep existing technical fit outcomes truthful. Normal UI shows Checking layout with Skip layout check, not unresolved-section details or warning badges. Implement the progress plan: skip stops remaining optional fit, retains prior adjustments, then saves a real owned result excluded from normal cache. Complete R01-R14, then audit the existing mock web UI (docs/design/web-gui/prototype/lenny.html, documented in the design README's Runnable Prototype section) and integrate it against the real backend under P6. Preserve useful features and deliberately rework/drop/add features as needed; remove fake production data and simulated job success. Complete W01-W08 and publish truthful release evidence. Do not implement P7 MCP/visual edits, weaken preservation requirements, claim skipped tests passed, or stop at scaffolds. Escalate concrete product conflicts/environment blockers while continuing independent authorized work.

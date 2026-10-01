@@ -124,7 +124,7 @@ Desktop setup must document supported OS/architecture, installer signature, runt
 
 The main desktop workflow is open -> drag/drop files or folders -> select options/destination -> translate -> open results. Tray progress/notifications are secondary. Right-click integration is only a later consideration. Lenovo deployment/preload is a long-term goal requiring a separate managed pilot and distribution/servicing decisions.
 
-The [desktop/internal-app delivery plan](plans/Desktop-and-internal-app-delivery.md) defines D0-D2/I1. Do not publish invented installer commands or claim packaging is complete. Existing developer instructions below remain separate from the intended end-user installer.
+The [desktop/internal-app delivery plan](archive/plans/Desktop-and-internal-app-delivery.md) defines D0-D2/I1. Do not publish invented installer commands or claim packaging is complete. Existing developer instructions below remain separate from the intended end-user installer.
 
 ## Local Development
 
@@ -280,7 +280,7 @@ Local check results do not establish CI success; record CI run IDs and the teste
 
 ## Delivery Handoff Requirements
 
-The [P2-P6 handoff](plans/P2-P6-delivery-handoff.md) requires a verified operating guide at implementation completion. P5 must document migrations, user/key provisioning/revocation, company TLS, model/font identity, worker lifecycle, manifest submissions, owned history/downloads, retention and a tested database-plus-blobs backup/restore. P6 adds browser sessions, the integrated static build, routed reloads and the same-user web workflow. Proposed command names in plans are not runnable instructions until implemented.
+The [P2-P6 handoff](archive/plans/P2-P6-delivery-handoff.md) requires a verified operating guide at implementation completion. P5 must document migrations, user/key provisioning/revocation, company TLS, model/font identity, worker lifecycle, manifest submissions, owned history/downloads, retention and a tested database-plus-blobs backup/restore. P6 adds browser sessions, the integrated static build, routed reloads and the same-user web workflow. Proposed command names in plans are not runnable instructions until implemented.
 
 Service CLI and REST use the same server. Local `translate` is a distinct mode without persistent cache/history; documentation must never imply local output is automatically saved to the service. Human and service accounts own their batches/jobs/documents even when physical bytes are shared. Saved originals/current translations have quotas, not automatic expiry; temporary results and superseded job outputs expose expiration. Configure cleanup, backup retention and recovery bounds before launch.
 

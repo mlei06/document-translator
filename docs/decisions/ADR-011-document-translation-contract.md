@@ -6,11 +6,11 @@ Amended by [ADR-022](ADR-022-protected-dictionaries.md): broader literal syntax,
 
 ## Status
 
-Accepted (2026-09-28) in the architect role under the [P2-P6 handoff](../plans/P2-P6-delivery-handoff.md), from the P2.0 evidence below. Completes the P2.0 gates for formatting, PPTX/DOCX writers, source detection, protection and output identity. The XLSX calculation gate is settled in [ADR-009](ADR-009-xlsx-preservation.md).
+Accepted (2026-09-28) in the architect role under the [P2-P6 handoff](../archive/plans/P2-P6-delivery-handoff.md), from the P2.0 evidence below. Completes the P2.0 gates for formatting, PPTX/DOCX writers, source detection, protection and output identity. The XLSX calculation gate is settled in [ADR-009](ADR-009-xlsx-preservation.md).
 
 ## Context
 
-P2 must translate TXT, PPTX, DOCX and XLSX through one core pipeline while preserving rich text in both engines, never flattening formatting, never silently dropping content, and exposing a cache fingerprint that the server can compute without loading a model (ADR-007, ADR-008). The [P2.0 plan](../plans/P2.0-document-design-validation.md) required evidence before choosing each strategy. Exact types and signatures are in the [core API reference](../Architecture.md#core-api-reference).
+P2 must translate TXT, PPTX, DOCX and XLSX through one core pipeline while preserving rich text in both engines, never flattening formatting, never silently dropping content, and exposing a cache fingerprint that the server can compute without loading a model (ADR-007, ADR-008). The [P2.0 plan](../archive/plans/P2.0-document-design-validation.md) required evidence before choosing each strategy. Exact types and signatures are in the [core API reference](../Architecture.md#core-api-reference).
 
 ## Evidence
 

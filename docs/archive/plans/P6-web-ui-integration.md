@@ -1,11 +1,13 @@
 # P6 - Audit and Integrate the Existing Web UI
 
-Current amendment: [ADR-020](../decisions/ADR-020-browser-accounts-and-decoding.md) authorizes basic email/password registration/sign-in and Lenny-accessible translator/decoding settings. It supersedes the access-key-only/no-password wording below; API-key sign-in remains compatible.
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
 
-> Translator configuration is governed by accepted [ADR-019](../decisions/ADR-019-configured-translators.md): selectable configured translator IDs, one default, explicit local/remote location and no automatic fallback. Desktop setup selects supported model downloads; hosted users select admin-enabled translators. Installer delivery remains D0/D1 work.
+Current amendment: [ADR-020](../../decisions/ADR-020-browser-accounts-and-decoding.md) authorizes basic email/password registration/sign-in and Lenny-accessible translator/decoding settings. It supersedes the access-key-only/no-password wording below; API-key sign-in remains compatible.
+
+> Translator configuration is governed by accepted [ADR-019](../../decisions/ADR-019-configured-translators.md): selectable configured translator IDs, one default, explicit local/remote location and no automatic fallback. Desktop setup selects supported model downloads; hosted users select admin-enabled translators. Installer delivery remains D0/D1 work.
 
 
-> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
 Status: Owner-requested execution plan. Parent: Feature #9014. Implement after the combined P2-P5 backend acceptance gate; audit the mock earlier to identify API gaps. No existing mock is evidence of a working product.
@@ -16,7 +18,7 @@ Integrate the existing agent-built mock UI into the accepted React/TypeScript ap
 
 ## Artifact Discovery and Baseline
 
-Runnable mock: `docs/design/web-gui/prototype/lenny.html` with `prototype/assets/`, an exact copy of the owner's claude.ai artifact (version 13, 2026-09-27). It is a single HTML/CSS/vanilla-JavaScript file with no framework, lockfile or build step, and a simulated backend. [Runnable Prototype](../design/web-gui/README.md#runnable-prototype) documents its source hash, run instructions, code map, feature inventory (real vs simulated), the owner decisions it reflects and its known gaps against this plan. The rest of `docs/design/web-gui/README.md` and its `assets/` hold the design notes and full-resolution art.
+Runnable mock: `docs/design/web-gui/prototype/lenny.html` with `prototype/assets/`, an exact copy of the owner's claude.ai artifact (version 13, 2026-09-27). It is a single HTML/CSS/vanilla-JavaScript file with no framework, lockfile or build step, and a simulated backend. [Runnable Prototype](../../design/web-gui/README.md#runnable-prototype) documents its source hash, run instructions, code map, feature inventory (real vs simulated), the owner decisions it reflects and its known gaps against this plan. The rest of `docs/design/web-gui/README.md` and its `assets/` hold the design notes and full-resolution art.
 
 Before editing, record the exact source path/revision, framework/package lock, build/run commands, asset sources and screenshots in `docs/design/web-gui/AUDIT.md`. The README's inventory is a starting point, not the audit: verify it against the running mock. Run the mock and inspect every route, control and responsive state. Preserve a recoverable baseline through Git or an immutable source copy; do not overwrite the only artifact. Do not recreate the UI from the prose while claiming to have integrated the existing mock. If the artifact is unavailable, complete backend work and record this specific P6 blocker.
 
@@ -101,4 +103,4 @@ Add frontend install/build/typecheck/lint/component and browser E2E commands to 
 | W07 | Keyboard, focus, screen-reader names, narrow viewport, reduced motion, day/night contrast | Usable alternative to drag/drop/mascot; readable progress/errors; no motion-dependent interaction |
 | W08 | Audit every visible control and production network request | Real scoped backend behavior or documented removal/rework; no fake users/stats/results/timer completion, no external document leakage |
 
-Use deterministic backend fixtures for failure/race UI tests in addition to real engine smoke flows. Capture representative final screenshots and inspect them for clipping, alignment, contrast and obstructed controls; fix evident defects. Test routed refresh, empty/loading/error states and second-machine internal TLS access. Record results plus the feature audit in `docs/plans/P2-P6-release-evidence.md` during implementation. All six Python checks and frontend checks/CI must pass before P6 closes.
+Use deterministic backend fixtures for failure/race UI tests in addition to real engine smoke flows. Capture representative final screenshots and inspect them for clipping, alignment, contrast and obstructed controls; fix evident defects. Test routed refresh, empty/loading/error states and second-machine internal TLS access. Record results plus the feature audit in `docs/archive/plans/P2-P6-release-evidence.md` during implementation. All six Python checks and frontend checks/CI must pass before P6 closes.

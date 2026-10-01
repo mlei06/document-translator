@@ -1,6 +1,6 @@
 # Laptop MT performance
 
-Experiment and integration authorized 2026-09-29. See [execution plan](../../plans/laptop-mt-performance.md)
+Experiment and integration authorized 2026-09-29. See [execution plan](../../archive/plans/laptop-mt-performance.md)
 and [ADR-025](../../decisions/ADR-025-local-hy-mt.md). Twenty representative benchmark
 configurations and successful real-document/service acceptance are recorded below.
 

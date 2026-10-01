@@ -36,4 +36,4 @@ ADR-008's job queue remains authoritative. Batch grouping adds no broker or seco
 - A local service must be running even when persistent CLI use is on the same laptop. Startup and credentials need a documented bootstrap path.
 - The CLI can resume submissions and downloads from a private manifest containing IDs and local paths, never credentials or full file contents.
 - P6 can consume the same batch/job API without moving translation logic into the UI.
-- The detailed contracts and acceptance sequence live in [the P2-P6 handoff](../plans/P2-P6-delivery-handoff.md) and [P5](../plans/P5-server-and-service-cli.md).
+- The detailed contracts and acceptance sequence live in [the P2-P6 handoff](../archive/plans/P2-P6-delivery-handoff.md) and [P5](../archive/plans/P5-server-and-service-cli.md).

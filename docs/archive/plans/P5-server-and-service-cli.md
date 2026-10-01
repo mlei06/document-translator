@@ -1,6 +1,8 @@
 # P5 - Persistent Service, User Flow and Service CLI
 
-> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
 Status: Detailed execution contract for the pre-GUI handoff. Shared-service CLI is accepted in ADR-010. Authentication and exact database/lease contracts must pass P5.0 architect review and be recorded in accepted ADRs before production work. Parent: Feature #9013.

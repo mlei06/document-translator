@@ -63,7 +63,7 @@ MT mode uses **SMALL-100** (`alirezamsh/small100`), converted to CTranslate2 int
 ## Consequences
 
 - MT mode meets the throughput bar on today's CPU-only host, with an MIT license and no territorial restrictions.
-- MT mode targets lower-cost local translation, with expected lower quality than LLM mode. Full comparative quality has not yet been established by committed baselines. The owner deferred those runs until before the first prompt/model change; [P1.1](../plans/P1.1-baseline-capture.md) will record SMALL-100's scores across all 12 directions. The throughput evidence above does not substitute for quality scores.
+- MT mode targets lower-cost local translation, with expected lower quality than LLM mode. Full comparative quality has not yet been established by committed baselines. The owner deferred those runs until before the first prompt/model change; [P1.1](../plans/quality-baselines.md) will record SMALL-100's scores across all 12 directions. The throughput evidence above does not substitute for quality scores.
 - The MT engine supports one model family. Adding another model later means adding a family, not changing this one.
 - On the GPU laptop, larger or LLM-based translation models become practical. Re-run the comparison there before assuming SMALL-100 is still the right tradeoff; HY-MT1.5 additionally needs a legal review of its territorial exclusion first.
 - SMALL-100 is a single-author research release, last updated in 2024. Conversion records the Hugging Face revision SHA, and the converted model in the data directory does not depend on the repository staying online.

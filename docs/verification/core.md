@@ -1,6 +1,6 @@
 # Unified translation core and CLI implementation evidence
 
-Scope: common target-only inference, automatic policy types, bounded transport, and removal of production rendering from the core and CLI. The current owner specification in `unified-translator-design.md` takes precedence over older source-dependent and thorough-fit contracts.
+Scope: common target-only inference, automatic policy types, bounded transport, and removal of production rendering from the core and CLI. The current owner specification in `docs/plans/unified-translator-design.md` takes precedence over older source-dependent and thorough-fit contracts.
 
 ## Implemented decisions
 

@@ -6,7 +6,7 @@ Status: Accepted by the owner, 2026-09-29, through the explicit instruction "imp
 
 Later owner direction: [ADR-029](ADR-029-standard-fit-direct-download.md) removes thorough/rendered verification and previews. Standard structure-aware fit, complete-content checks and safe PDF placement from this decision remain. Earlier rendering requirements below are superseded for the target runtime; removal is not yet implemented.
 
-The current implementation instruction accepts this design for PDF, PPTX and DOCX. This decision supersedes ADR-012 shrink-only/source-measurement coupling, ADR-018 unsafe overflow placement, and ADR-023 pre-publication rendering restrictions only for explicitly selected thorough fit. The other preservation, ownership, skip, and asynchronous preview requirements remain. The detailed implementation contract is [Offline fit v2](../plans/offline-fit-v2.md).
+The current implementation instruction accepts this design for PDF, PPTX and DOCX. This decision supersedes ADR-012 shrink-only/source-measurement coupling, ADR-018 unsafe overflow placement, and ADR-023 pre-publication rendering restrictions only for explicitly selected thorough fit. The other preservation, ownership, skip, and asynchronous preview requirements remain. The detailed implementation contract is [Offline fit v2](../archive/plans/offline-fit-v2.md).
 
 Inspection of two owner-supplied documents established concrete gaps:
 

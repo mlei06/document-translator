@@ -1,6 +1,6 @@
 # Unified website implementation evidence
 
-This records the website portion of `unified-translator-design.md`. The current explicit unified specification governs the changes, superseding the old source/model/preview interaction in the existing implementation.
+This records the website portion of `docs/plans/unified-translator-design.md`. The current explicit unified specification governs the changes, superseding the old source/model/preview interaction in the existing implementation.
 
 ## Implemented decisions
 

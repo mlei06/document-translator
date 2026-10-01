@@ -2,7 +2,7 @@
 
 This is a bounded packaging probe on Windows x64, based on commit `0d6efed`. It freezes the existing CLI and its core/native dependencies into a directory that can later be installed beside a desktop shell. It does not implement the desktop service, installer, persistent jobs, model downloader or UI.
 
-The language boundary remains a native desktop shell, a shared Python backend, and independently replaceable inference. See the [D0 integration contract](../../plans/D0-desktop-runtime-contract.md) for proposed interfaces and the [desktop delivery plan](../../plans/Desktop-and-internal-app-delivery.md) for full acceptance.
+The language boundary remains a native desktop shell, a shared Python backend, and independently replaceable inference. See the [D0 integration contract](../../archive/plans/D0-desktop-runtime-contract.md) for proposed interfaces and the [desktop delivery plan](../../archive/plans/Desktop-and-internal-app-delivery.md) for full acceptance.
 
 ## Reproduce the build
 

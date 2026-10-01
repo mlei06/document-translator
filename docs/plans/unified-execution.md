@@ -1,6 +1,10 @@
 # Unified implementation execution
 
-Authority: the owner's unified specification and clean-slate authorization supersede conflicting older plans. Existing uncommitted work is preserved. No production deployment or publication is authorized.
+Authority: the owner's unified specification and clean-slate authorization supersede conflicting older plans. The owner has authorized committing the complete implementation to both repository remotes. Source publication is separate from production deployment and installer distribution.
+
+## Latest source amendments
+
+Desktop UI and Downloads exports are implemented and covered by 499 repository tests and 7 desktop UI tests. These changes still require an updated frozen runtime/package and installed native acceptance. Website lint/typecheck/build and 36 unit tests pass. See the dated [desktop evidence](../verification/desktop.md) for limits; historical installer results below describe earlier builds.
 
 ## Checklist
 
@@ -56,7 +60,7 @@ The last installer-lifecycle correction makes repeated setup verify and reuse an
 - Independent HTTP client: queued cancellation, five cold format submissions, authorized verified downloads and five warm shared-cache hits passed against real loopback service/worker/Davy. Evidence: `data/experiments/unified-api/ba6c31342ed949489b6fafe8d3c3c903`. Cold ready times were 2.4-8.0 seconds; warm times 0.5-1.3 seconds on these fixtures. These are cold/warm observations, not a claimed before/after speedup.
 - The final HTTP rerun after ingestion metadata and cleanup changes also passed all ten cold/warm submissions and cancellation: `data/experiments/unified-api/e0cd7728fa914e2d8a2521eefa7de5b4`. Warm job fit diagnostics now agree with the reused report.
 - Existing real integration tests were run with the actual Gemma endpoint and installed SMALL-100 model: 2 passed. Missing environment variables in the default integration invocation were supplied from existing local configuration without disclosing values.
-- See [core evidence](unified-core-evidence.md), [website evidence](unified-web-evidence.md) and [desktop evidence](unified-desktop-evidence.md) for deterministic cases, browser screenshots, measured contrast and native artifacts. Native desktop builds and available final repository checks passed; signed clean-machine release is not implied by these results.
+- See [core evidence](../verification/core.md), [website evidence](../verification/web.md) and [desktop evidence](../verification/desktop.md) for deterministic cases, browser screenshots, measured contrast and native artifacts. Native desktop builds and available final repository checks passed; signed clean-machine release is not implied by these results.
 
 Both final private unsigned installers built successfully. Online installation and full-offline upgrade returned exit 0; installed artifacts matched payload hashes and all five baseline originals/exports were preserved. The final installed runtime passed real translation, export replay, authenticated-host checks and repeated offline setup returning Ready. Graceful shutdown and the installed path guard passed. Artifact identities and lifecycle evidence are in the desktop report. All six required repository commands passed; the final Python result is 498 passed, three integration cases deselected. Web validation passed 35 unit tests, seven browser E2E tests, lint, typecheck, formatting and build. No artifacts were published.
 

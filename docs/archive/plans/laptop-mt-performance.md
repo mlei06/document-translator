@@ -1,8 +1,10 @@
 # Laptop translation performance and HY-MT integration
 
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
 Status: Benchmarks and integration verified, 2026-09-29. Final whole-workspace check gate
 is pending concurrent offline-fit implementation; do not treat the shared working tree as a
-validated release. See [measured evidence](../experiments/laptop-mt/README.md).
+validated release. See [measured evidence](../../experiments/laptop-mt/README.md).
 
 ## Scope and authority
 
@@ -69,4 +71,4 @@ SMALL-100 beam 4 using identical source bytes, four CPU threads and serial jobs.
 three standard-fit repetitions per model (first plus two warm), and one thorough-fit sample
 per model. Preserve per-stage CPU/GPU/memory traces and output integrity evidence. Report
 startup separately, account for HY eager versus CT2 lazy loading, and avoid adding nested
-rendered-fit timings twice. Evidence: [lifecycle report](../experiments/laptop-mt/LIFECYCLE.md).
+rendered-fit timings twice. Evidence: [lifecycle report](../../experiments/laptop-mt/LIFECYCLE.md).

@@ -1,6 +1,8 @@
 # Backend-specific translator availability
 
-Decision: [ADR-024](../decisions/ADR-024-translator-availability.md).
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
+Decision: [ADR-024](../../decisions/ADR-024-translator-availability.md).
 
 ## Delivered behavior
 

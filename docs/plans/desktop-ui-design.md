@@ -1,6 +1,6 @@
 # Desktop translation UI design specification
 
-Status: Owner-requested implementation in desktop source, 2026-09-30. Automated verification is recorded in [desktop evidence](unified-desktop-evidence.md); updated installed-shell drag/drop acceptance remains outstanding. This is not a release certification.
+Status: Owner-requested implementation in desktop source, 2026-09-30. Automated verification is recorded in [desktop evidence](../verification/desktop.md); updated installed-shell drag/drop acceptance remains outstanding. This is not a release certification.
 
 ## 1. Purpose and authority
 

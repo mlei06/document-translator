@@ -25,7 +25,10 @@ If documented architecture and existing code disagree, do not assume either is c
 - Repository structure: `docs/Structure.md`
 - Implementation roadmap: `docs/IMPLEMENTATION_PLAN.md`
 - Detailed task plans: `docs/plans/`
-- P2-P6 execution entry point: `docs/plans/P2-P6-delivery-handoff.md` (shared-service CLI/API, user ownership, all formats/fit, then existing web UI integration)
+- Documentation index: `docs/README.md`
+- Current execution entry point: `docs/plans/unified-execution.md`
+- Verification reports: `docs/verification/`
+- Historical plans: `docs/archive/` (context only; not current implementation authority)
 - Architecture decisions: `docs/decisions/`
 
 ## Core Rules

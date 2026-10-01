@@ -4,7 +4,7 @@ Amended by [ADR-023](ADR-023-page-rendering-for-previews.md): preview page image
 
 Amended by [ADR-020](ADR-020-browser-accounts-and-decoding.md): optional email/password self-registration and password-backed browser sessions are now accepted. API-key clients remain supported.
 
-Status: Accepted 2026-09-29 (P6.1). Extends [ADR-015](ADR-015-authentication-and-ownership.md) with browser sessions and adds what the [P6.0 audit](../design/web-gui/AUDIT.md) found missing, on top of the storage model of [ADR-014](ADR-014-storage-ownership-and-retranslation.md) and the [progress/skip plan](../plans/P5-P6-document-progress.md). Everything stays owner-scoped as in ADR-015.
+Status: Accepted 2026-09-29 (P6.1). Extends [ADR-015](ADR-015-authentication-and-ownership.md) with browser sessions and adds what the [P6.0 audit](../design/web-gui/AUDIT.md) found missing, on top of the storage model of [ADR-014](ADR-014-storage-ownership-and-retranslation.md) and the [progress/skip plan](../archive/plans/P5-P6-document-progress.md). Everything stays owner-scoped as in ADR-015.
 
 ## Context
 

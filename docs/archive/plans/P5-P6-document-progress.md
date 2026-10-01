@@ -1,8 +1,10 @@
 # P5-P6 - Store and Display Document Processing Progress
 
-> Latest website amendment: ADR-028/029 supersede older website display/skip rules below. Fit remains an internal backend phase mapped to Translating, with no Checking layout label/announcement or completed percentage during fit. Saving covers actual persistence; Ready requires verified publication. Keep backend timings and diagnostic phases. See [direct-download specification](standard-fit-direct-download.md).
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
 
-> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
+> Latest website amendment: ADR-028/029 supersede older website display/skip rules below. Fit remains an internal backend phase mapped to Translating, with no Checking layout label/announcement or completed percentage during fit. Saving covers actual persistence; Ready requires verified publication. Keep backend timings and diagnostic phases. See [direct-download specification](../../plans/unified-translator-design.md).
+
+> Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
 Status: Implementation plan requested by the owner. Progress (2026-09-29, `release/p2-p6`): core `ProgressPhase.APPLY`, early extract event, `should_skip_fit` and `FitStatus.SKIPPED`; service `prepare` phase, progress snapshots with `progress_updated_at`, `fit_skip_requested`, `POST /v1/jobs/{id}/skip-fit`, nested `progress` in job responses and skipped results excluded from reuse are implemented and tested. The web display is P6 work in progress. Applies to the shared service used by the website, service CLI and future desktop app.
@@ -15,7 +17,7 @@ This task adds progress reporting and the owner-requested ability to skip fit wh
 
 ## Relevant architecture and starting point
 
-- [Job lifecycle](../Architecture.md#job-lifecycle), [ADR-008](../decisions/ADR-008-job-execution-model.md), [P5 service plan](P5-server-and-service-cli.md) and [P6 UI plan](P6-web-ui-integration.md).
+- [Job lifecycle](../../Architecture.md#job-lifecycle), [ADR-008](../../decisions/ADR-008-job-execution-model.md), [P5 service plan](P5-server-and-service-cli.md) and [P6 UI plan](P6-web-ui-integration.md).
 - ADR-008 already specifies `status`, `phase`, `progress_done`, `progress_total`, attempts, cancellation and lease fields. Reuse them. P5 owns the claim-token/fencing amendment and database schema; progress cannot bypass those predicates.
 - Current core code reports `extract`, `translate`, `fit`, `write` through `TranslationProgress(phase, done, total)`. Extraction/writing are start/end events, translation counts unique initial engine inputs, and fit counts layout containers. Applying translations has no separate event.
 - Translation may report `done == total` before formatting fallbacks complete. That is not completion of the translation stage or the document. Core stages have no current slide/sheet completion counts.

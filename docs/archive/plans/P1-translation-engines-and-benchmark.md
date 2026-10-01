@@ -1,16 +1,18 @@
 # P1 Translation Engines and Benchmark
 
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
 Board: [Feature #9009](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9009)
 
 ## Objective
 
-Translate plain text in both LLM and MT modes across all 12 directions between Chinese (Simplified), English, Japanese, and Spanish through the core's public API, and measure each mode's quality with the benchmark defined in [ADR-005](../decisions/ADR-005-translation-quality-evaluation.md). The local MT model is SMALL-100 ([ADR-006](../decisions/ADR-006-mt-model-selection.md)); commit quality baselines for both modes.
+Translate plain text in both LLM and MT modes across all 12 directions between Chinese (Simplified), English, Japanese, and Spanish through the core's public API, and measure each mode's quality with the benchmark defined in [ADR-005](../../decisions/ADR-005-translation-quality-evaluation.md). The local MT model is SMALL-100 ([ADR-006](../../decisions/ADR-006-mt-model-selection.md)); commit quality baselines for both modes.
 
 ## Relevant Architecture
 
-- [Core component](../Architecture.md#core-api-reference) - public API, types, config, engine interface, error handling. **This plan implements that document; read it first.**
-- [ADR-003](../decisions/ADR-003-source-structure.md) - module locations and dependency rules
-- [ADR-005](../decisions/ADR-005-translation-quality-evaluation.md) - benchmark method, COMET isolation
+- [Core component](../../Architecture.md#core-api-reference) - public API, types, config, engine interface, error handling. **This plan implements that document; read it first.**
+- [ADR-003](../../decisions/ADR-003-source-structure.md) - module locations and dependency rules
+- [ADR-005](../../decisions/ADR-005-translation-quality-evaluation.md) - benchmark method, COMET isolation
 - [P0 plan](P0-project-foundation.md) - tooling this phase builds on
 
 ## Dependencies
@@ -29,7 +31,7 @@ Verified 2026-09-26 unless noted.
 | HTTP client | `httpx` (sync `Client`, thread pool for concurrency) | Typed, supports `MockTransport` for tests without an extra library. The core API is synchronous. |
 | TLS trust | `truststore.SSLContext` passed as `verify=` | Uses the OS certificate store, where the company's internal CA lives; verification is never disabled. |
 | LLM protocol | `POST {base_url}/chat/completions`, JSON segments in, JSON translations out | OpenAI-compatible; see Core component, LLM engine. |
-| MT model | **SMALL-100** (`alirezamsh/small100`, MIT), CTranslate2 int8 | [ADR-006](../decisions/ADR-006-mt-model-selection.md): the only candidate meeting the throughput bar on the CPU-only laptop with beam search and an unrestricted license. The candidates and exclusions are recorded there. |
+| MT model | **SMALL-100** (`alirezamsh/small100`, MIT), CTranslate2 int8 | [ADR-006](../../decisions/ADR-006-mt-model-selection.md): the only candidate meeting the throughput bar on the CPU-only laptop with beam search and an unrestricted license. The candidates and exclusions are recorded there. |
 | MT runtime | **CTranslate2** with **SentencePiece** used directly; no `transformers` or PyTorch at runtime | Fast int8 CPU inference now; CUDA later on the GPU laptop with a config change. SMALL-100's SentencePiece model is identical to M2M100's, and its language convention is one token, so no tokenizer framework is needed (verified 2026-09-27 with `ctranslate2` 4.8.2 and `sentencepiece` 0.2.2 on Python 3.14). |
 | MT model conversion | `ct2-transformers-converter`, run by `scripts/convert_mt_model.py` in a throwaway `uv` environment that includes PyTorch | Keeps PyTorch out of `uv.lock` and every installed package. |
 | Eval CLI framework | **Typer** | Typed, standard. P2 uses the same for the product CLI. |
@@ -271,7 +273,7 @@ Pyright strict: parse JSON into `object` and narrow with `isinstance` checks; no
 - Loading: lazy `import ctranslate2` and `import sentencepiece`. On `ImportError`, raise `EngineUnavailableError("MT mode requires the 'mt' extra: install doctranslator-core[mt]")`. `model_dir` must contain `model.bin` and `sentencepiece.bpe.model`; otherwise `EngineUnavailableError` naming the missing file. A load failure from either library is also `EngineUnavailableError`.
 - Neither library ships complete type information. Private `Protocol`s describe exactly the surface used (`_Ct2Module` with `get_cuda_device_count` and `Translator`, `_Ct2Translator.translate_batch`, `_Ct2Result.hypotheses`, `_SentencePiece.encode`/`decode`), with one `cast` at load time and narrowly-scoped `# pyright: ignore[reportMissingTypeStubs]` on the imports. Everything after the cast is fully typed.
 - Device: `auto` resolves to `"cuda"` if `get_cuda_device_count() > 0`, else `"cpu"`. Construct `ctranslate2.Translator(str(model_dir), device=..., compute_type=config.compute_type, intra_threads=config.cpu_threads)` and `sentencepiece.SentencePieceProcessor(model_file=str(model_dir / "sentencepiece.bpe.model"))`.
-- SMALL-100 convention ([ADR-006](../decisions/ADR-006-mt-model-selection.md)): each source is `[f"__{target.value}__", *encode(text, out_type=str), "</s>"]`; no target prefix. The source language is not encoded.
+- SMALL-100 convention ([ADR-006](../../decisions/ADR-006-mt-model-selection.md)): each source is `[f"__{target.value}__", *encode(text, out_type=str), "</s>"]`; no target prefix. The source language is not encoded.
 - `translate_batch`: call `translate_batch(tokens, beam_size=config.beam_size, max_batch_size=config.max_batch_size)`, take `hypotheses[0]` of each result, drop special tokens (`<s>`, `</s>`, `<pad>`, `<unk>`) and language tokens (`__xx__`), decode with SentencePiece, strip.
 - `info`: `EngineInfo(mode=MT, model=model_dir.name, details={"model_family": ..., "device": <resolved>, "compute_type": ..., "beam_size": ...})`.
 - `close()` drops the runtime; later calls raise `RuntimeError`.
@@ -396,7 +398,7 @@ The console entry point `main()` sets UTF-8 console output and configures loggin
 
 **Deferred (owner, 2026-09-27):** SMALL-100 (MT) and Gemma (LLM) are settled for now, so benchmark scoring and baselines are not run yet. The eval app is ready for them; this step and its completion criteria remain open until they are run.
 
-The MT model was chosen before the benchmark existed, on a zh-en throughput bake-off ([ADR-006](../decisions/ADR-006-mt-model-selection.md)); the full benchmark sets the baselines. On the development laptop (CPU only; hardware is recorded automatically), from the repository root:
+The MT model was chosen before the benchmark existed, on a zh-en throughput bake-off ([ADR-006](../../decisions/ADR-006-mt-model-selection.md)); the full benchmark sets the baselines. On the development laptop (CPU only; hardware is recorded automatically), from the repository root:
 
 1. `uv run doctranslator-eval download-flores`
 2. **LLM baseline (VPN):** `uv run doctranslator-eval run --mode llm`, then `uv run doctranslator-eval baseline set <run_dir>`.
@@ -421,7 +423,7 @@ In the same change set:
 
 ## Interfaces
 
-Public API added in this phase: exactly the Public API, Types, and Configuration sections of the [core API reference](../Architecture.md#core-api-reference). Nothing else is exported from `doctranslator_core` or `doctranslator_core.types`.
+Public API added in this phase: exactly the Public API, Types, and Configuration sections of the [core API reference](../../Architecture.md#core-api-reference). Nothing else is exported from `doctranslator_core` or `doctranslator_core.types`.
 
 Eval command-line interface: step 9, `cli.py` table.
 
@@ -452,7 +454,7 @@ All tests in step 10, passing under the six checks. Integration tests pass when 
 
 ### Deferred
 
-The [P1.1 operational draft](P1.1-baseline-capture.md) gives the capture sequence. Board #9009 was verified Active on 2026-09-27 and no CI run was found for `p1-engines-eval`; keep the two unchecked closure criteria above until reviewed-commit CI and board closure are verified. The handoff's claimed closure was premature.
+The [P1.1 operational draft](../../plans/quality-baselines.md) gives the capture sequence. Board #9009 was verified Active on 2026-09-27 and no CI run was found for `p1-engines-eval`; keep the two unchecked closure criteria above until reviewed-commit CI and board closure are verified. The handoff's claimed closure was premature.
 
 Moved out of P1 by the owner on 2026-09-27; tracked in `docs/IMPLEMENTATION_PLAN.md` under P1. They must be done **before the first change to the LLM prompt, the LLM model, or the MT model**, since that is when a regression check first matters:
 

@@ -31,4 +31,4 @@ Atomic replacement briefly needs old and new outputs; active streams finish agai
 
 A common-profile change can invalidate reuse without allocating another slot. Preserve old output during replacement. History can download an available older-profile result with truthful provenance unless revoked; new translation submissions enforce current compatibility. No background upgrade on model recovery or history reads.
 
-See [Architecture](../Architecture.md#bounded-website-cache-and-retention-adr-028) and [delivery specification](../plans/website-cache-and-retention.md).
+See [Architecture](../Architecture.md#bounded-website-cache-and-retention-adr-028) and [delivery specification](../plans/unified-translator-design.md).

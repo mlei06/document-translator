@@ -1,6 +1,6 @@
 # Repository Structure
 
-The current combined delivery contract is [Unified translator design](plans/unified-translator-design.md). The former automatic website, cache/retention, direct-download, desktop Online/Offline and subtle Lenovo UI plans are compatibility pointers; D0 retains historical packaging evidence and subordinate runtime context.
+Use the [documentation index](README.md) to find current contracts, verification and history. The [unified specification](plans/unified-translator-design.md) governs current delivery; superseded plans are archived rather than maintained as competing entry points.
 
 <!-- Update this whenever a change alters the repository's conceptual structure, in the same change. This starts generic; make it describe the real layout as the project grows. -->
 
@@ -99,7 +99,15 @@ ADR-029's production renderer/preview removal is implemented within the existing
 
 Automatic website translation and shared cache/private History extend existing server settings, jobs, repositories and web screens. They add no service/package boundary. The unified specification and current Architecture overview govern their contracts.
 
-Detailed implementation plans, one per phase or subphase of `docs/IMPLEMENTATION_PLAN.md`.
+Current product specification, execution checklist, desktop UI contract, deferred quality study and task template. Historical phase plans are under `archive/plans/`.
+
+### `/docs/verification`
+
+Current core, website and desktop evidence reports, with tested scope and remaining gates distinguished from implementation claims. Generated artifacts remain in ignored local directories.
+
+### `/docs/archive`
+
+Superseded phase plans and the September 2026 roadmap, retaining board references, rationale and earlier evidence. Archive notices direct readers to current contracts; archived requirements are not implementation authority.
 
 ### `/docs/decisions`
 

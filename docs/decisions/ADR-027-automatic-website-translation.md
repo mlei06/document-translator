@@ -24,4 +24,4 @@ Keeping an advanced model picker conflicts with the requested single website pat
 
 Whole-document fallback can repeat work when a model fails late. Durable rung progress prevents restarting exhausted rungs; interruption within a rung may repeat it. Cross-user reuse, ranked stopping and cooldowns reduce repeated work. Quality differences remain visible in actual result provenance. Upgrades on new uploads intentionally trade computation for preferred-model results; history reads never cause upgrades.
 
-The component contract is in [Architecture](../Architecture.md#automatic-website-translation-adr-027); implementation and acceptance are in [the delivery specification](../plans/automatic-website-translation.md).
+The component contract is in [Architecture](../Architecture.md#automatic-website-translation-adr-027); implementation and acceptance are in [the delivery specification](../plans/unified-translator-design.md).

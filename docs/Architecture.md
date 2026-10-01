@@ -46,7 +46,7 @@ The CLI has two paths: local `translate` runs the core without a database or job
 
 **Status:** document translation, standard fit, automatic routing, shared website storage and the integrated website are implemented. Deployment diagrams describe accepted responsibilities and target flows, not proof of a shipped service or desktop installer. The roadmap owns phase status; accepted ADRs take precedence over summaries here. ADR-009/011/012/013 record the accepted document, fit and deployment decisions.
 
-This single-file layout follows the sibling `Agentic_Project_Scaffold`. The [P2-P6 delivery handoff](plans/P2-P6-delivery-handoff.md) specifies the implementation sequence and release tests. The owner has approved the shared-service CLI, preserved XLSX sheet names, user-owned translation history and integration of the existing mock UI. Evidence-dependent technical decisions remain gated in the phase plans.
+This single-file layout follows the sibling `Agentic_Project_Scaffold`. The [P2-P6 delivery handoff](archive/plans/P2-P6-delivery-handoff.md) specifies the implementation sequence and release tests. The owner has approved the shared-service CLI, preserved XLSX sheet names, user-owned translation history and integration of the existing mock UI. Evidence-dependent technical decisions remain gated in the phase plans.
 
 ### Reading Guide
 
@@ -180,7 +180,7 @@ The configured ladder begins with Gemma, continues through the five approved Dav
 
 Service admission verifies uploaded bytes and creates a private history grant, then consults the shared source/target slot. A compatible current result sets a stopping rung: try only eligible higher-priority models, replace on complete validated success, otherwise reuse it. No equal/lower recomputation; no compatible result uses the full ladder. Shared 15-minute failure cooldowns bound repeated failed upgrades. Core owns translation/format/fit logic, typed failure categories and the shared automatic-policy value object; server jobs own persistent ladder execution, routing state and ownership.
 
-History downloads never probe availability or infer; new verified uploads trigger ranked upgrades. Common-profile compatibility is separate from policy order and actual producer identity. Reordering alone changes ranking, not bytes. Safe shared work publication records actual producer, never labels HY-MT as Gemma. Details are in [routing](plans/automatic-website-translation.md).
+History downloads never probe availability or infer; new verified uploads trigger ranked upgrades. Common-profile compatibility is separate from policy order and actual producer identity. Reordering alone changes ranking, not bytes. Safe shared work publication records actual producer, never labels HY-MT as Gemma. Details are in [routing](plans/unified-translator-design.md).
 
 ### Bounded website cache and retention (ADR-028)
 
@@ -223,7 +223,7 @@ flowchart TD
 
 Shared output idle expiry defaults to 30 days since successful reuse/download, with earlier unpinned pressure eviction. Private history expires 90 days after that user's last submission; another user's activity does not renew it. History deletion leaves shared bytes; operator purge revokes the shared slot. Old grants can download a later regenerated output while their history remains.
 
-A common-profile change can make a result ineligible for new request reuse while still downloadable from history with correct provenance. Administrative revocation blocks both. The one-slot invariant survives replacement/profile changes; no variants are archived. See [storage specification](plans/website-cache-and-retention.md) for budgets, grants, migration, backup and acceptance. Filesystem/SQLite remains the initial single-host deployment; multi-host migration is separate.
+A common-profile change can make a result ineligible for new request reuse while still downloadable from history with correct provenance. Administrative revocation blocks both. The one-slot invariant survives replacement/profile changes; no variants are archived. See [storage specification](plans/unified-translator-design.md) for budgets, grants, migration, backup and acceptance. Filesystem/SQLite remains the initial single-host deployment; multi-host migration is separate.
 
 ### Standard fit and direct downloads (ADR-029)
 
@@ -235,7 +235,7 @@ Web bubbles and large-batch rows are status groups with explicit direct Download
 
 Website progress maps internal fit to Translating, with activity instead of a completed percentage. No Checking layout label or accessibility announcement. Actual persistence may show Saving; only verified publication enables Ready to download. Keep raw fit phases/timings for backend diagnostics and preserve cancellation. This mapping does not assume fit always takes a second or hide failures.
 
-Preview endpoints and render configuration/process supervision/install requirements are removed; existing blob GC handles unreferenced data. Explicit saved/temporary output/report access remains. The owner-authorized clean slate does not require an executable legacy preview compatibility path; unrelated user software and model assets remain outside cleanup scope. Optional external/native visual QA is not a runtime dependency. See [the removal plan](plans/standard-fit-direct-download.md) for inventory, compatibility and acceptance.
+Preview endpoints and render configuration/process supervision/install requirements are removed; existing blob GC handles unreferenced data. Explicit saved/temporary output/report access remains. The owner-authorized clean slate does not require an executable legacy preview compatibility path; unrelated user software and model assets remain outside cleanup scope. Optional external/native visual QA is not a runtime dependency. See [the removal plan](plans/unified-translator-design.md) for inventory, compatibility and acceptance.
 
 ### Installer and model readiness
 
@@ -271,7 +271,7 @@ Versioned REST is the default integration: submit with idempotency, inspect stat
 
 Explorer right-click translation is a release requirement using the same per-user queue and compact progress with explicit Open file/Show in folder. The thin IExplorerCommand/app-identity adapter only activates the application. Modern menu placement and signed registration are clean-machine proof requirements, not inferred from a CLI packaging probe.
 
-Lenovo managed rollout and eventual OEM preload follow a working installer app. Distribution agreements, model/font licensing, signed updates/rollback, resource/battery behavior and target hardware need separate validation. No mandatory NPU, ARM support or general consumer cloud service is assumed. The [desktop/internal-app plan](plans/Desktop-and-internal-app-delivery.md) owns gates and acceptance.
+Lenovo managed rollout and eventual OEM preload follow a working installer app. Distribution agreements, model/font licensing, signed updates/rollback, resource/battery behavior and target hardware need separate validation. No mandatory NPU, ARM support or general consumer cloud service is assumed. The [desktop/internal-app plan](archive/plans/Desktop-and-internal-app-delivery.md) owns gates and acceptance.
 
 ## Implementation Boundary
 
@@ -346,11 +346,11 @@ Only `jobs` calls the core pipeline; `settings` may construct public core config
 
 ### Web UI
 
-`apps/web` is a React/TypeScript SPA using authenticated REST only. File selection immediately starts bounded staged uploads. Target selection synchronously pins draft membership and target; each ready file submits independently, and later drops create a new draft. Retry, Cancel, Dismiss and Download are per-file actions. History is private and resolves the current shared output. The UI maps internal fit to Translating, has one meaningful live status region and preserves Lenny, the meadow and appearance controls. It has no source/model/settings/preview translation controls and never calls engines or storage directly. [Website evidence](plans/unified-web-evidence.md) records unit, browser, responsive and accessibility checks.
+`apps/web` is a React/TypeScript SPA using authenticated REST only. File selection immediately starts bounded staged uploads. Target selection synchronously pins draft membership and target; each ready file submits independently, and later drops create a new draft. Retry, Cancel, Dismiss and Download are per-file actions. History is private and resolves the current shared output. The UI maps internal fit to Translating, has one meaningful live status region and preserves Lenny, the meadow and appearance controls. It has no source/model/settings/preview translation controls and never calls engines or storage directly. [Website evidence](verification/web.md) records unit, browser, responsive and accessibility checks.
 
 ### CLI
 
-`apps/cli` has local `translate`, which calls the public core synchronously without persistent history/cache, and service commands, which submit/poll/download through REST using the user's credential. The service path shares durable jobs, batch history, cache and owned documents with API/UI users. It never imports server modules or accesses their database directly, and never silently falls back to local translation. Both paths own terminal progress, exit codes and output-path presentation; the core owns translation/fit. See [ADR-010](decisions/ADR-010-shared-service-cli.md) and [P5](plans/P5-server-and-service-cli.md).
+`apps/cli` has local `translate`, which calls the public core synchronously without persistent history/cache, and service commands, which submit/poll/download through REST using the user's credential. The service path shares durable jobs, batch history, cache and owned documents with API/UI users. It never imports server modules or accesses their database directly, and never silently falls back to local translation. Both paths own terminal progress, exit codes and output-path presentation; the core owns translation/fit. See [ADR-010](decisions/ADR-010-shared-service-cli.md) and [P5](archive/plans/P5-server-and-service-cli.md).
 
 ### Evaluation
 
@@ -489,7 +489,7 @@ flowchart LR
     EXPORT --> USER["User-controlled file; never app-GC deleted"]
 ```
 
-Local export preserves relative folders and reserves collision-safe names, never overwrites existing files, and reconciles destination/digest on restart. It retains no hidden source/result library. Temporary snapshots and bounded job metadata support active work/recovery. Explorer activation uses this same path; signed native integration acceptance remains separate. See [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and the [storage transition plan](plans/P5-D2-storage-and-ownership.md) for deletion, identity, API and acceptance details.
+Local export preserves relative folders and reserves collision-safe names, never overwrites existing files, and reconciles destination/digest on restart. It retains no hidden source/result library. Temporary snapshots and bounded job metadata support active work/recovery. Explorer activation uses this same path; signed native integration acceptance remains separate. See [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and the [storage transition plan](archive/plans/P5-D2-storage-and-ownership.md) for deletion, identity, API and acceptance details.
 
 ## Core Document Pipeline
 
@@ -521,7 +521,7 @@ The implemented neutral schema, segmentation, inline tokens, best-effort detecti
 
 ### Fit Check
 
-[ADR-026](decisions/ADR-026-offline-fit-v2.md) is accepted and implemented, amending ADR-012, ADR-018 and ADR-023. The [offline fit v2 contract](plans/offline-fit-v2.md) defines acceptance cases and bounded implementation tasks. Repository validation and scoped native-document evidence are recorded in that contract; broader corpus acceptance is not implied.
+[ADR-026](decisions/ADR-026-offline-fit-v2.md) is accepted and implemented, amending ADR-012, ADR-018 and ADR-023. The [offline fit v2 contract](archive/plans/offline-fit-v2.md) defines acceptance cases and bounded implementation tasks. Repository validation and scoped native-document evidence are recorded in that contract; broader corpus acceptance is not implied.
 
 Standard fit preserves structure before measurement, resolves source and target fonts independently, and verifies the serialized output. An unknown source measurement cannot suppress target fitting: a measurable target uses nominal bounds and neighbour clearance, retaining source uncertainty in the report. Target font substitutions are deterministic provisioned faces written into the document, with script slots and style preserved. Unknown source fallback never claims native parity. Generic fit takes neutral containers and callbacks, never format adapters or XML.
 
@@ -669,7 +669,7 @@ See [Deployment](Deployment.md) for current local operation and future deploymen
 | Versioning | Common-profile and actual producer identities govern shared reuse; immutable outputs are pinned during downloads; no website version archive |
 | Verification | Unit/fake-engine tests, real-backend integration tests, native-file preservation checks and visual QA have distinct purposes |
 
-All six repository checks remain required. Unit tests do not need VPN/models. Real-backend tests are explicitly marked and skips do not prove availability. The XLSX experiment's eight passing cases do not establish full Office compatibility. Visual/render acceptance is still required for format and fit work. Changes to prompts/models require the deferred [P1.1 baselines](plans/P1.1-baseline-capture.md) first.
+All six repository checks remain required. Unit tests do not need VPN/models. Real-backend tests are explicitly marked and skips do not prove availability. The XLSX experiment's eight passing cases do not establish full Office compatibility. Visual/render acceptance is still required for format and fit work. Changes to prompts/models require the deferred [P1.1 baselines](plans/quality-baselines.md) first.
 
 ## Architectural Constraints and Known Tradeoffs
 
@@ -1005,7 +1005,7 @@ HY-MT remains independently configured and is the final eligible automatic fallb
 Its nonempty deployment revision pins the administrator-declared weights/runtime configuration;
 protocol, prompt version and generation settings are included in output identity.
 
-The [laptop experiment](plans/laptop-mt-performance.md) profiles SMALL-100 CPU/OpenVINO and
+The [laptop experiment](archive/plans/laptop-mt-performance.md) profiles SMALL-100 CPU/OpenVINO and
 HY-MT CPU/Arc separately. OpenVINO remains experimental until performance and compatibility
 evidence justify a production adapter. No PyTorch/Transformers dependency is added to production
 by the HTTP HY-MT adapter. Per the current owner instruction, this task defers the broad quality
@@ -1053,12 +1053,12 @@ Loggers are named after modules (`doctranslator_core.engines.llm`, ...). The cor
 - LLM output determinism depends on the server honoring `temperature = 0`.
 - Deduplication is scoped to one `translate_texts` call. It is not yet document-wide (ADR-007).
 - `EngineInfo` is descriptive metadata, not yet a complete cache fingerprint. LLM endpoint/batching and MT artifact identity need explicit treatment before P2 exposes a fingerprint.
-- Formatting tags are not structurally validated by the text API. A saved exploratory run kept all tags in 30/30 Gemma cases and 20/30 SMALL-100 cases; this is feasibility evidence, not a fidelity guarantee. See the [P2 draft](plans/P2-document-translation-and-cli.md).
+- Formatting tags are not structurally validated by the text API. A saved exploratory run kept all tags in 30/30 Gemma cases and 20/30 SMALL-100 cases; this is feasibility evidence, not a fidelity guarantee. See the [P2 draft](archive/plans/P2-document-translation-and-cli.md).
 - Document geometry, format capabilities, diagnostics and progress callbacks have no implemented public API yet. Placeholder files do not provide these capabilities.
 
 ## Evaluation Reference
 
-Status: implemented in P1 (2026-09-27). Full baselines have not been committed. The owner deferred them until before the first prompt or model change; [P1.1](plans/P1.1-baseline-capture.md) describes that work.
+Status: implemented in P1 (2026-09-27). Full baselines have not been committed. The owner deferred them until before the first prompt or model change; [P1.1](plans/quality-baselines.md) describes that work.
 
 ### Purpose
 

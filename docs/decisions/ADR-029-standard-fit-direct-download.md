@@ -23,4 +23,4 @@ The normal path becomes upload, translation, standard layout fitting, validated 
 
 Standard fitting remains best effort and does not prove native rendered appearance. Required safeguards against missing content, broken files and unsafe PDF placement remain. Office page rendering is already asynchronous today, so removing it alone is not a guaranteed large download speedup; removing synchronous preview packaging and selected thorough verification eliminates their actual overhead. Measure remaining latency rather than promise a numeric improvement.
 
-See [Architecture](../Architecture.md#standard-fit-and-direct-downloads-adr-029) and [delivery specification](../plans/standard-fit-direct-download.md).
+See [Architecture](../Architecture.md#standard-fit-and-direct-downloads-adr-029) and [delivery specification](../plans/unified-translator-design.md).

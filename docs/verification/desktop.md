@@ -1,6 +1,6 @@
 # Unified desktop implementation evidence
 
-Status: implementation and all available local checks are complete, including final installed-package verification. Release acceptance remains blocked by signing material, an isolated clean machine and the locked desktop's final Open file visual check. The latest unified translator design and explicit unattended instruction supersede the earlier D0 stop gate.
+Status: the baseline runtime/installer has recorded local acceptance below. Later main-window UI and Downloads-export amendments are implemented and tested in source but have not replaced the running installation. Read those dated amendments before applying older installed-package claims. Signed clean-machine release and the remaining native checks are still outstanding.
 
 ## Implemented boundaries
 

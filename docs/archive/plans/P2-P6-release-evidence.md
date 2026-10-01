@@ -1,5 +1,7 @@
 # P2-P6 Release Evidence
 
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
 Offline fit v2 follow-on (2026-09-29): implementation, scoped native-document replays and final repository checks are recorded in [the fit v2 plan](offline-fit-v2.md#implementation-evidence-2026-09-29). Historical v1 evidence below is not v2 acceptance evidence; this follow-on does not change phase or board closure.
 
 Evidence for the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md). Every row records the tested commit, the command or test, engine/runtime/application/font versions, the outcome and where artifacts live. Rows are filled only from real runs; an empty outcome means not yet tested. Generated documents and outputs stay under gitignored `data/` and are never committed.

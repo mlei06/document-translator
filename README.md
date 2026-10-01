@@ -111,7 +111,7 @@ The user selects a mode per job. Both modes produce the same output format and g
 
 **Visual quality**
 
-Translation quality and accuracy take priority. [ADR-026](docs/decisions/ADR-026-offline-fit-v2.md) defines the implemented structure-aware offline fitting policy. The [design spec](docs/plans/offline-fit-v2.md) records exact scope and acceptance requirements.
+Translation quality and accuracy take priority. [ADR-026](docs/decisions/ADR-026-offline-fit-v2.md) defines the implemented structure-aware offline fitting policy. The [design spec](docs/archive/plans/offline-fit-v2.md) records exact scope and acceptance requirements.
 
 Standard fitting preserves structure, measures target text even when the source font baseline is unknown, writes provisioned target font substitutions and applies bounded repairs. PowerPoint can grow eligible boxes into free space, reduce paragraph spacing and shrink proportionally. Word body content reflows naturally. PDF preserves paragraph boundaries/right anchors and rejects a document when complete text cannot be legally placed without overlap or below-floor rescue. Floors remain 70% and 8 pt by default. No wording changes, OCR or model calls occur during fitting.
 
@@ -178,21 +178,19 @@ Lenovo fleet deployment and eventual OEM preload require separate distribution, 
 
 ## Current Status
 
-Text translation works through the internal LLM service and local MT runtimes. The repository includes TXT, PPTX, DOCX, XLSX and PDF translation, local/service CLI commands, the owned-job REST service, web integration and offline fit v2. The translation quality benchmark (`apps/eval`) is in place. See [release evidence](docs/plans/P2-P6-release-evidence.md) and [fit v2 evidence](docs/plans/offline-fit-v2.md#implementation-evidence-2026-09-29) for tested scope and limitations.
+The repository implements five-format translation, local/service CLI commands, automatic routing, website uploads/private History, and the native desktop runtime and UI. The desktop source defaults exports to Downloads or a chosen folder. The latest UI/export changes require a rebuilt installed package and native acceptance; previous installer evidence does not certify those changes.
 
-Historical phase closure, board synchronization and reviewed-commit CI are distinct from the implementation present in the workspace. Full translation-quality baselines remain deferred under the owner's recorded instruction. MCP delivery remains future work; implementing offline fit does not close those broader delivery gates.
-
-## Delivery Handoff
-
-The [P2-P6 handoff](docs/plans/P2-P6-delivery-handoff.md) is the execution entry point for completing the five-format backend and integrating the existing mock web GUI. It includes the user/ownership flow, technical design gates, phase tasks, CLI/API contracts and backend/browser release matrices. It describes required work, not completed functionality.
+See [verification records](docs/verification/README.md) for tested scope and limitations and [the roadmap](docs/IMPLEMENTATION_PLAN.md) for remaining work. Signed clean-machine release, distribution approvals and full quality baselines remain separate gates. MCP and enterprise platform integration remain future work.
 
 ## Documentation
 
-- [Architecture](docs/Architecture.md)
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
-- [Repository Structure](docs/Structure.md)
-- [Architecture Diagrams and Main Flow](docs/Architecture.md#main-translation-flow)
-- [Implementation Plans](docs/plans/)
-- [Architecture Decisions](docs/decisions/)
-- [Deployment](docs/Deployment.md)
-- [Agent Instructions](AGENTS.md)
+Start with the [documentation index](docs/README.md).
+
+- [Product specification](docs/plans/unified-translator-design.md)
+- [Roadmap](docs/IMPLEMENTATION_PLAN.md) and [execution checklist](docs/plans/unified-execution.md)
+- [Architecture](docs/Architecture.md) and [repository structure](docs/Structure.md)
+- [Deployment and operation](docs/Deployment.md)
+- [Verification](docs/verification/README.md)
+- [Architecture decisions](docs/decisions/README.md)
+- [Historical plans](docs/archive/README.md)
+- [Agent instructions](AGENTS.md)

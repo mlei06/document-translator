@@ -2,7 +2,7 @@
 
 Status: Draft operational plan. Implements the owner's existing baseline deferral; does not put baselines back into P1's completion criteria. Required before the first prompt, LLM model or MT model change.
 
-Owner exception, 2026-09-29: the [laptop performance/HY-MT task](laptop-mt-performance.md)
+Owner exception, 2026-09-29: the [laptop performance/HY-MT task](../archive/plans/laptop-mt-performance.md)
 explicitly proceeds without this full quality study. It retains basic response and document
 preservation checks and makes no benchmarked accuracy-superiority claim. This exception does
 not mark the baselines below as captured.
@@ -14,7 +14,7 @@ Record full FLORES+ baselines for the current Gemma prompt/model and SMALL-100 c
 ## Relevant Architecture
 
 - [ADR-005](../decisions/ADR-005-translation-quality-evaluation.md), [ADR-006](../decisions/ADR-006-mt-model-selection.md)
-- [Eval component](../Architecture.md#evaluation-reference), [P1 step 11](P1-translation-engines-and-benchmark.md)
+- [Eval component](../Architecture.md#evaluation-reference), [P1 step 11](../archive/plans/P1-translation-engines-and-benchmark.md)
 
 ## Dependencies
 

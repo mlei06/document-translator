@@ -1,5 +1,7 @@
 # Offline Fit v2 - Design Specification
 
+> Historical plan. Retained for rationale and evidence, not current implementation instructions. Follow the [current specification](../../plans/unified-translator-design.md) and [execution checklist](../../plans/unified-execution.md).
+
 Status: Implemented in the workspace, 2026-09-29, following owner approval. Repository checks pass; native-document acceptance scope and remaining corpus limits are recorded below.
 
 ## Objective
@@ -10,14 +12,14 @@ Use the current fast fitter as one component of a pipeline that first preserves 
 
 ## Relevant architecture and decisions
 
-- [Architecture: fit check](../Architecture.md#fit-check), core pipeline, PDF and page-rendering sections.
-- [ADR-003](../decisions/ADR-003-source-structure.md): shared-core boundaries and format-owned capabilities.
-- [ADR-011](../decisions/ADR-011-document-translation-contract.md): translation and formatting preservation.
-- [ADR-012](../decisions/ADR-012-lightweight-fit-policy.md): current floors, shrink policy, skip and simple UI.
-- [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md): owner-scoped reuse and immutable results.
-- [ADR-018](../decisions/ADR-018-pdf-strategy.md): PDF replacement and placement.
-- [ADR-023](../decisions/ADR-023-page-rendering-for-previews.md): existing local render infrastructure and asynchronous previews.
-- [ADR-026](../decisions/ADR-026-offline-fit-v2.md): policy changes and alternatives.
+- [Architecture: fit check](../../Architecture.md#fit-check), core pipeline, PDF and page-rendering sections.
+- [ADR-003](../../decisions/ADR-003-source-structure.md): shared-core boundaries and format-owned capabilities.
+- [ADR-011](../../decisions/ADR-011-document-translation-contract.md): translation and formatting preservation.
+- [ADR-012](../../decisions/ADR-012-lightweight-fit-policy.md): current floors, shrink policy, skip and simple UI.
+- [ADR-014](../../decisions/ADR-014-storage-ownership-and-retranslation.md): owner-scoped reuse and immutable results.
+- [ADR-018](../../decisions/ADR-018-pdf-strategy.md): PDF replacement and placement.
+- [ADR-023](../../decisions/ADR-023-page-rendering-for-previews.md): existing local render infrastructure and asynchronous previews.
+- [ADR-026](../../decisions/ADR-026-offline-fit-v2.md): policy changes and alternatives.
 
 Authority: the user explicitly requested implementation of this spec, accepting ADR-026 and its stated changes. This plan does not mark P3/P4/P7 Active or complete, and does not change board state. Canonical component documentation remains in Architecture; interface sketches below describe the accepted requirements; concrete implementation scope and evidence are recorded below.
 
