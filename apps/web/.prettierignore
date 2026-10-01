@@ -1,0 +1,6 @@
+src/api/schema.d.ts
+openapi.json
+dist
+src/styles/lenny.css
+test-results
+playwright-report

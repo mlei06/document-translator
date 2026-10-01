@@ -1,5 +1,12 @@
 # D0 - Desktop Runtime and Packaging Contract
 
+> Current authority: [Unified translator design](unified-translator-design.md) incorporates the surviving desktop runtime/installer requirements and supersedes all conflicting text below, including mode/model selectors, individual credential provisioning, old model order and deferred Explorer delivery. Desktop automatically uses the installer-provisioned shared Davy key and then installed HY-MT. Historical packaging evidence and separate I1 integration scope remain valid.
+
+> Desktop amendment: [ADR-030](../decisions/ADR-030-desktop-online-offline-delivery.md) and [delivery contract](desktop-online-offline-delivery.md) supersede conflicting model-picker, local-first/no-fallback and deferred Explorer requirements below. Retain the packaged Python/process/loopback security contract. Add signed modern Explorer identity, direct Davy authentication independent of the website service and managed HY-MT offline runtime proof; the CLI probe does not complete D0.
+
+> Translator configuration is governed by accepted [ADR-019](../decisions/ADR-019-configured-translators.md): selectable configured translator IDs, one default, explicit local/remote location and no automatic fallback. Desktop setup selects supported model downloads; hosted users select admin-enabled translators. Installer delivery remains D0/D1 work.
+
+
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
@@ -30,6 +37,8 @@ The following is the proposed wire/bootstrap contract, not a currently available
 5. The desktop API client uses the existing versioned REST job endpoints. Keep the session token only in memory in the trusted app context. Restrict WebView navigation and CSP to packaged assets and the selected API; local server validates Host and configured Origin, with no wildcard CORS. Unrelated browser origins and other OS users must fail acceptance tests.
 6. The shell manages its children in a Windows Job Object so abrupt shell termination cannot leave orphan local servers/workers. Graceful quit requests shutdown and observes a bounded deadline before terminating only its own job object. Durable job recovery remains P5's lease/retry behavior.
 7. Window close with active work offers clearly explained background/tray behavior; explicit quit explains interruption. Reopening reconnects to the same running app. After a full restart the token/port rotate but owner and active recovery state remain stable; exported files remain in the chosen folder. There is no permanent local document library.
+
+The desktop profile is file in, file out: it sets `DOCTRANSLATOR_PAGE_PREVIEWS=off` ([ADR-023](../decisions/ADR-023-page-rendering-for-previews.md)), so workers never render page previews or run a renderer thread, and LibreOffice is not part of the desktop runtime.
 
 The service owner must implement and test this profile in the existing server executable. Desktop must not import server modules, maintain a second database queue, or fabricate completed jobs while that profile is unavailable.
 

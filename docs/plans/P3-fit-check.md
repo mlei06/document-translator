@@ -1,5 +1,7 @@
 # P3 - Fit Check Implementation
 
+Accepted follow-on (2026-09-29): [Offline fit v2](offline-fit-v2.md) and [ADR-026](../decisions/ADR-026-offline-fit-v2.md) amend fitting and placement policy. See that plan for implementation evidence; historical phase/board state below is unchanged.
+
 Status: Revised 2026-09-28 for owner-approved lightweight best-effort fitting. Parent: Feature #9011. [ADR-012](../decisions/ADR-012-lightweight-fit-policy.md) is authoritative.
 
 Progress (2026-09-28): fit is integrated for PPTX, DOCX and XLSX with saved-output verification, the policy/unsupported/search-limit tests, the synthetic-font corpus and a real-engine run with native spot checks; see the [closure report](../experiments/fit-measurement/README.md). Remaining for phase closure: reviewed-commit CI (branch not pushed) and the service-level R11 evidence. PDF fit arrives with P4.

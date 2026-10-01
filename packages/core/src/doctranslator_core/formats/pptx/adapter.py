@@ -7,10 +7,10 @@ from pathlib import Path
 from lxml import etree
 
 from doctranslator_core.config import DocumentLimits
-from doctranslator_core.document import LayoutContainer, Paragraph
+from doctranslator_core.document import LayoutContainer, LayoutPatch, Paragraph
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats._ooxml.runs import StyleTable, clean_text
-from doctranslator_core.formats.base import DocumentAdapter, LayoutSupport
+from doctranslator_core.formats.base import DocumentAdapter, LayoutRepairSupport, LayoutSupport
 from doctranslator_core.formats.pptx.layout import PptxLayout
 from doctranslator_core.formats.pptx.model import Container
 from doctranslator_core.inline import Inline, Keep, Obj, Text, Wrap
@@ -41,7 +41,7 @@ class _ParagraphRef:
     container: int
 
 
-class PptxAdapter(DocumentAdapter, LayoutSupport):
+class PptxAdapter(DocumentAdapter, LayoutSupport, LayoutRepairSupport):
     format = DocumentFormat.PPTX
 
     def __init__(self, path: Path, limits: DocumentLimits) -> None:
@@ -246,6 +246,7 @@ class PptxAdapter(DocumentAdapter, LayoutSupport):
             else:
                 para.append(element)
         self.package.mark_modified(ref.part)
+        self._layout.invalidate(str(ref.container))
 
     def _render(self, node: Inline, target: Language) -> list[Element]:
         match node:
@@ -267,6 +268,16 @@ class PptxAdapter(DocumentAdapter, LayoutSupport):
 
     def layout_containers(self) -> list[LayoutContainer]:
         return self._layout.containers(self.containers)
+
+    def layout_context(self) -> list[LayoutContainer]:
+        return self.layout_containers()
+
+    def apply_layout_patch(self, patch: LayoutPatch) -> None:
+        current = next(c for c in self.layout_containers() if c.id == patch.expected.id)
+        if current != patch.expected:
+            raise ValueError("stale layout patch")
+        self._layout.apply_patch(patch)
+        self.package.mark_modified(self.containers[int(current.id)].part)
 
     def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
         self._layout.apply_sizes(container_id, sizes)

@@ -1,5 +1,7 @@
 # Repository Structure
 
+The current combined delivery contract is [Unified translator design](plans/unified-translator-design.md). The former automatic website, cache/retention, direct-download, desktop Online/Offline and subtle Lenovo UI plans are compatibility pointers; D0 retains historical packaging evidence and subordinate runtime context.
+
 <!-- Update this whenever a change alters the repository's conceptual structure, in the same change. This starts generic; make it describe the real layout as the project grows. -->
 
 The layout follows [ADR-003](decisions/ADR-003-source-structure.md): one `uv` workspace in which the translation core is a library and every surface is a separate app depending on it.
@@ -17,6 +19,8 @@ apps/
   cli/                  # doctranslator-cli
   server/               # doctranslator-server
   eval/                 # doctranslator-eval
+  web/                  # authenticated immediate-batch React website
+  desktop/              # native shell, installer and packaged runtime build inputs
 tests/
 scripts/
 docs/
@@ -36,25 +40,41 @@ Reusable libraries.
 
 ### `/packages/core`
 
-`doctranslator_core`: everything that determines what a translated document looks like. Its module layout (`types`, `config`, `document`, `pipeline`, `engines/`, `formats/<format>/`, `fit/`, `render/`) and responsibilities are defined in ADR-003. Apps import only `doctranslator_core` and `doctranslator_core.types`. Implemented: the text and document APIs, engines, `inline`/`protect`/`detect`/`identity`, the pipeline, TXT/PPTX/DOCX/XLSX/PDF format packages (each Office package and PDF has `adapter.py` and `layout.py`; `formats/_ooxml/` holds safe package access and run-style tables) and `fit/` (fonts, measure, fitter). `render/` is a scaffold (P7).
+`doctranslator_core`: everything that determines what a translated document looks like. Apps import only `doctranslator_core` and `doctranslator_core.types`. Implemented modules include text/document APIs, `policy`, engines, `inline`/`protect`/`detect`/`identity`, the pipeline, TXT/PPTX/DOCX/XLSX/PDF format packages and standard `fit/` (fonts, measurement, bounded native repairs). `formats/_ooxml/` holds safe package access and run-style tables. The empty `render/` namespace remains an import-contract boundary; production renderer implementations are removed.
 
 ## `/apps`
 
 Deployable surfaces, each a distribution depending on the core. They never import each other.
 
 - `cli/` - `doctranslator_cli`: `main` (the `doctranslator` command; local synchronous `translate`), `commands` (service commands `whoami`, `submit`, `batches`, `jobs`, `download`), `service` (REST client: retries, verified atomic downloads), `batch` (manifests, resume state, bounded uploads, waiting, downloads), `settings`, `fonts`, `console`.
-- `server/` - `doctranslator_server` (the `doctranslator-server` command): `app` (composition root), `settings`, `cli` (migrate, serve, worker, users, keys, retention, backup, restore), `api/` (REST `/v1` routes and wire schemas), `auth/` (API keys, users, ADR-015), `jobs/` (submission service for saved documents and temporary jobs, queue transitions, worker, blob storage, engine identities, preview packages, retention, backup; the only module calling the core), `db/` (engine and sessions, ORM models, `repositories/`), `mcp/` (scaffold, P7). `apps/server/migrations/` holds the Alembic environment and revisions (ADR-004).
+- `server/` - `doctranslator_server`: composition roots `app` and `desktop`, settings and CLI, REST/session/desktop wire APIs, authentication, and `jobs/` for shared translation, queue/worker, storage, desktop lifecycle and exports. Only jobs/settings call the public core. `db/` owns ORM models, transactions and repositories; `migrations/` holds Alembic schema revisions. `mcp/` remains a later scaffold.
 - `eval/` - `doctranslator_eval`: implemented translation quality benchmark (ADR-005, [evaluation reference](Architecture.md#evaluation-reference)). `baselines/` is the planned location for committed scores; full baselines are still deferred.
 
-Planned under [ADR-013](decisions/ADR-013-deployment-profiles.md): a desktop client/launcher, model setup and installer assets. Exact directories/toolkit are chosen at D0; they do not exist merely because the product direction is approved. The client uses HTTP and packaged process entry points, not server Python imports. Hosted and per-user local installations reuse the server implementation.
+`desktop/` contains the Tauri native shell, local HTML/CSS/JavaScript main/activity surfaces, C++ Explorer command, NSIS/sparse identity packaging inputs and PyInstaller build entry point. The shell uses authenticated HTTP and packaged process entry points. Hosted and per-user local installations reuse the server implementation. Signed release and clean-machine acceptance are tracked separately from local compilation.
 
 Each package and app has its own `tests/` directory next to `src/`.
+
+Server `jobs/davy.py` owns cached, authenticated model-list discovery and safe status mapping. `jobs/engines.py` combines that approval filter with local MT artifact readiness and preserves pinned worker identities. The API exposes these through capabilities and authenticated refresh; frontend `ui/DavyStatus.tsx` presents connection feedback without accessing endpoint credentials.
+
+### `/apps/web`
+
+React/TypeScript implementation of the Lenny website. `src/api` owns generated OpenAPI types, same-origin session transport and query coordination; screens/components own sign-in, immediate target-pinned upload batches, progress, private History and presentation preferences. `world`, `lenny` and local assets preserve the visual design. The UI calls REST, never Python/server internals or models directly. Preview and personal translation-setting screens are removed.
+
+`vite.config.ts` builds the SPA and configures Vitest. Playwright configuration and `e2e` exercise a separate deterministic real-service fixture; they do not inject mock production data. Browser reports, screenshots and dependency/build directories are generated artifacts. Run frontend checks independently of the Python workspace checks and regenerate API types through `npm run gen:api` after wire-schema changes.
 
 ## `/tests`
 
 Sample documents shared by all test suites (`fixtures/<format>/`, provenance in `fixtures/README.md`), cross-surface end-to-end tests (`e2e/`: the service CLI against the service in another process, crash recovery) and shared test helpers (`support/`: fake translators, a local fake LLM server, a synthetic font, OOXML inspection, synthetic PDFs, server builders with a deterministic engine, the fake-engine service process); `tests` is on the pytest and pyright path so suites import `support.*`. Cross-surface end-to-end tests (`e2e/`) arrive with the service (P5).
 
 ## `/scripts`
+
+Unified modules: the core `policy.py` owns the approved automatic order and digest.
+Server `jobs/automatic.py`, `shared.py`, and `capacity.py` extend the existing queue with
+pinned routing, shared current results/private grants, and global reservations. Desktop
+bootstrap/authentication and local asset/export helpers live within the server's existing
+composition/auth/jobs boundaries. Production `jobs/preview.py`, `jobs/pages.py`, page
+repositories and core/format rendering implementations have been removed. The empty core
+`render` package remains only as an import-contract boundary, not an executable renderer.
 
 Development, migration, deployment, and maintenance scripts.
 
@@ -75,6 +95,10 @@ The single architecture document: system context, component responsibilities and
 
 ### `/docs/plans`
 
+ADR-029's production renderer/preview removal is implemented within the existing package boundaries. Required translation/PDF/font code remains; standalone QA scripts are not runtime dependencies.
+
+Automatic website translation and shared cache/private History extend existing server settings, jobs, repositories and web screens. They add no service/package boundary. The unified specification and current Architecture overview govern their contracts.
+
 Detailed implementation plans, one per phase or subphase of `docs/IMPLEMENTATION_PLAN.md`.
 
 ### `/docs/decisions`
@@ -90,6 +114,11 @@ Visual design exploration and source assets gathered ahead of the phase that imp
 Small design experiments and their evidence, separate from production code. `xlsx-roundtrip/spike.py` is an isolated, dependency-pinned script comparing two XLSX write strategies. Its disposable workbooks and machine-readable results live in gitignored `data/experiments/xlsx-roundtrip/`; the report and script are tracked here. These scripts are outside the production test/typecheck paths and are verified separately using their documented commands.
 
 `desktop-packaging/` contains the D0 Python runtime packaging probe and build instructions. It exercises the existing CLI with a separately installed model; it is not a production desktop app or persistent server. Generated bundles and execution evidence stay in ignored `data/experiments/desktop-packaging/`.
+
+`laptop-mt/` contains the serial SMALL-100/HY-MT runtime/thread benchmark and Windows
+process-tree CPU/GPU profiler. Raw samples and generated documents stay in ignored
+`data/experiments/laptop-mt/`. It reuses the SMALL-100 export and runtime experiment in
+`openvino-small100/` without promoting that experimental OpenVINO wrapper into production.
 
 ## `/.agents`
 

@@ -114,7 +114,7 @@ def test_0001_data_converts_without_losing_results(tmp_path: Path) -> None:
 
     database = Database(f"sqlite:///{path.as_posix()}")
     database.migrate()
-    assert database.current_revision() == "0002"
+    assert database.current_revision() == "0007"
     database.dispose()
     conn = sqlite3.connect(path)
     assert conn.execute("SELECT kind FROM users").fetchall() == [("human",)]
@@ -140,3 +140,56 @@ def test_0001_data_converts_without_losing_results(tmp_path: Path) -> None:
     assert not {"translation_results", "document_versions", "legacy_documents"} & tables
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
+
+
+def test_password_upgrade_preserves_existing_key_sessions(tmp_path: Path) -> None:
+    path = tmp_path / "accounts.db"
+    database = Database(f"sqlite:///{path.as_posix()}")
+    try:
+        database.migrate("0003")
+        with sqlite3.connect(path) as conn:
+            _insert(
+                conn,
+                "users",
+                id="u",
+                display_name="Existing",
+                kind="human",
+                active=1,
+                created_at=NOW,
+            )
+            _insert(
+                conn,
+                "api_keys",
+                id="k",
+                user_id="u",
+                prefix="abcdefghijkl",
+                digest="digest",
+                label="Existing",
+                created_at=NOW,
+            )
+            _insert(
+                conn,
+                "sessions",
+                id="s",
+                user_id="u",
+                api_key_id="k",
+                token_digest="token",  # noqa: S106 - inert migration fixture digest
+                csrf_digest="csrf",
+                created_at=NOW,
+                last_seen_at=NOW,
+                expires_at=LATER,
+            )
+        conn.close()
+        database.migrate()
+        with sqlite3.connect(path) as conn:
+            assert conn.execute("SELECT user_id, api_key_id FROM sessions").fetchall() == [
+                ("u", "k")
+            ]
+            assert conn.execute("SELECT email, password_hash FROM users").fetchall() == [
+                (None, None)
+            ]
+            assert conn.execute("SELECT translation_settings FROM users").fetchall() == [("{}",)]
+            assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        conn.close()
+    finally:
+        database.dispose()

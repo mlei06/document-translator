@@ -34,12 +34,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--server", required=True)
     parser.add_argument("--to", required=True)
-    parser.add_argument("--mode", required=True)
+    parser.add_argument("--mode")
+    parser.add_argument(
+        "--automatic", action="store_true", help="Use target-only shared website policy"
+    )
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--temporary", action="store_true")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("files", type=Path, nargs="+")
     args = parser.parse_args()
+    if not args.automatic and not args.mode:
+        parser.error("provide --automatic or --mode")
+    if args.automatic and (args.mode or args.force or args.temporary):
+        parser.error("automatic requests do not accept explicit translation controls")
     key = os.environ.get("DOCTRANSLATOR_API_KEY")
     if not key:
         print("DOCTRANSLATOR_API_KEY is not set", file=sys.stderr)
@@ -59,6 +66,15 @@ def main() -> int:
             "retention": "temporary" if args.temporary else "saved",
         }
     )
+    if args.automatic:
+        options = json.dumps(
+            {
+                "target": args.to,
+                "selection_policy": "website_auto",
+                "retention": "cached",
+                "download_semantics": "current_shared",
+            }
+        )
     failures = 0
     for path in args.files:
         before = sha256(path.read_bytes())

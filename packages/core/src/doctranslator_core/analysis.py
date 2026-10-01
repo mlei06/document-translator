@@ -66,7 +66,29 @@ def detect_document(path: Path, *, limits: DocumentLimits | None = None) -> Docu
             segments=len(paragraphs),
             diagnostics=[note],
         )
-    status = "no_text" if source is None else "detected"
+    except Exception:
+        return DocumentDetection(
+            format=fmt,
+            source=None,
+            status="unknown",
+            segments=len(paragraphs),
+            diagnostics=[
+                DocumentDiagnostic(
+                    code="source_unknown",
+                    severity=DiagnosticSeverity.INFO,
+                    message="Source language is unknown; translation uses the selected target.",
+                )
+            ],
+        )
+    status = (
+        "mixed"
+        if any(note.code == "source_mixed" for note in notes)
+        else "detected"
+        if source is not None
+        else "unknown"
+        if any(ch.isalpha() for text in texts for ch in text)
+        else "no_text"
+    )
     return DocumentDetection(
         format=fmt, source=source, status=status, segments=len(paragraphs), diagnostics=notes
     )

@@ -92,6 +92,9 @@ class User(Base):
 
     id: Mapped[str] = _id()
     display_name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(256))
+    translation_settings: Mapped[Json] = mapped_column(JSON, default=dict)
     kind: Mapped[str] = mapped_column(String(16), default="human")
     """``human`` or ``service`` (an application's own account, ADR-014)."""
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -158,7 +161,8 @@ class Document(Base):
 
     id: Mapped[str] = _id()
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    source_blob: Mapped[str] = mapped_column(ForeignKey("blobs.hash"), index=True)
+    source_blob: Mapped[str] = mapped_column(String(64), index=True)
+    staging_expires_at: Mapped[datetime | None]
     name: Mapped[str] = mapped_column(String(255))
     size: Mapped[int] = mapped_column(BigInteger)
     format: Mapped[str] = mapped_column(String(8))
@@ -190,11 +194,16 @@ class Job(Base):
     kind: Mapped[str] = mapped_column(String(16), default="translate")
     original_name: Mapped[str] = mapped_column(String(255))
     format: Mapped[str] = mapped_column(String(8))
-    input_blob: Mapped[str] = mapped_column(ForeignKey("blobs.hash"), index=True)
+    input_blob: Mapped[str] = mapped_column(String(64), index=True)
+    shared_work_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    history_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    policy: Mapped[Json | None]
+    rung: Mapped[int] = mapped_column(Integer, default=0)
     input_size: Mapped[int] = mapped_column(BigInteger)
     options: Mapped[Json]
     """Canonical ``DocumentTranslationOptions`` JSON."""
     mode: Mapped[str] = mapped_column(String(8))
+    translator_id: Mapped[str | None] = mapped_column(String(64))
     source_requested: Mapped[str] = mapped_column(String(8))
     source_resolved: Mapped[str | None] = mapped_column(String(8))
     target: Mapped[str] = mapped_column(String(8))
@@ -242,7 +251,6 @@ class JobResult(Base):
     fingerprint: Mapped[str] = mapped_column(String(64))
     output_blob: Mapped[str] = mapped_column(ForeignKey("blobs.hash"), index=True)
     report_blob: Mapped[str] = mapped_column(ForeignKey("blobs.hash"), index=True)
-    preview_blob: Mapped[str | None] = mapped_column(ForeignKey("blobs.hash"), index=True)
     source_resolved: Mapped[str | None] = mapped_column(String(8))
     fit_status: Mapped[str] = mapped_column(String(32))
     engine: Mapped[Json]
@@ -320,8 +328,52 @@ class Session(Base):
     token_digest: Mapped[str] = mapped_column(String(64), unique=True)
     csrf_digest: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    api_key_id: Mapped[str] = mapped_column(ForeignKey("api_keys.id"), index=True)
+    api_key_id: Mapped[str | None] = mapped_column(ForeignKey("api_keys.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(default=utcnow)
     expires_at: Mapped[datetime]
     revoked_at: Mapped[datetime | None]
+
+
+class SharedSlot(Base):
+    """One replaceable shared output. No uploader metadata belongs here."""
+
+    __tablename__ = "shared_slots"
+    __table_args__ = (UniqueConstraint("source_hash", "target"),)
+    id: Mapped[str] = _id()
+    source_hash: Mapped[str] = mapped_column(String(64))
+    target: Mapped[str] = mapped_column(String(8))
+    current_result_id: Mapped[str | None] = mapped_column(String(36))
+    active_work_id: Mapped[str | None] = mapped_column(String(36))
+    generation: Mapped[int] = mapped_column(Integer, default=0)
+    profile: Mapped[str | None] = mapped_column(String(64))
+    producer: Mapped[str | None] = mapped_column(String(64))
+    producer_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    last_used_at: Mapped[datetime] = mapped_column(default=utcnow)
+    cooldowns: Mapped[Json] = mapped_column(JSON, default=dict)
+
+
+class HistoryGrant(Base):
+    """Verified private authorization, independent of current output lifetime."""
+
+    __tablename__ = "history_grants"
+    __table_args__ = (UniqueConstraint("owner_id", "slot_id"),)
+    id: Mapped[str] = _id()
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    slot_id: Mapped[str] = mapped_column(ForeignKey("shared_slots.id"), index=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    format: Mapped[str] = mapped_column(String(8))
+    source: Mapped[str | None] = mapped_column(String(8))
+    detection: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    deleted_at: Mapped[datetime | None]
+
+
+class StorageReservation(Base):
+    __tablename__ = "storage_reservations"
+    id: Mapped[str] = _id()
+    owner_id: Mapped[str] = mapped_column(String(36), index=True)
+    purpose: Mapped[str] = mapped_column(String(16))
+    bytes: Mapped[int] = mapped_column(BigInteger)
+    expires_at: Mapped[datetime]

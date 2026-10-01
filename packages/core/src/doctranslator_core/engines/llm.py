@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import random
 import ssl
 import time
@@ -17,9 +18,12 @@ from doctranslator_core.engines.base import TranslationEngine
 from doctranslator_core.engines.llm_prompts import PROMPT_VERSION, system_prompt, user_message
 from doctranslator_core.types import (
     EngineAuthenticationError,
+    EngineEndpointUnavailableError,
     EngineInfo,
+    EnginePolicyDeniedError,
     EngineResponseError,
     EngineUnavailableError,
+    IdentityMismatchError,
     Language,
     TranslationError,
     TranslationIdentity,
@@ -33,6 +37,8 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 _AUTH_STATUS = frozenset({401, 403})
 _MAX_RETRY_AFTER_S = 30.0
+RESPONSE_VERSION = "llm-response-v2-thinking-envelope"
+_MAX_THINKING_CHARS = 65_536
 
 
 class LlmEngine(TranslationEngine):
@@ -52,6 +58,7 @@ class LlmEngine(TranslationEngine):
             timeout=config.timeout_s,
             verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
             transport=transport,
+            trust_env=config.execution_location != "server",
         )
 
     @property
@@ -70,9 +77,11 @@ class LlmEngine(TranslationEngine):
         return prepare_identity(self._config)
 
     def translate_batch(
-        self, texts: Sequence[str], source: Language, target: Language
+        self, texts: Sequence[str], source: Language | None = None, target: Language | None = None
     ) -> list[str]:
-        system = system_prompt(source, target)
+        if target is None:
+            raise ValueError("target language is required")
+        system = system_prompt(target)
         size = self._config.batch_size
         chunks = [texts[i : i + size] for i in range(0, len(texts), size)]
         if len(chunks) <= 1:
@@ -117,14 +126,19 @@ class LlmEngine(TranslationEngine):
         return _message_content(self._post_with_retries(body, len(chunk)))
 
     def _post_with_retries(self, body: dict[str, object], segments: int) -> httpx.Response:
-        max_retries = self._config.max_retries
+        max_retries = min(self._config.max_retries, 2)
         for attempt in range(max_retries + 1):
             started = time.perf_counter()
             retry_after: float | None = None
             try:
                 response = self._client.post("chat/completions", json=body)
             except httpx.TransportError as exc:
-                failure: TranslationError = EngineUnavailableError(
+                unavailable = (
+                    EngineEndpointUnavailableError
+                    if isinstance(exc, (httpx.ConnectError, httpx.ProxyError))
+                    else EngineUnavailableError
+                )
+                failure: TranslationError = unavailable(
                     f"LLM server unreachable ({type(exc).__name__})"
                 )
                 failure.__cause__ = exc
@@ -138,7 +152,10 @@ class LlmEngine(TranslationEngine):
                     attempt + 1,
                 )
                 if response.is_success:
+                    self._validate_response_identity(response)
                     return response
+                if _hard_policy_denial(response):
+                    raise EnginePolicyDeniedError("LLM endpoint denied policy or hard quota")
                 if status in _AUTH_STATUS:
                     raise EngineAuthenticationError(
                         f"LLM server rejected the credentials (HTTP {status})"
@@ -155,6 +172,24 @@ class LlmEngine(TranslationEngine):
             self._sleep(delay)
         raise AssertionError("unreachable")
 
+    def _validate_response_identity(self, response: httpx.Response) -> None:
+        """Never attribute an explicitly different served model to the requested producer.
+
+        Some compatible deployments omit this optional response field; their identity remains
+        the configured deployment identity, not a claim of independent response verification.
+        """
+        try:
+            payload: object = response.json()
+        except ValueError as exc:
+            raise EngineResponseError("LLM server returned a response that is not JSON") from exc
+        if not isinstance(payload, dict) or "model" not in payload:
+            return
+        model = cast(dict[str, object], payload)["model"]
+        if not isinstance(model, str) or not model.strip():
+            raise EngineResponseError("LLM server response has an invalid model identity")
+        if model not in (self._config.model, *self._config.response_model_aliases):
+            raise IdentityMismatchError("LLM response model does not match the pinned deployment")
+
 
 def prepare_identity(config: LlmEngineConfig) -> TranslationIdentity:
     """The LLM engine's output identity from configuration alone (no network)."""
@@ -165,6 +200,8 @@ def prepare_identity(config: LlmEngineConfig) -> TranslationIdentity:
             "base_url": str(config.base_url).rstrip("/"),
             "deployment_revision": config.deployment_revision,
             "prompt_version": PROMPT_VERSION,
+            "response_version": RESPONSE_VERSION,
+            "response_model_aliases": json.dumps(sorted(config.response_model_aliases)),
             "temperature": repr(config.temperature),
             "json_mode": str(config.json_mode).lower(),
             "batch_size": str(config.batch_size),
@@ -185,7 +222,29 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
         seconds = float(value)
     except ValueError:
         return None
+    if not math.isfinite(seconds):
+        return None
     return min(max(seconds, 0.0), _MAX_RETRY_AFTER_S)
+
+
+def _hard_policy_denial(response: httpx.Response) -> bool:
+    """Inspect structured error codes only, never expose upstream content in diagnostics."""
+    if response.status_code not in (400, 403, 429):
+        return False
+    try:
+        payload: object = response.json()
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    error = cast(dict[str, object], payload).get("error")
+    if not isinstance(error, dict):
+        return False
+    record = cast(dict[str, object], error)
+    denied = {"insufficient_quota", "quota_exceeded", "policy_denied", "policy_violation"}
+    return any(
+        isinstance(record.get(key), str) and record[key] in denied for key in ("code", "type")
+    )
 
 
 def _message_content(response: httpx.Response) -> str | None:
@@ -198,9 +257,15 @@ def _message_content(response: httpx.Response) -> str | None:
     if not isinstance(choices, list) or not choices:
         raise EngineResponseError("LLM server response has no choices")
     first: object = cast(list[object], choices)[0]
+    if isinstance(first, dict):
+        reason = cast(dict[str, object], first).get("finish_reason")
+        if reason is not None and reason != "stop":
+            raise EngineResponseError("LLM translation was refused or incomplete")
     message = cast(dict[str, object], first).get("message") if isinstance(first, dict) else None
     if not isinstance(message, dict):
         raise EngineResponseError("LLM server response has no message")
+    if cast(dict[str, object], message).get("refusal"):
+        raise EngineResponseError("LLM refused the translation")
     content = cast(dict[str, object], message).get("content")
     return content if isinstance(content, str) else None
 
@@ -210,6 +275,11 @@ def _parse_translations(content: str | None, expected: int) -> list[str] | None:
     if content is None:
         return None
     text = _strip_code_fence(content.strip())
+    if text.startswith("<thinking>"):
+        end = text.find("</thinking>", len("<thinking>"), _MAX_THINKING_CHARS)
+        if end < 0 or "<thinking>" in text[len("<thinking>") : end]:
+            return None
+        text = _strip_code_fence(text[end + len("</thinking>") :].strip())
     try:
         parsed: object = json.loads(text)
     except ValueError:

@@ -94,8 +94,10 @@ class MtEngine(TranslationEngine):
         return _identity(self._config, runtime.device, runtime.artifact_sha256)
 
     def translate_batch(
-        self, texts: Sequence[str], source: Language, target: Language
+        self, texts: Sequence[str], source: Language | None = None, target: Language | None = None
     ) -> list[str]:
+        if target is None:
+            raise ValueError("target language is required")
         runtime = self._require_runtime()
         # small100 conditions on the target language only: the target token leads the source.
         # The source language is implied by the text.
@@ -111,6 +113,14 @@ class MtEngine(TranslationEngine):
     def close(self) -> None:
         self._runtime = None
 
+    def with_decoding(self, *, beam_size: int, max_batch_size: int) -> MtEngine:
+        """Bind validated per-call decoding settings to the same loaded runtime."""
+        runtime = self._require_runtime()
+        config = MtEngineConfig.model_validate(
+            self._config.model_dump() | {"beam_size": beam_size, "max_batch_size": max_batch_size}
+        )
+        return MtEngine(config, runtime=runtime)
+
     def _require_runtime(self) -> MtRuntime:
         if self._runtime is None:
             raise RuntimeError("MT engine is closed")
@@ -121,10 +131,11 @@ def prepare_identity(config: MtEngineConfig) -> TranslationIdentity:
     """The MT engine's output identity without loading the model.
 
     Hashes the model directory and resolves ``device="auto"`` (which imports CTranslate2 only to
-    count CUDA devices). Raises ``EngineUnavailableError`` if the directory is missing.
+    count CUDA devices). Raises ``EngineUnavailableError`` if required model files are missing.
     """
     if not config.model_dir.is_dir():
         raise EngineUnavailableError(f"MT model directory not found: {config.model_dir}")
+    _validate_model_files(config.model_dir)
     return _identity(config, _resolve_device(config), artifact_sha256(config.model_dir))
 
 
@@ -183,9 +194,7 @@ def _load_runtime(config: MtEngineConfig) -> MtRuntime:
 
     model_dir = config.model_dir
     tokenizer_file = model_dir / "sentencepiece.bpe.model"
-    for required in (model_dir / "model.bin", tokenizer_file):
-        if not required.is_file():
-            raise EngineUnavailableError(f"MT model file not found: {required}")
+    _validate_model_files(model_dir)
 
     ct2 = cast(_Ct2Module, ctranslate2)
     device = config.device
@@ -207,3 +216,17 @@ def _load_runtime(config: MtEngineConfig) -> MtRuntime:
         device=device,
         artifact_sha256=artifact_sha256(model_dir),
     )
+
+
+def _validate_model_files(model_dir: Path) -> None:
+    # Files emitted by the supported SMALL-100 conversion bundle. Keep this beside the
+    # adapter so future families own their artifact requirements rather than the server.
+    for filename in (
+        "model.bin",
+        "sentencepiece.bpe.model",
+        "config.json",
+        "shared_vocabulary.json",
+    ):
+        required = model_dir / filename
+        if not required.is_file() or required.stat().st_size == 0:
+            raise EngineUnavailableError(f"MT model file not found or empty: {required}")

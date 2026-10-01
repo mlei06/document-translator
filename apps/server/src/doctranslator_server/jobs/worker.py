@@ -1,6 +1,7 @@
 """The worker loop (ADR-008, ADR-016): claim, translate with the core, publish fenced.
 
-A worker process keeps one ``Translator`` per mode between jobs. A separate heartbeat thread
+A worker lazily loads configured translators with a bounded local runtime cache.
+A separate heartbeat thread
 extends the lease and watches for cancellation; the pipeline's progress callback raises to stop
 between batches. A lost claim or lease stops the attempt without publishing anything.
 """
@@ -13,23 +14,27 @@ import socket
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from pathlib import Path
 from typing import Protocol
 
 from doctranslator_core.types import (
+    DocumentDetection,
     DocumentError,
     DocumentTranslationOptions,
     DocumentTranslationResult,
     EngineAuthenticationError,
+    EngineEndpointUnavailableError,
+    EnginePolicyDeniedError,
     EngineResponseError,
     EngineUnavailableError,
-    TranslationMode,
+    IdentityMismatchError,
     TranslationProgress,
 )
 from doctranslator_server.db import Database
 from doctranslator_server.jobs.engines import EngineCatalog
-from doctranslator_server.jobs.preview import build_preview
+from doctranslator_server.jobs.errors import InvalidRequestError
 from doctranslator_server.jobs.queue import Attempt, Output, Queue
 from doctranslator_server.jobs.storage import BlobStore
 from doctranslator_server.settings import ServerSettings
@@ -42,16 +47,22 @@ logger = logging.getLogger(__name__)
 class DocumentRunner(Protocol):
     """Runs one translation; the default uses the catalog's ``Translator`` for the mode."""
 
-    def fingerprint(self, mode: TranslationMode, options: DocumentTranslationOptions) -> str: ...
+    def available(self) -> set[str] | None:
+        """Execution-time discovered IDs; None leaves availability to inference."""
+        ...
+
+    def fingerprint(self, mode: str, options: DocumentTranslationOptions) -> str: ...
 
     def translate(
         self,
-        mode: TranslationMode,
+        mode: str,
         source: Path,
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
         should_skip_fit: Callable[[], bool],
+        *,
+        detection_metadata: DocumentDetection | None = None,
     ) -> DocumentTranslationResult: ...
 
 
@@ -59,17 +70,25 @@ class _CatalogRunner:
     def __init__(self, catalog: EngineCatalog) -> None:
         self._catalog = catalog
 
-    def fingerprint(self, mode: TranslationMode, options: DocumentTranslationOptions) -> str:
-        return self._catalog.loaded_fingerprint(self._catalog.translator(mode), options)
+    def available(self) -> set[str]:
+        return {entry.id for entry in self._catalog.translators}
+
+    def fingerprint(self, mode: str, options: DocumentTranslationOptions) -> str:
+        try:
+            return self._catalog.loaded_fingerprint(self._catalog.translator(mode), options)
+        except InvalidRequestError as exc:
+            raise _IdentityChangedError from exc
 
     def translate(
         self,
-        mode: TranslationMode,
+        mode: str,
         source: Path,
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
         should_skip_fit: Callable[[], bool],
+        *,
+        detection_metadata: DocumentDetection | None = None,
     ) -> DocumentTranslationResult:
         return self._catalog.translator(mode).translate_document(
             source,
@@ -77,6 +96,7 @@ class _CatalogRunner:
             options=options,
             on_progress=on_progress,
             should_skip_fit=should_skip_fit,
+            detection_metadata=detection_metadata,
         )
 
 
@@ -186,7 +206,13 @@ class Worker:
         heartbeat.start()
         work = self._work / f"{attempt.job_id}-{attempt.token[:8]}"
         try:
-            self._translate(attempt, heartbeat, work)
+            if not self._store.verify(attempt.input_hash):
+                raise DocumentError("the verified source bytes are missing or damaged")
+            job = self._queue.job(attempt.job_id)
+            if job is not None and job.policy is not None:
+                self._automatic(attempt, heartbeat, work)
+            else:
+                self._translate(attempt, heartbeat, work)
         except _StopError as stop:
             if stop.reason == "cancelled":
                 self._queue.cancelled(attempt)
@@ -200,11 +226,17 @@ class Worker:
             self._queue.fail(
                 attempt, "engine_authentication", "The translation engine rejected the service."
             )
+        except EnginePolicyDeniedError:
+            self._queue.fail(
+                attempt,
+                "engine_policy_denied",
+                "The translation service denied this request under its policy or quota.",
+            )
         except EngineResponseError as exc:
             self._queue.fail(attempt, "engine_response", str(exc))
         except DocumentError as exc:
             self._queue.fail(attempt, exc.code, str(exc))
-        except _IdentityChangedError:
+        except _IdentityChangedError, IdentityMismatchError:
             self._queue.fail(
                 attempt,
                 "identity_mismatch",
@@ -215,11 +247,82 @@ class Worker:
             self._queue.fail(attempt, "internal_error", "The translation failed unexpectedly.")
         finally:
             heartbeat.stop()
-            shutil.rmtree(work, ignore_errors=True)
+            if (
+                not work.is_symlink()
+                and not work.is_junction()
+                and work.resolve().parent == self._work.resolve()
+            ):
+                shutil.rmtree(work, ignore_errors=True)
+            finished = self._queue.job(attempt.job_id)
+            if (
+                finished is not None
+                and (
+                    finished.retention == "cached"
+                    or (finished.retention == "temporary" and finished.policy is not None)
+                )
+                and finished.status not in ("queued", "running")
+            ):
+                try:
+                    self._store.collect(
+                        holder=f"terminal:{attempt.job_id}", pending_grace=timedelta(hours=24)
+                    )
+                except Exception:
+                    logger.warning("terminal cleanup deferred to retention sweep")
+
+    def _automatic(self, attempt: Attempt, heartbeat: _Heartbeat, work: Path) -> None:
+        job = self._queue.job(attempt.job_id)
+        if job is None or job.policy is None:
+            raise _IdentityChangedError
+        candidates = job.policy["candidates"]
+        available = self._runner.available()
+        skip_remote = False
+        for index in range(job.rung, len(candidates)):
+            candidate = candidates[index]
+            identifier = candidate["id"]
+            if (skip_remote and identifier != "hy-mt-local") or (
+                available is not None and identifier not in available
+            ):
+                self._queue.advance_rung(
+                    attempt, index + 1, "unavailable", candidate["fingerprint"]
+                )
+                continue
+            selected = replace(
+                attempt, translator_id=identifier, fingerprint=candidate["fingerprint"]
+            )
+            if not self._queue.select_candidate(attempt, identifier, candidate["fingerprint"]):
+                raise _StopError("lost")
+            try:
+                self._translate(selected, heartbeat, work / str(index))
+                return
+            except (EngineUnavailableError, EngineAuthenticationError, EngineResponseError) as exc:
+                category = (
+                    "authentication"
+                    if isinstance(exc, EngineAuthenticationError)
+                    else "unavailable"
+                    if isinstance(exc, EngineUnavailableError)
+                    else "response"
+                )
+                self._queue.advance_rung(attempt, index + 1, category, candidate["fingerprint"])
+                if (
+                    isinstance(exc, (EngineAuthenticationError, EngineEndpointUnavailableError))
+                    and identifier != "hy-mt-local"
+                ):
+                    skip_remote = True
+        reuse = job.policy.get("reuse")
+        if reuse:
+            if not self._queue.publish(attempt, None, reuse=reuse):
+                self._after_refused(attempt)
+            return
+        self._queue.fail(
+            attempt,
+            "translation_services_exhausted",
+            "Translation services are unavailable. Retry when a service is reachable "
+            "or install offline support.",
+        )
 
     def _translate(self, attempt: Attempt, heartbeat: _Heartbeat, work: Path) -> None:
         options = DocumentTranslationOptions.model_validate(attempt.options)
-        mode = TranslationMode(attempt.mode)
+        mode = attempt.translator_id or attempt.mode
         if self._runner.fingerprint(mode, options) != attempt.fingerprint:
             raise _IdentityChangedError
         work.mkdir(parents=True, exist_ok=True)
@@ -227,24 +330,40 @@ class Worker:
         shutil.copyfile(self._store.path(attempt.input_hash), source)
         output = work / f"output.{attempt.format}"
         progress = _Progress(self._queue, attempt, heartbeat)
-        result = self._runner.translate(mode, source, output, options, progress, progress.skip)
+        job = self._queue.job(attempt.job_id)
+        metadata = job.policy.get("detection_metadata") if job and job.policy else None
+        result = self._runner.translate(
+            mode,
+            source,
+            output,
+            options,
+            progress,
+            progress.skip,
+            detection_metadata=DocumentDetection.model_validate(metadata)
+            if metadata is not None
+            else None,
+        )
         progress.check()
         report = work / "report.json"
         payload = result.model_dump(mode="json", exclude={"output_path", "timings_s"})
         report.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        package = build_preview(attempt.format, source, output, work / "preview.zip")
-        stored_output = self._store.put_file(output)
-        stored_report = self._store.put_file(report)
-        stored_preview = self._store.put_file(package) if package is not None else None
+        if output.stat().st_size > self._settings.max_output_bytes:
+            raise DocumentError("translated document exceeds the output size limit")
+        if report.stat().st_size > self._settings.max_report_bytes:
+            raise DocumentError("translation report exceeds the size limit")
+        if (
+            sum(path.stat().st_size for path in work.rglob("*") if path.is_file())
+            > self._settings.max_workspace_bytes
+        ):
+            raise DocumentError("translation workspace exceeds its size limit")
+        stored_output = self._store.put_file(output, reservation_owner=attempt.job_id)
+        stored_report = self._store.put_file(report, reservation_owner=attempt.job_id)
         pins = [stored_output.pin_id, stored_report.pin_id]
-        if stored_preview is not None:
-            pins.append(stored_preview.pin_id)
         published = self._queue.publish(
             attempt,
             Output(
                 output_blob=stored_output.sha256,
                 report_blob=stored_report.sha256,
-                preview_blob=stored_preview.sha256 if stored_preview else None,
                 pins=pins,
                 source_resolved=result.source_resolved.value if result.source_resolved else None,
                 fit_status=result.fit_status.value,

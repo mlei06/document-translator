@@ -1,5 +1,6 @@
 """Read models the job service returns to the REST adapter (never ORM objects or paths)."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,12 @@ class ProgressView:
 
 @dataclass(frozen=True, slots=True)
 class JobView:
+    """Historical request progress/provenance, with live authorized download availability.
+
+    A cached website job's file may later be upgraded independently of this request's
+    translator and fit diagnostics. History/download resolution follows the current slot.
+    """
+
     id: str
     batch_id: str | None
     document_id: str | None
@@ -38,6 +45,7 @@ class JobView:
     original_name: str
     format: str
     mode: str
+    translator_id: str | None
     source_requested: str
     source_resolved: str | None
     target: str
@@ -52,13 +60,14 @@ class JobView:
     error_message: str | None
     fit_status: str | None
     result_available: bool
-    """The job's exact output can be downloaded now."""
+    """The authorized output is available (current shared output for website waiters)."""
     result_expires_at: datetime | None
     """When the job's output stops being downloadable (``None``: while it is current)."""
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
     dismissed_at: datetime | None
+    fallback: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +142,7 @@ class FileView:
     media_type: str
     size: int
     sha256: str
+    on_complete: Callable[[], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)

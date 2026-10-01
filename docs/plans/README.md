@@ -6,12 +6,20 @@ A plan is the contract between the architect and the coder(s) implementing it: i
 
 ## Execution Entry Point
 
+Start with [Unified translator product and delivery specification](unified-translator-design.md). It consolidates website routing/cache/private History, standard fit/direct downloads, automatic desktop installation/application and subtle Lenovo visuals. The former five feature plans now point there; their duplicate delivery text has been retired.
+
+Read [standard fit/direct downloads](standard-fit-direct-download.md) with ADR-027/028's website plans: ADR-029 removes all preview/rendered-fit requirements from the target release, retaining standard fit and direct bubble/History actions.
+
+Latest website specifications: [automatic translation](automatic-website-translation.md) and [cache/retention](website-cache-and-retention.md). Read ADR-027/028 before older website selection and permanent-library plans. These are design deliverables, not completed implementation.
+
 Start with the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md): user-owned service CLI/API batches, complete five-format backend, then audit/integrate the existing mock web UI. It fixes product choices and provides the multi-role design/implementation/review sequence; technical gates still need evidence before coding.
 
 ## Current Index
 
 | Plan | State / use |
 |------|-------------|
+| [Desktop UI design](desktop-ui-design.md) | Implemented desktop source: drag feedback, draft selection, destination reset and compact activity; automated verification recorded separately; updated native UI acceptance pending |
+| [Subtle Lenovo-inspired UI](subtle-lenovo-ui.md) | Proposed visual sweep: unchanged white icon on red, restrained action accents, sharper controls and quieter meadow; planning only |
 | [P0](P0-project-foundation.md) | Completed foundation |
 | [P1](P1-translation-engines-and-benchmark.md) | Approved, implemented; delivery verification/closure outstanding |
 | [P1.1](P1.1-baseline-capture.md) | Draft operational plan for deferred baselines; required before prompt/model changes |
@@ -19,6 +27,7 @@ Start with the [P2-P6 delivery handoff](P2-P6-delivery-handoff.md): user-owned s
 | [P2](P2-document-translation-and-cli.md) | Draft API/format/CLI contract; technical gates precede architect acceptance/coding |
 | [P3.0](P3.0-fit-design-validation.md) | Draft measurement/font design work |
 | [P3 implementation](P3-fit-check.md) | Tasks/contracts after measurement gate |
+| [Offline fit v2](offline-fit-v2.md) | Owner-approved follow-on: structure-aware offline repairs and explicit thorough verification; implementation evidence in the plan |
 | [P4](P4-pdf-support.md) | PDF experiment/ADR and implementation contract |
 | [P5 implementation](P5-server-and-service-cli.md) | Users, auth, REST, batches, jobs, storage and service CLI |
 | [P6](P6-web-ui-integration.md) | Existing mock audit, real backend integration and browser acceptance |

@@ -58,11 +58,17 @@ def release_pins(session: Session, pin_ids: list[str]) -> None:
 
 def _referenced(digest: InstrumentedAttribute[str]) -> ColumnElement[bool]:
     return or_(
-        exists().where(Job.input_blob == digest),
-        exists().where(Document.source_blob == digest),
+        exists().where(
+            Job.input_blob == digest,
+            (
+                (Job.retention != "cached")
+                & ~((Job.retention == "temporary") & Job.policy.is_not(None))
+            )
+            | Job.status.in_(("queued", "running")),
+        ),
+        exists().where(Document.source_blob == digest, Document.deleted_at.is_(None)),
         exists().where(JobResult.output_blob == digest),
         exists().where(JobResult.report_blob == digest),
-        exists().where(JobResult.preview_blob == digest),
     )
 
 
@@ -70,6 +76,7 @@ def _collectable(now: datetime, pending_before: datetime) -> ColumnElement[bool]
     return (
         or_(
             Blob.state == "available",
+            Blob.state == "deleting",
             (Blob.state == "pending") & (Blob.created_at < pending_before),
         )
         & ~_referenced(Blob.hash)
@@ -79,7 +86,9 @@ def _collectable(now: datetime, pending_before: datetime) -> ColumnElement[bool]
 
 def unreferenced(session: Session, now: datetime, pending_before: datetime) -> list[str]:
     """Candidates for deletion (re-checked by ``mark_deleting``)."""
-    return list(session.scalars(select(Blob.hash).where(_collectable(now, pending_before))))
+    return list(
+        session.scalars(select(Blob.hash).where(_collectable(now, pending_before)).limit(500))
+    )
 
 
 def mark_deleting(session: Session, digest: str, now: datetime, pending_before: datetime) -> bool:

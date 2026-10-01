@@ -13,13 +13,11 @@ from doctranslator_core.types import (
     DocumentLimitError,
     DocumentTranslationOptions,
     DocumentTranslationResult,
-    EngineResponseError,
     FitStatus,
     InvalidDocumentError,
     Language,
     OutputPathError,
     ProgressPhase,
-    SourceLanguageAmbiguousError,
     TranslationProgress,
     UnsupportedDocumentError,
 )
@@ -111,10 +109,10 @@ def test_numbers_urls_and_other_script_lines_pass_through(tmp_path: Path) -> Non
     source = write(tmp_path / "in.txt", "12,345.67\nhttps://example.com/a\nAPI v2\n中文\n".encode())
     translator = FakeTranslator()
     result = run(translator, source)
-    assert translator.inputs == ["中文"]
-    assert result.counts.passed_through == 3
+    assert translator.inputs == ["API v2", "中文"]
+    assert result.counts.passed_through == 2
     assert (tmp_path / "out.txt").read_text(encoding="utf-8") == (
-        "12,345.67\nhttps://example.com/a\nAPI v2\nEN:xx\n"
+        "12,345.67\nhttps://example.com/a\nEN:API v2\nEN:xx\n"
     )
 
 
@@ -212,8 +210,8 @@ def test_source_detection_and_unchanged_copies(tmp_path: Path) -> None:
         limits=DocumentLimits(),
     )
     assert same.source_resolved is Language.JA
-    assert [d.code for d in same.diagnostics] == ["already_target_language"]
-    assert (tmp_path / "ja-out.txt").read_bytes() == ja.read_bytes()
+    assert not same.diagnostics
+    assert same.counts.unique_inputs == 1
 
     numbers = write(tmp_path / "n.txt", b"123\n456\n")
     empty = translate_document(
@@ -225,35 +223,41 @@ def test_source_detection_and_unchanged_copies(tmp_path: Path) -> None:
         limits=DocumentLimits(),
     )
     assert empty.source_resolved is None
-    assert [d.code for d in empty.diagnostics] == ["no_translatable_text"]
+    assert empty.counts.unique_inputs == 0
 
     short = write(tmp_path / "s.txt", "你好".encode())
-    with pytest.raises(SourceLanguageAmbiguousError):
-        translate_document(
-            FakeTranslator(),
-            short,
-            tmp_path / "s-out.txt",
-            options=DocumentTranslationOptions(target=Language.EN),
-            fingerprint="f",
-            limits=DocumentLimits(),
-        )
+    translated = translate_document(
+        FakeTranslator(),
+        short,
+        tmp_path / "s-out.txt",
+        options=DocumentTranslationOptions(target=Language.EN),
+        fingerprint="f",
+        limits=DocumentLimits(),
+    )
+    assert translated.source_resolved is None
+    assert translated.counts.unique_inputs == 1
 
 
-def test_explicit_source_equal_to_target_is_rejected(tmp_path: Path) -> None:
+def test_explicit_source_equal_to_target_still_translates(tmp_path: Path) -> None:
     source = write(tmp_path / "in.txt", b"hello")
-    with pytest.raises(ValueError, match="both"):
-        run(
-            FakeTranslator(),
-            source,
-            DocumentTranslationOptions(source=Language.EN, target=Language.EN),
-        )
+    result = run(
+        FakeTranslator(), source, DocumentTranslationOptions(source=Language.EN, target=Language.EN)
+    )
+    assert result.counts.unique_inputs == 1
 
 
-def test_empty_engine_output_fails_without_publishing(tmp_path: Path) -> None:
-    source = write(tmp_path / "in.txt", "你好\n".encode())
-    with pytest.raises(EngineResponseError):
-        run(FakeTranslator(lambda text, target: " "), source)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["in.txt"]
+def test_empty_engine_output_preserves_source_and_translates_siblings(tmp_path: Path) -> None:
+    original = "联想\n\n你好\n"
+    source = write(tmp_path / "in.txt", original.encode())
+    result = run(
+        FakeTranslator(lambda text, target: " " if text == "联想" else "Hello"),
+        source,
+        ZH_TO_EN.model_copy(update={"use_default_dictionary": False}),
+    )
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "联想\n\nHello\n"
+    assert source.read_text(encoding="utf-8") == original
+    warning = next(d for d in result.diagnostics if d.code == "empty_translation_preserved")
+    assert warning.count == 1 and warning.severity.value == "warning"
 
 
 def test_limits_and_unsupported_inputs(tmp_path: Path) -> None:

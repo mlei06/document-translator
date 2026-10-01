@@ -1,1 +1,1 @@
-"""Shared rendering infrastructure. No format-specific logic."""
+"""Reserved architecture namespace. Production document rendering has been removed."""

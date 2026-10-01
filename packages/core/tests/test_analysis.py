@@ -1,4 +1,4 @@
-"""Read-only analysis: detection before translation, preview text units, PDF page images."""
+"""Read-only analysis: detection before translation and preview text units."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ import pytest
 from support.fakes import FIXTURES
 from support.pdf import write_image_only, write_mixed
 
-from doctranslator_core import detect_document, document_text, render_pdf_pages
+from doctranslator_core import detect_document, document_text
 from doctranslator_core.analysis import group_of
 from doctranslator_core.types import DocumentFormat, Language, NoExtractableTextError
 
@@ -52,9 +52,3 @@ def test_groups_per_format() -> None:
     assert group_of(DocumentFormat.PDF, "page 7, text 2") == "page 7"
     assert group_of(DocumentFormat.TXT, "line 1") == "lines 1-40"
     assert group_of(DocumentFormat.TXT, "line 41") == "lines 41-80"
-
-
-def test_pdf_pages_render_as_jpeg(tmp_path: Path) -> None:
-    pages = render_pdf_pages(write_mixed(tmp_path / "mixed.pdf"), max_pages=5, width_px=300)
-    assert len(pages) == 1
-    assert pages[0][:3] == b"\xff\xd8\xff"

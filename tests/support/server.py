@@ -11,6 +11,7 @@ from typing import Any
 from doctranslator_core import DocumentLimits
 from doctranslator_core.pipeline import translate_document
 from doctranslator_core.types import (
+    DocumentDetection,
     DocumentTranslationOptions,
     DocumentTranslationResult,
     FontManifest,
@@ -19,6 +20,8 @@ from doctranslator_core.types import (
 )
 from doctranslator_server import auth
 from doctranslator_server.app import Services, build_services, migrate
+from doctranslator_server.jobs.davy import DavyState
+from doctranslator_server.jobs.engines import TranslatorInfo
 from doctranslator_server.jobs.queue import Queue
 from doctranslator_server.jobs.worker import Worker
 from doctranslator_server.settings import ServerSettings
@@ -47,6 +50,8 @@ class FakeEngines:
         self.loaded_version = version
         self.before = before
         self.calls = 0
+        self.available_translators: set[str] | None = None
+        self.discovery_calls = 0
         self.translator = FakeTranslator()
         self.fonts: FontManifest | None = None
         """Font manifest for fit (``None``: changed containers are unresolved)."""
@@ -55,31 +60,53 @@ class FakeEngines:
     def modes(self) -> list[TranslationMode]:
         return [TranslationMode.MT, TranslationMode.LLM]
 
-    def _fingerprint(self, version: str, mode: TranslationMode, options: Any) -> str:
-        payload = {"v": version, "mode": mode.value, "options": options.model_dump(mode="json")}
+    @property
+    def translators(self) -> list[TranslatorInfo]:
+        return [
+            TranslatorInfo(
+                m.value, m.value.upper(), m, "server" if m == TranslationMode.MT else "remote"
+            )
+            for m in self.modes
+        ]
+
+    @property
+    def default_translator_id(self) -> str | None:
+        return "mt"
+
+    def _fingerprint(self, version: str, mode: str, options: Any) -> str:
+        payload = {"v": version, "mode": mode, "options": options.model_dump(mode="json")}
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
-    def fingerprint(self, mode: TranslationMode, options: DocumentTranslationOptions) -> str:
+    def fingerprint(self, mode: str, options: DocumentTranslationOptions) -> str:
         """Submission side (metadata only)."""
         return self._fingerprint(self.version, mode, options)
+
+    def discovery(self, *, force: bool = False) -> DavyState:
+        return DavyState()
 
     def close(self) -> None:
         pass
 
     # Worker side
 
+    def available(self) -> set[str] | None:
+        self.discovery_calls += 1
+        return self.available_translators
+
     def translate(
         self,
-        mode: TranslationMode,
+        mode: str,
         source: Path,
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
         should_skip_fit: Callable[[], bool] | None = None,
+        *,
+        detection_metadata: DocumentDetection | None = None,
     ) -> DocumentTranslationResult:
         self.calls += 1
         if self.before is not None:
-            self.before(mode, source)
+            self.before(TranslationMode(mode), source)
         return translate_document(
             self.translator,
             source,
@@ -90,6 +117,7 @@ class FakeEngines:
             on_progress=on_progress,
             fonts=self.fonts,
             should_skip_fit=should_skip_fit,
+            detection_metadata=detection_metadata,
         )
 
 
@@ -99,19 +127,32 @@ class _Runner:
     def __init__(self, engines: FakeEngines) -> None:
         self._engines = engines
 
-    def fingerprint(self, mode: TranslationMode, options: DocumentTranslationOptions) -> str:
+    def available(self) -> set[str] | None:
+        return self._engines.available()
+
+    def fingerprint(self, mode: str, options: DocumentTranslationOptions) -> str:
         return self._engines._fingerprint(self._engines.loaded_version, mode, options)  # pyright: ignore[reportPrivateUsage]
 
     def translate(
         self,
-        mode: TranslationMode,
+        mode: str,
         source: Path,
         output: Path,
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None],
         should_skip_fit: Callable[[], bool],
+        *,
+        detection_metadata: DocumentDetection | None = None,
     ) -> DocumentTranslationResult:
-        return self._engines.translate(mode, source, output, options, on_progress, should_skip_fit)
+        return self._engines.translate(
+            mode,
+            source,
+            output,
+            options,
+            on_progress,
+            should_skip_fit,
+            detection_metadata=detection_metadata,
+        )
 
 
 def server_settings(tmp_path: Path, **overrides: Any) -> ServerSettings:
@@ -125,6 +166,7 @@ def server_settings(tmp_path: Path, **overrides: Any) -> ServerSettings:
         "llm_api_key": None,
         "llm_model": None,
         "font_dirs": str(tmp_path / "no-fonts"),
+        "soffice_path": tmp_path / "no-office-renderer",
     }
     values.update(overrides)
     return ServerSettings(_env_file=None, **values)  # pyright: ignore[reportCallIssue]

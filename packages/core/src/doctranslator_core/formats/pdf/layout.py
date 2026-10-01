@@ -21,8 +21,8 @@ from doctranslator_core.types import (
     FitOptions,
     FontFace,
     FontManifest,
-    InvalidDocumentError,
     Language,
+    LayoutUnresolvableError,
 )
 
 __all__ = [
@@ -293,7 +293,11 @@ def region_for(
         left, right, bottom = container[0] + inset, container[2] - inset, container[3] - inset
     else:
         left, right, bottom = bounds[0], bounds[2], bounds[3]
-    others = [o for o in obstacles if not _intersects(o, unit) and not _contains(o, unit)]
+    others = [o for o in obstacles if not _contains(o, unit)]
+    # An intersecting neighbour is not free space. Metric-normalized text boxes
+    # are supplied by the adapter; ambiguous genuine intersections forbid growth.
+    if any(_intersects(o, unit) for o in others):
+        return unit
     for other in others:
         if _overlaps_rows(other, unit):
             if other[0] >= x1 - 0.5:
@@ -356,7 +360,7 @@ def font_css(faces: dict[str, FontFace], resolver: FontResolver) -> tuple[str, p
         filename = f"{family}.ttf"
         archive.add((resolver.blob(face), filename))
         rules.append(f"@font-face {{font-family: {family}; src: url({filename});}}")
-    rules.append("* {margin: 0; padding: 0;}")
+    rules.append("* {margin: 0; padding: 0;} body {margin: 0; padding: 0;}")
     return "\n".join(rules), archive
 
 
@@ -368,7 +372,7 @@ class Placement:
     scale: float
     used_height: float
     fitted: bool
-    """False when the text overflows its region at the floor (ADR-012 unresolved)."""
+    """Successful v2 placements always fit; impossible placement raises a typed error."""
 
 
 def place_html(
@@ -380,26 +384,17 @@ def place_html(
     scale_low: float,
     page_bottom: float,
 ) -> Placement:
-    """Write the unit (``build(scale)`` gives its HTML) into ``rect``, shrinking to ``scale_low``.
+    """Write only legal complete content; MuPDF leaves the page untouched on no-fit.
 
-    PyMuPDF writes nothing when content does not fit even at ``scale_low``, and text is never
-    dropped: the unit then keeps its floor sizes and extends below its region toward
-    ``page_bottom`` (unresolved, as overflow in Office). Only if even the rest of the page is too
-    small does the writer shrink further, so that every word stays on the page.
+    ``page_bottom`` remains part of the internal call contract, but never authorizes
+    extending through neighbours or shrinking below the requested floor.
     """
-    writer: Any = page  # PyMuPDF annotates scale_low as int; it is a float in [0, 1]
+    if rect[3] > page_bottom + 0.01 or rect[2] <= rect[0] or rect[3] <= rect[1]:
+        raise LayoutUnresolvableError("a translated PDF unit has no legal placement region")
+    writer: Any = page
     spare, scale = writer.insert_htmlbox(
         pymupdf.Rect(rect), build(1.0), css=css, archive=archive, scale_low=scale_low
     )
-    if spare >= 0:
+    if spare >= 0 and scale + 0.00001 >= scale_low:
         return Placement(rect, scale, (rect[3] - rect[1]) - spare, fitted=True)
-    extended = (rect[0], rect[1], rect[2], max(rect[3], page_bottom))
-    floor = build(scale_low)
-    for low in (1.0, 0.0):
-        spare, scale = writer.insert_htmlbox(
-            pymupdf.Rect(extended), floor, css=css, archive=archive, scale_low=low
-        )
-        if spare >= 0:
-            used = (extended[3] - extended[1]) - spare
-            return Placement(extended, scale_low * scale, used, fitted=False)
-    raise InvalidDocumentError("a translated text unit could not be placed on its page")
+    raise LayoutUnresolvableError("a translated PDF unit cannot fit within its font floor")

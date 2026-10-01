@@ -9,7 +9,15 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, HttpUrl, SecretStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    SecretStr,
+    ValidationError,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from doctranslator_core import EngineConfig, LlmEngineConfig, MtEngineConfig
@@ -20,6 +28,30 @@ __all__ = ["ServerSettings", "SettingsError", "load_settings"]
 
 class SettingsError(Exception):
     """Configuration is missing or invalid. The message names settings, never their values."""
+
+
+class ConfiguredTranslator(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$")
+    label: str = Field(min_length=1, max_length=100)
+    enabled: bool = True
+    engine: EngineConfig
+
+
+class DavyModel(BaseModel):
+    """An administrator-approved translation model on the shared Davy endpoint."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    id: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$")
+    label: str = Field(min_length=1, max_length=100)
+    model: str = Field(min_length=1)
+    response_model_aliases: tuple[str, ...] = ()
+    enabled: bool = True
+    deployment_revision: str = ""
+    json_mode: bool = True
+    batch_size: int = Field(default=16, ge=1)
+    max_concurrency: int = Field(default=4, ge=1)
 
 
 class ServerSettings(BaseSettings):
@@ -42,6 +74,8 @@ class ServerSettings(BaseSettings):
     web_dir: Path | None = None
     """The built web UI (``apps/web/dist``); served at ``/`` when set (ADR-017)."""
 
+    registration_enabled: bool = False
+
     workers: int = Field(default=1, ge=0, le=32)
     poll_s: float = Field(default=1.0, gt=0)
     heartbeat_s: float = Field(default=20.0, gt=0)
@@ -52,6 +86,14 @@ class ServerSettings(BaseSettings):
     max_upload_bytes: int = Field(default=100 << 20, ge=1)
     max_queued_jobs: int = Field(default=1000, ge=1)
     max_queued_jobs_per_user: int = Field(default=200, ge=1)
+    web_translation_policy: dict[str, object] | None = None
+    global_blob_budget_bytes: int = Field(default=100 << 30, ge=1)
+    global_work_budget_bytes: int = Field(default=8 << 30, ge=1)
+    max_output_bytes: int = Field(default=200 << 20, ge=1)
+    max_report_bytes: int = Field(default=16 << 20, ge=1)
+    max_workspace_bytes: int = Field(default=1 << 30, ge=1)
+    backup_budget_bytes: int = Field(default=100 << 30, ge=1)
+    daily_backups: bool = True
 
     temporary_retention_hours: int = Field(default=24, ge=1)
     """Temporary job results (``retention=temporary``) are downloadable this long (ADR-014)."""
@@ -63,10 +105,42 @@ class ServerSettings(BaseSettings):
     owner_quota_bytes: int = Field(default=20 << 30, ge=1)
     """Saved library limit per owner: sources plus current translations (no automatic expiry)."""
 
+    translators: list[ConfiguredTranslator] | None = None
+    davy_base_url: HttpUrl | None = None
+    davy_api_key: SecretStr | None = None
+    davy_models: list[DavyModel] = Field(default_factory=list[DavyModel])
+    default_translator_id: str | None = None
+    max_loaded_local_models: int = Field(default=1, ge=1, le=32)
+
+    @model_validator(mode="after")
+    def validate_translators(self) -> ServerSettings:
+        entries = self.translators or []
+        ids = [entry.id for entry in entries] + [entry.id for entry in self.davy_models]
+        if self.translators is None:
+            ids += [mode.value for mode in self._legacy_modes()]
+        if len(ids) != len(set(ids)):
+            raise ValueError("translator IDs must be unique")
+        enabled = [entry.id for entry in entries if entry.enabled]
+        enabled += [entry.id for entry in self.davy_models if entry.enabled]
+        if self.translators is None:
+            enabled += [mode.value for mode in self._legacy_modes()]
+        if self.translators is not None or self.davy_models:
+            if enabled and self.default_translator_id not in enabled:
+                raise ValueError("default_translator_id must identify an enabled translator")
+            if not enabled and self.default_translator_id is not None:
+                raise ValueError("default_translator_id requires an enabled translator")
+        elif self.default_translator_id is not None and self.default_translator_id not in enabled:
+            raise ValueError("default_translator_id must identify an available translator")
+        return self
+
     llm_base_url: HttpUrl | None = None
     llm_api_key: SecretStr | None = None
     llm_model: str | None = None
     llm_deployment_revision: str = ""
+    llm_protocol: Literal["json-batch", "hy-mt"] = "json-batch"
+    llm_execution_location: Literal["server", "remote"] = "remote"
+    llm_max_output_tokens: int = 2048
+    llm_max_concurrency: int = 4
     mt_model_dir: Path | None = None
     mt_model_family: Literal["small100"] = "small100"
     mt_device: Literal["cpu", "cuda", "auto"] = "auto"
@@ -114,7 +188,45 @@ class ServerSettings(BaseSettings):
             ]
         return [Path("/usr/share/fonts"), Path("/usr/local/share/fonts")]
 
+    def configured_translators(self) -> list[ConfiguredTranslator]:
+        entries = (
+            [entry for entry in self.translators if entry.enabled]
+            if self.translators is not None
+            else [
+                ConfiguredTranslator(
+                    id=mode.value, label=mode.value.upper(), engine=self.engine_config(mode)
+                )
+                for mode in self._legacy_modes()
+            ]
+        )
+        if (
+            self.davy_base_url
+            and self.davy_api_key
+            and self.davy_api_key.get_secret_value().strip()
+        ):
+            entries.extend(
+                ConfiguredTranslator(
+                    id=model.id,
+                    label=model.label,
+                    engine=LlmEngineConfig(
+                        base_url=self.davy_base_url,
+                        api_key=self.davy_api_key,
+                        response_model_aliases=model.response_model_aliases
+                        or (("gpt-oss-120b",) if model.model == "gpt-oss-120b-thinking" else ()),
+                        **model.model_dump(
+                            exclude={"id", "label", "enabled", "response_model_aliases"}
+                        ),
+                    ),
+                )
+                for model in self.davy_models
+                if model.enabled
+            )
+        return entries
+
     def available_modes(self) -> list[TranslationMode]:
+        return list(dict.fromkeys(entry.engine.mode for entry in self.configured_translators()))
+
+    def _legacy_modes(self) -> list[TranslationMode]:
         modes: list[TranslationMode] = []
         if self.mt_model_dir is not None:
             modes.append(TranslationMode.MT)
@@ -135,6 +247,10 @@ class ServerSettings(BaseSettings):
                     api_key=self.llm_api_key,
                     model=self.llm_model,
                     deployment_revision=self.llm_deployment_revision,
+                    protocol=self.llm_protocol,
+                    execution_location=self.llm_execution_location,
+                    max_output_tokens=self.llm_max_output_tokens,
+                    max_concurrency=self.llm_max_concurrency,
                 )
             case TranslationMode.MT:
                 if self.mt_model_dir is None:

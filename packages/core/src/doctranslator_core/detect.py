@@ -75,6 +75,14 @@ def detect_source(texts: Iterable[str]) -> tuple[Language | None, list[DocumentD
             latin += 1
     if kana + han + latin == 0:
         return None, []
+    if kana + han >= 10 and latin >= 20 and min(kana + han, latin) / max(kana + han, latin) >= 0.35:
+        return None, [
+            DocumentDiagnostic(
+                code="source_mixed",
+                severity=DiagnosticSeverity.INFO,
+                message="The document contains substantial text in multiple language scripts.",
+            )
+        ]
     if kana + han >= latin:
         if kana >= KANA_SHARE * (kana + han):
             return Language.JA, []
@@ -82,23 +90,20 @@ def detect_source(texts: Iterable[str]) -> tuple[Language | None, list[DocumentD
             note = DocumentDiagnostic(
                 code="detected_without_kana",
                 severity=DiagnosticSeverity.INFO,
-                message="Detected Chinese: the text has Han characters and no Japanese kana. "
-                "Pass the source language explicitly if the document is Japanese.",
+                message="Detected Chinese: the text has Han characters and no Japanese kana.",
             )
             return Language.ZH, [note]
         raise SourceLanguageAmbiguousError(
-            "too little Chinese/Japanese text to detect the source language; pass it explicitly"
+            "too little Chinese/Japanese text to detect the source language confidently"
         )
     if latin < MIN_LATIN:
         raise SourceLanguageAmbiguousError(
-            "too little text to detect the source language; pass it explicitly"
+            "too little text to detect the source language confidently"
         )
     detector, english, spanish = _latin_detector()  # pyright: ignore[reportUnknownVariableType]
     en = float(detector.compute_language_confidence(sample, english))  # pyright: ignore
     es = float(detector.compute_language_confidence(sample, spanish))  # pyright: ignore
     best, confidence = (Language.EN, en) if en >= es else (Language.ES, es)
     if confidence < MIN_CONFIDENCE:
-        raise SourceLanguageAmbiguousError(
-            "cannot tell English from Spanish with confidence; pass the source language explicitly"
-        )
+        raise SourceLanguageAmbiguousError("cannot tell English from Spanish with confidence")
     return best, []

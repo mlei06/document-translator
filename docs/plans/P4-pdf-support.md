@@ -1,5 +1,7 @@
 # P4 - PDF Design and Implementation
 
+Accepted follow-on (2026-09-29): [Offline fit v2](offline-fit-v2.md) and [ADR-026](../decisions/ADR-026-offline-fit-v2.md) amend PDF extraction, right anchors and safe placement. See that plan for implementation evidence; historical phase/board state below is unchanged.
+
 Status: Execution plan for the pre-GUI handoff; the PDF strategy must be validated and recorded before production implementation. Parent: Feature #9012.
 
 Progress (2026-09-29): P4.0 closed with [ADR-018](../decisions/ADR-018-pdf-strategy.md) and the [strategy experiment](../experiments/pdf-strategy/README.md); P4.1-P4.3 implemented (`formats/pdf`, pipeline `PlacementFit`/`verify_output`, CLI; tests in `packages/core/tests/test_format_pdf.py` and the CLI suite); P4.4 local acceptance with both engines and an independent PDFium check recorded in the experiment report. Remaining for closure: reviewed-commit CI (branch not pushed) and service acceptance with PDF (P5).

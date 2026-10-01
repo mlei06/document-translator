@@ -9,10 +9,11 @@ from typing import Self
 
 from doctranslator_core import pipeline
 from doctranslator_core.config import DocumentLimits, EngineConfig
-from doctranslator_core.engines import TranslationEngine, create_engine
+from doctranslator_core.engines import TranslationEngine, create_engine, with_mt_decoding
 from doctranslator_core.fit.fonts import FontLibrary
 from doctranslator_core.identity import output_fingerprint
 from doctranslator_core.types import (
+    DocumentDetection,
     DocumentTranslationOptions,
     DocumentTranslationResult,
     EngineInfo,
@@ -54,6 +55,23 @@ class Translator:
     def engine_info(self) -> EngineInfo:
         return self._engine.info
 
+    def with_mt_decoding(self, *, beam_size: int, max_batch_size: int) -> Translator:
+        """Return a separate decoding binding sharing this MT model and tokenizer.
+
+        Settings are immutable and supplied to every inference call. Closing either binding
+        leaves the other usable. Like this translator, bindings are worker-local, not thread-safe.
+        """
+        if self._closed:
+            raise RuntimeError("Translator is closed")
+        engine = with_mt_decoding(self._engine, beam_size=beam_size, max_batch_size=max_batch_size)
+        binding = object.__new__(Translator)
+        binding._engine = engine
+        binding._fonts = self._fonts
+        binding._font_library = FontLibrary(self._fonts) if self._fonts is not None else None
+        binding._limits = self._limits
+        binding._closed = False
+        return binding
+
     @property
     def identity(self) -> TranslationIdentity:
         """The loaded engine's output identity (ADR-011); compare with ``prepare_identity``."""
@@ -67,10 +85,12 @@ class Translator:
         options: DocumentTranslationOptions,
         on_progress: Callable[[TranslationProgress], None] | None = None,
         should_skip_fit: Callable[[], bool] | None = None,
+        detection_metadata: DocumentDetection | None = None,
     ) -> DocumentTranslationResult:
         """Translate one document into a new file of the same format (see the Document API).
 
         ``should_skip_fit`` lets the caller stop remaining optional fit work (ADR-012 amendment).
+        ``detection_metadata`` reuses best-effort ingestion display data without detecting again.
         """
         if self._closed:
             raise RuntimeError("Translator is closed")
@@ -85,10 +105,11 @@ class Translator:
             on_progress=on_progress,
             font_library=self._font_library,
             should_skip_fit=should_skip_fit,
+            detection_metadata=detection_metadata,
         )
 
     def translate_texts(
-        self, texts: Sequence[str], *, source: Language, target: Language
+        self, texts: Sequence[str], *, target: Language, source: Language | None = None
     ) -> list[str]:
         """Return one translation per input, in input order.
 
@@ -98,8 +119,6 @@ class Translator:
         """
         if self._closed:
             raise RuntimeError("Translator is closed")
-        if source == target:
-            raise ValueError(f"source and target language are both {source.value!r}")
 
         started = time.perf_counter()
         parts = [_split_whitespace(text) for text in texts]

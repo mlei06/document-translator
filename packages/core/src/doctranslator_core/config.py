@@ -1,9 +1,10 @@
 """Configuration types and validation. Never reads the environment."""
 
+import ipaddress
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
 
 from doctranslator_core.types import TranslationMode
 
@@ -20,8 +21,10 @@ class LlmEngineConfig(BaseModel):
     """OpenAI-compatible API root, e.g. ``https://host:port/v1``."""
     api_key: SecretStr
     model: str
-    timeout_s: float = Field(default=120.0, gt=0)
-    max_retries: int = Field(default=3, ge=0)
+    response_model_aliases: tuple[str, ...] = ()
+    """Explicit approved provider names returned for this requested deployment."""
+    timeout_s: float = Field(default=120.0, gt=0, allow_inf_nan=False)
+    max_retries: int = Field(default=2, ge=0)
     batch_size: int = Field(default=16, ge=1)
     """Segments per request."""
     max_concurrency: int = Field(default=4, ge=1)
@@ -32,6 +35,42 @@ class LlmEngineConfig(BaseModel):
     deployment_revision: str = ""
     """The operator's declared revision of the model served as ``model``. Part of the output
     identity (ADR-011); change it when the server's model changes under an unchanged name."""
+
+    protocol: Literal["json-batch", "hy-mt"] = "json-batch"
+    execution_location: Literal["server", "remote"] = "remote"
+    """Location metadata. Server-local HTTP endpoints must use a loopback address."""
+    managed_runtime_identity: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    """Verified weights/runtime/settings digest for a managed local HY-MT process.
+
+    Its ephemeral loopback port is transport metadata, not part of the model identity.
+    """
+    max_output_tokens: int = Field(default=2048, ge=1, le=32768)
+    """HY-MT output limit. A response hitting this limit is rejected, never published."""
+
+    @model_validator(mode="after")
+    def validate_protocol(self) -> LlmEngineConfig:
+        if (
+            len(self.response_model_aliases) > 8
+            or len(set(self.response_model_aliases)) != len(self.response_model_aliases)
+            or any(not alias.strip() or len(alias) > 256 for alias in self.response_model_aliases)
+        ):
+            raise ValueError("response model aliases must be distinct nonempty bounded names")
+        if self.managed_runtime_identity is not None and (
+            self.protocol != "hy-mt" or self.execution_location != "server"
+        ):
+            raise ValueError("managed runtime identity requires server-local HY-MT")
+        if self.protocol == "hy-mt" and not self.deployment_revision.strip():
+            raise ValueError("HY-MT requires deployment_revision for weights and runtime settings")
+        if self.execution_location == "server":
+            host = (self.base_url.host or "").strip("[]")
+            if host != "localhost":
+                try:
+                    local = ipaddress.ip_address(host).is_loopback
+                except ValueError:
+                    local = False
+                if not local:
+                    raise ValueError("server execution_location requires a loopback endpoint")
+        return self
 
 
 class MtEngineConfig(BaseModel):

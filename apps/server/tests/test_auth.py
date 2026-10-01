@@ -78,7 +78,7 @@ def test_services_refuse_an_unmigrated_database(tmp_path: Path) -> None:
     try:
         with pytest.raises(MigrationRequiredError):
             database.require_current()
-        assert migrate(settings) == "0002"
+        assert migrate(settings) == "0007"
         database.require_current()
     finally:
         database.dispose()

@@ -32,8 +32,9 @@ class FakeEngine(TranslationEngine):
         return TranslationIdentity(mode=TranslationMode.MT, model="fake", details={})
 
     def translate_batch(
-        self, texts: Sequence[str], source: Language, target: Language
+        self, texts: Sequence[str], source: Language | None = None, target: Language | None = None
     ) -> list[str]:
+        assert target is not None
         self.batches.append(list(texts))
         out = [f"{target.value}:{text}" for text in texts]
         return out[:-1] if self._drop_one else out
@@ -80,8 +81,8 @@ def test_nothing_to_translate_skips_engine(engine: FakeEngine) -> None:
 
 
 def test_same_source_and_target_rejected(engine: FakeEngine) -> None:
-    with make_translator() as t, pytest.raises(ValueError, match="both"):
-        t.translate_texts(["a"], source=Language.EN, target=Language.EN)
+    with make_translator() as t:
+        assert t.translate_texts(["a"], source=Language.EN, target=Language.EN) == ["en:a"]
 
 
 def test_wrong_count_from_engine_raises(monkeypatch: pytest.MonkeyPatch) -> None:

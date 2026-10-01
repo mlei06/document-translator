@@ -56,6 +56,7 @@ from doctranslator_core.types import (
     FontManifest,
     InvalidDocumentError,
     Language,
+    LayoutUnresolvableError,
     NoExtractableTextError,
     UnsupportedDocumentError,
 )
@@ -117,6 +118,7 @@ class _Unit:
     location: str
     bbox: Box
     line_boxes: list[Box]
+    footprint: Box
     span_boxes: list[Box]
     underline_boxes: list[Box]
     prefix: tuple[Inline, ...]
@@ -198,12 +200,12 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
             self._pages[number] = record
             rules = [b for b in record.obstacles if b[3] - b[1] <= 2.0 and b[2] - b[0] >= 2.0]
             layout = cast(dict[str, Any], page.get_text("dict", flags=_TEXT_FLAGS))
+            horizontal: list[dict[str, Any]] = []
             for block in layout["blocks"]:
                 if block.get("type") != 0:
                     continue
                 lines = [line for line in block["lines"] if _line_text(line).strip()]
                 characters += sum(len(_line_text(line).strip()) for line in lines)
-                horizontal: list[dict[str, Any]] = []
                 for line in lines:
                     dx, dy = line["dir"]
                     if abs(dy) > 0.01 or dx < 0:
@@ -211,18 +213,18 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
                         rotated.append(f"page {number + 1}")
                     else:
                         horizontal.append(line)
-                for group in _paragraphs(horizontal):
-                    unit = self._unit(number, len(record.units), group, rules)
-                    if "�" in unit.source:
-                        record.kept.append(unit.bbox)
-                        unreadable.append(unit.location)
-                        continue
-                    record.units.append(unit)
-                    self._units.append(unit)
-                    if len(self._units) > self._limits.max_segments:
-                        raise DocumentLimitError(
-                            f"the PDF has more than {self._limits.max_segments} text units"
-                        )
+            for group in _paragraphs(horizontal):
+                unit = self._unit(number, len(record.units), group, rules)
+                if "�" in unit.source:
+                    record.kept.append(unit.bbox)
+                    unreadable.append(unit.location)
+                    continue
+                record.units.append(unit)
+                self._units.append(unit)
+                if len(self._units) > self._limits.max_segments:
+                    raise DocumentLimitError(
+                        f"the PDF has more than {self._limits.max_segments} text units"
+                    )
             self._image_warning(page, number)
         if characters == 0:
             raise NoExtractableTextError(
@@ -297,6 +299,7 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
             location=f"page {page + 1}, text {index + 1}",
             bbox=_union(boxes),
             line_boxes=boxes,
+            footprint=_union([_line_footprint(line) for line in lines]),
             span_boxes=span_boxes,
             underline_boxes=underlines,
             prefix=prefix,
@@ -371,12 +374,22 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
         resolver = FontResolver(fonts)
         outcomes: list[FitEntry | None] = []
         substituted = 0
-        for number in sorted({u.page for u in changed}):
-            page_outcomes, page_substituted = self._place_page(
-                self._doc[number], self._pages[number], options, resolver
-            )
-            outcomes.extend(page_outcomes)
-            substituted += page_substituted
+        original = self._doc
+        self._doc = pymupdf.open(stream=original.tobytes(), filetype="pdf")
+        try:
+            for number in sorted({u.page for u in changed}):
+                page_outcomes, page_substituted = self._place_page(
+                    self._doc[number], self._pages[number], options, resolver
+                )
+                outcomes.extend(page_outcomes)
+                substituted += page_substituted
+        except BaseException:
+            self._doc.close()
+            self._doc = original
+            for unit in changed:
+                unit.placed = None
+            raise
+        original.close()
         if substituted:
             self.diagnostics.append(
                 DocumentDiagnostic(
@@ -392,78 +405,171 @@ class PdfAdapter(DocumentAdapter, PlacementFit):
     def _place_page(
         self, page: pymupdf.Page, record: _Page, options: FitOptions, resolver: FontResolver
     ) -> tuple[list[FitEntry | None], int]:
-        text_boxes = [u.bbox for u in record.units] + record.kept
+        text_boxes = [u.footprint for u in record.units] + record.kept
         bounds = page_bounds(record.width, record.height, text_boxes)
-        changed = [u for u in record.units if u.translated is not None]
+        changed = sorted(
+            (u for u in record.units if u.translated is not None),
+            key=lambda u: (u.bbox[1], u.bbox[0], u.id),
+        )
         plans: dict[int, tuple[Box, Align]] = {}
         for unit in changed:
             container = container_for(unit.bbox, record.boxes)
             align = alignment(unit.line_boxes, container, record.width)
-            others = [b for b in text_boxes if b is not unit.bbox]
+            peers = [u for u in record.units if u.id != unit.id]
+            if container is None and align == "left":
+                right_peers = [
+                    u
+                    for u in peers
+                    if abs(u.bbox[2] - unit.bbox[2]) <= 1.5
+                    and (
+                        (u.bbox[0] > record.width / 2 and unit.bbox[0] > record.width / 2)
+                        or any(
+                            other.footprint[2] < unit.footprint[0]
+                            and other.footprint[1] < unit.footprint[3]
+                            and other.footprint[3] > unit.footprint[1]
+                            for other in peers
+                        )
+                    )
+                    and abs(max(u.sizes) - max(unit.sizes)) <= 1.0
+                ]
+                if right_peers:
+                    align = "right"
+            others = [u.footprint for u in peers] + record.kept
             others += [b for b in record.obstacles if b not in unit.underline_boxes]
-            plans[unit.id] = (region_for(unit.bbox, align, container, others, bounds), align)
-
-        # Redaction deletes links that overlap it; they are restored at their original places.
-        page_links = page.get_links()
-        # Underlines belong to the text they decorate: remove them first (only line art fully
-        # inside the marked rectangles), then the characters, keeping every other graphic.
-        underlines = [b for u in changed for b in u.underline_boxes]
-        if underlines:
-            for x0, y0, x1, y1 in underlines:
-                page.add_redact_annot(pymupdf.Rect(x0 - 0.5, y0 - 0.5, x1 + 0.5, y1 + 0.5))
-            page.apply_redactions(
-                images=pymupdf.PDF_REDACT_IMAGE_NONE,
-                graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
-                text=pymupdf.PDF_REDACT_TEXT_NONE,
-            )
-        for unit in changed:
-            for x0, y0, x1, y1 in unit.span_boxes:
-                shrink = (y1 - y0) * 0.25  # the middle of the line: never a neighbouring line
-                page.add_redact_annot(pymupdf.Rect(x0, y0 + shrink, x1, y1 - shrink))
-        page.apply_redactions(
-            images=pymupdf.PDF_REDACT_IMAGE_NONE,
-            graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
-            text=pymupdf.PDF_REDACT_TEXT_REMOVE,
-        )
-        remaining = {_link_key(link) for link in page.get_links()}
-        for link in page_links:
-            if _link_key(link) not in remaining:
-                page.insert_link({k: v for k, v in link.items() if k not in ("xref", "id")})
+            region = region_for(unit.footprint, align, container, others, bounds)
+            if (
+                container is None
+                and align == "left"
+                and not any(abs(u.bbox[0] - unit.bbox[0]) <= 1.5 for u in peers)
+            ):
+                region = (unit.bbox[0], region[1], unit.bbox[2], region[3])
+            # Keep the original layout origin; metric leading is available to the
+            # replacement's line box even when neighbouring glyph footprints are tight.
+            region = (region[0], unit.bbox[1], region[2], region[3])
+            plans[unit.id] = (region, align)
 
         outcomes: list[FitEntry | None] = []
         substituted = 0
         target = self._target or Language.EN
-        for unit in changed:
-            nodes = (*unit.prefix, *(unit.translated or ()))
-            families: dict[int, str] = {}
-            faces: dict[str, FontFace] = {}
-            unit_substituted = False
-            for style_id, text in _style_texts(nodes).items():
-                font = unit.fonts.get(style_id, "")
-                choice = resolver.choose(font, self._styles[style_id], text, target)
-                unit_substituted |= choice.substituted
-                if choice.face is None:
-                    families[style_id] = choice.family
-                    continue
-                name = next((n for n, f in faces.items() if f == choice.face), f"dtf{len(faces)}")
-                faces[name] = choice.face
-                families[style_id] = name
-            substituted += unit_substituted
-            css, archive = font_css(faces, resolver)
-            region, align = plans[unit.id]
-            build = functools.partial(
-                unit_html, nodes, self._styles, families, align, unit.line_height
+        with pymupdf.open() as trial:
+            reservations: list[tuple[_Unit, Box]] = []
+            for unit in changed:
+                trial_page = trial.new_page(width=record.width, height=record.height)
+                nodes = (*unit.prefix, *(unit.translated or ()))
+                families: dict[int, str] = {}
+                faces: dict[str, FontFace] = {}
+                unit_substituted = False
+                for style_id, text in _style_texts(nodes).items():
+                    font = unit.fonts.get(style_id, "")
+                    choice = resolver.choose(font, self._styles[style_id], text, target)
+                    unit_substituted |= choice.substituted
+                    if choice.face is None:
+                        families[style_id] = choice.family
+                        continue
+                    name = next(
+                        (n for n, f in faces.items() if f == choice.face), f"dtf{len(faces)}"
+                    )
+                    faces[name] = choice.face
+                    families[style_id] = name
+                substituted += unit_substituted
+                css, archive = font_css(faces, resolver)
+                region, align = plans[unit.id]
+                reserved_region = region_for(
+                    unit.footprint, align, None, [b for _, b in reservations], region
+                )
+                region = (
+                    reserved_region[0],
+                    region[1],
+                    reserved_region[2],
+                    min(region[3], reserved_region[3]),
+                )
+                build = functools.partial(
+                    unit_html, nodes, self._styles, families, align, unit.line_height
+                )
+                if not self._skipped and self._should_skip():
+                    self._skipped = True
+                # Required placement always happens; skipping only removes the optional shrinking.
+                scale_low = 1.0 if self._skipped else floor_scale(unit.sizes, options)
+                try:
+                    placement = place_html(
+                        trial_page, region, build, css, archive, scale_low, record.height
+                    )
+                except LayoutUnresolvableError as exc:
+                    raise LayoutUnresolvableError(f"{unit.location}: {exc}") from exc
+                layout = cast(dict[str, Any], trial_page.get_text("dict"))
+                footprints = [
+                    _line_footprint(line)
+                    for block in layout["blocks"]
+                    if block["type"] == 0
+                    for line in block["lines"]
+                ]
+                actual_text = _normalized(cast(str, trial_page.get_text("text")))
+                if actual_text != _normalized(plain_text(nodes)):
+                    raise LayoutUnresolvableError(f"{unit.location}: trial text is incomplete")
+                fixed_obstacles = [u.footprint for u in record.units if u.translated is None]
+                fixed_obstacles += record.kept
+                fixed_obstacles += [
+                    b
+                    for b in record.obstacles
+                    if b not in unit.underline_boxes
+                    and not pymupdf.Rect(b).contains(pymupdf.Rect(unit.footprint))
+                ]
+                for footprint in footprints:
+                    for obstacle in fixed_obstacles:
+                        original_overlap = (
+                            pymupdf.Rect(unit.footprint) & pymupdf.Rect(obstacle)
+                        ).get_area()
+                        overlap = (pymupdf.Rect(footprint) & pymupdf.Rect(obstacle)).get_area()
+                        if overlap > original_overlap + 0.01:
+                            raise LayoutUnresolvableError(
+                                f"{unit.location}: placement intersects preserved content"
+                            )
+                    for previous, reserved in reservations:
+                        if previous.id == unit.id:
+                            continue
+                        original_overlap = (
+                            pymupdf.Rect(unit.footprint) & pymupdf.Rect(previous.footprint)
+                        ).get_area()
+                        if (
+                            pymupdf.Rect(footprint) & pymupdf.Rect(reserved)
+                        ).get_area() > original_overlap + 0.01:
+                            raise LayoutUnresolvableError(
+                                f"{unit.location} overlaps {previous.location} after placement"
+                            )
+                    reservations.append((unit, footprint))
+                unit.placed = placement.rect
+                if not self._skipped:
+                    outcomes.append(_entry(unit, region, placement))
+            # Redaction deletes links that overlap it; they are restored at their original places.
+            page_links = page.get_links()
+            # Underlines belong to the text they decorate: remove them first (only line art fully
+            # inside the marked rectangles), then the characters, keeping every other graphic.
+            underlines = [b for u in changed for b in u.underline_boxes]
+            if underlines:
+                for x0, y0, x1, y1 in underlines:
+                    page.add_redact_annot(pymupdf.Rect(x0 - 0.5, y0 - 0.5, x1 + 0.5, y1 + 0.5))
+                page.apply_redactions(
+                    images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                    graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
+                    text=pymupdf.PDF_REDACT_TEXT_NONE,
+                )
+            for unit in changed:
+                for x0, y0, x1, y1 in unit.span_boxes:
+                    shrink = (y1 - y0) * 0.25  # the middle of the line: never a neighbouring line
+                    page.add_redact_annot(pymupdf.Rect(x0, y0 + shrink, x1, y1 - shrink))
+            page.apply_redactions(
+                images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
+                text=pymupdf.PDF_REDACT_TEXT_REMOVE,
             )
-            if not self._skipped and self._should_skip():
-                self._skipped = True
-            # Required placement always happens; skipping only removes the optional shrinking.
-            scale_low = 1.0 if self._skipped else floor_scale(unit.sizes, options)
-            placement = place_html(
-                page, region, build, css, archive, scale_low, record.height - 2.0
-            )
-            unit.placed = placement.rect
-            if not self._skipped:
-                outcomes.append(_entry(unit, region, placement))
+            remaining = {_link_key(link) for link in page.get_links()}
+            for link in page_links:
+                if _link_key(link) not in remaining:
+                    page.insert_link({k: v for k, v in link.items() if k not in ("xref", "id")})
+            for trial_number in range(trial.page_count):
+                page.show_pdf_page(
+                    pymupdf.Rect(0, 0, record.width, record.height), trial, trial_number
+                )
         return outcomes, substituted
 
     def save(self, path: Path) -> None:
@@ -520,12 +626,37 @@ def _line_text(line: dict[str, Any]) -> str:
     return "".join(span["text"] for span in line["spans"])
 
 
+def _line_role(line: dict[str, Any]) -> tuple[float, bool, bool, int]:
+    spans = [s for s in line["spans"] if s["text"].strip()]
+    span = max(spans, key=lambda s: len(s["text"]))
+    flags = int(span["flags"])
+    return (round(float(span["size"]), 1), bool(flags & 16), bool(flags & 2), int(span["color"]))
+
+
+def _line_footprint(line: dict[str, Any]) -> Box:
+    """Remove font metric leading, retaining baseline order on densely set pages."""
+    boxes: list[Box] = []
+    for span in line["spans"]:
+        box = _box(span["bbox"])
+        asc, desc = float(span.get("ascender", 1)), float(span.get("descender", 0))
+        size, baseline = float(span["size"]), float(span["origin"][1])
+        if asc > desc and box[3] - box[1] > size:
+            box = (
+                box[0],
+                baseline - size * asc / (asc - desc),
+                box[2],
+                baseline - size * desc / (asc - desc),
+            )
+        boxes.append(box)
+    return _union(boxes)
+
+
 def _paragraphs(lines: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    """Group a block's lines into paragraphs.
+    """Group page lines into paragraphs; producer block boundaries are not semantic.
 
     A line continues the previous paragraph only if it sits below that paragraph's last line,
     overlaps it horizontally, is at most one line height away, does not start with a list
-    marker, and the previous line was full (it reached the block's right edge, so it wrapped).
+    marker, and the previous line was full, and its style role and indentation support continuation.
     """
     if not lines:
         return []
@@ -543,7 +674,19 @@ def _paragraphs(lines: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
             close = y0 - ly1 <= height
             full = lx1 >= right - max(3 * size, 0.15 * (right - lx0))
             marker = _LIST_MARKER.match(_line_text(line)) is not None
-            if below and overlaps and close and full and not marker:
+            same_role = _line_role(last) == _line_role(line)
+            labelled = re.match(r"^\s*[^:\uff1a]{1,45}[:\uff1a]", _line_text(line)) is not None
+            indented = abs(x0 - lx0) <= max(2.0, size)
+            if (
+                below
+                and overlaps
+                and close
+                and full
+                and not marker
+                and same_role
+                and not labelled
+                and indented
+            ):
                 groups[-1].append(line)
                 continue
         groups.append([line])

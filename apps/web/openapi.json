@@ -1,0 +1,4098 @@
+{
+ "components": {
+  "schemas": {
+   "AccountCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "display_name": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Display Name"
+     },
+     "email": {
+      "maxLength": 254,
+      "minLength": 3,
+      "title": "Email",
+      "type": "string"
+     },
+     "password": {
+      "format": "password",
+      "maxLength": 128,
+      "minLength": 8,
+      "title": "Password",
+      "type": "string",
+      "writeOnly": true
+     }
+    },
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "AccountCreate",
+    "type": "object"
+   },
+   "BatchCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "idempotency_key": {
+      "format": "uuid",
+      "title": "Idempotency Key",
+      "type": "string"
+     },
+     "label": {
+      "default": "",
+      "maxLength": 200,
+      "title": "Label",
+      "type": "string"
+     }
+    },
+    "required": [
+     "idempotency_key"
+    ],
+    "title": "BatchCreate",
+    "type": "object"
+   },
+   "BatchOut": {
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "items": {
+      "title": "Items",
+      "type": "integer"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "sealed_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sealed At"
+     },
+     "state": {
+      "enum": [
+       "open",
+       "sealed",
+       "cancelled"
+      ],
+      "title": "State",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "state",
+     "items",
+     "counts",
+     "created_at",
+     "sealed_at"
+    ],
+    "title": "BatchOut",
+    "type": "object"
+   },
+   "BatchPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/BatchOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor"
+     }
+    },
+    "required": [
+     "items",
+     "next_cursor"
+    ],
+    "title": "BatchPage",
+    "type": "object"
+   },
+   "Body_add_item_v1_batches__batch_id__items_post": {
+    "properties": {
+     "client_item_id": {
+      "format": "uuid",
+      "title": "Client Item Id",
+      "type": "string"
+     },
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "options": {
+      "description": "SubmitOptionsIn as JSON",
+      "title": "Options",
+      "type": "string"
+     }
+    },
+    "required": [
+     "file",
+     "options",
+     "client_item_id"
+    ],
+    "title": "Body_add_item_v1_batches__batch_id__items_post",
+    "type": "object"
+   },
+   "Body_create_document_v1_documents_post": {
+    "properties": {
+     "external_ref": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "External Ref"
+     },
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "new_document": {
+      "default": false,
+      "title": "New Document",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "file"
+    ],
+    "title": "Body_create_document_v1_documents_post",
+    "type": "object"
+   },
+   "Body_submit_job_v1_jobs_post": {
+    "properties": {
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "options": {
+      "description": "SubmitOptionsIn as JSON",
+      "title": "Options",
+      "type": "string"
+     },
+     "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "file",
+     "options",
+     "submission_id"
+    ],
+    "title": "Body_submit_job_v1_jobs_post",
+    "type": "object"
+   },
+   "Capabilities": {
+    "properties": {
+     "core_version": {
+      "title": "Core Version",
+      "type": "string"
+     },
+     "davy": {
+      "$ref": "#/components/schemas/DavyOut"
+     },
+     "default_translator_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default Translator Id"
+     },
+     "fit_defaults": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "string"
+        }
+       ]
+      },
+      "title": "Fit Defaults",
+      "type": "object"
+     },
+     "fit_statuses": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Fit Statuses",
+      "type": "array"
+     },
+     "formats": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Formats",
+      "type": "array"
+     },
+     "languages": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Languages",
+      "type": "array"
+     },
+     "limits": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Limits",
+      "type": "object"
+     },
+     "modes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Modes",
+      "type": "array"
+     },
+     "retention": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Retention",
+      "type": "array"
+     },
+     "service_version": {
+      "title": "Service Version",
+      "type": "string"
+     },
+     "translators": {
+      "items": {
+       "$ref": "#/components/schemas/TranslatorOut"
+      },
+      "title": "Translators",
+      "type": "array"
+     }
+    },
+    "required": [
+     "davy",
+     "formats",
+     "modes",
+     "translators",
+     "default_translator_id",
+     "languages",
+     "fit_statuses",
+     "retention",
+     "limits",
+     "fit_defaults",
+     "service_version",
+     "core_version"
+    ],
+    "title": "Capabilities",
+    "type": "object"
+   },
+   "DavyOut": {
+    "properties": {
+     "checked_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Checked At"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "not_configured",
+       "available",
+       "unreachable",
+       "authentication_failed",
+       "no_models",
+       "error"
+      ],
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "message",
+     "checked_at"
+    ],
+    "title": "DavyOut",
+    "type": "object"
+   },
+   "DocumentOut": {
+    "properties": {
+     "active_jobs": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Active Jobs",
+      "type": "object"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "detected_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Detected Source"
+     },
+     "detection": {
+      "enum": [
+       "detected",
+       "ambiguous",
+       "unknown",
+       "mixed",
+       "no_text"
+      ],
+      "title": "Detection",
+      "type": "string"
+     },
+     "external_ref": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "External Ref"
+     },
+     "format": {
+      "title": "Format",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "sha256": {
+      "title": "Sha256",
+      "type": "string"
+     },
+     "size": {
+      "title": "Size",
+      "type": "integer"
+     },
+     "translations": {
+      "items": {
+       "$ref": "#/components/schemas/TranslationOut"
+      },
+      "title": "Translations",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "format",
+     "size",
+     "sha256",
+     "detected_source",
+     "detection",
+     "external_ref",
+     "created_at",
+     "translations",
+     "active_jobs"
+    ],
+    "title": "DocumentOut",
+    "type": "object"
+   },
+   "DocumentPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/DocumentOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor"
+     }
+    },
+    "required": [
+     "items",
+     "next_cursor"
+    ],
+    "title": "DocumentPage",
+    "type": "object"
+   },
+   "ErrorOut": {
+    "properties": {
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "details": {
+      "additionalProperties": true,
+      "title": "Details",
+      "type": "object"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "request_id": {
+      "title": "Request Id",
+      "type": "string"
+     },
+     "retryable": {
+      "default": false,
+      "title": "Retryable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "code",
+     "message",
+     "request_id"
+    ],
+    "title": "ErrorOut",
+    "type": "object"
+   },
+   "FitOptionsIn": {
+    "additionalProperties": false,
+    "properties": {
+     "min_scale": {
+      "default": 0.7,
+      "maximum": 1.0,
+      "minimum": 0.3,
+      "title": "Min Scale",
+      "type": "number"
+     },
+     "min_size_pt": {
+      "default": 8.0,
+      "maximum": 72.0,
+      "minimum": 1.0,
+      "title": "Min Size Pt",
+      "type": "number"
+     },
+     "mode": {
+      "const": "standard",
+      "default": "standard",
+      "title": "Mode",
+      "type": "string"
+     }
+    },
+    "title": "FitOptionsIn",
+    "type": "object"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "title": "Detail",
+      "type": "array"
+     }
+    },
+    "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "ItemOut": {
+    "properties": {
+     "client_item_id": {
+      "title": "Client Item Id",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "job": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/JobOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "ordinal": {
+      "title": "Ordinal",
+      "type": "integer"
+     },
+     "original_name": {
+      "title": "Original Name",
+      "type": "string"
+     },
+     "rejection_code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rejection Code"
+     },
+     "rejection_message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rejection Message"
+     }
+    },
+    "required": [
+     "id",
+     "ordinal",
+     "client_item_id",
+     "original_name",
+     "rejection_code",
+     "rejection_message",
+     "job"
+    ],
+    "title": "ItemOut",
+    "type": "object"
+   },
+   "ItemPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ItemOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor"
+     }
+    },
+    "required": [
+     "items",
+     "next_cursor"
+    ],
+    "title": "ItemPage",
+    "type": "object"
+   },
+   "JobOut": {
+    "properties": {
+     "attempts": {
+      "title": "Attempts",
+      "type": "integer"
+     },
+     "batch_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Batch Id"
+     },
+     "cache_hit": {
+      "title": "Cache Hit",
+      "type": "boolean"
+     },
+     "cancel_requested": {
+      "title": "Cancel Requested",
+      "type": "boolean"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "dismissed_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dismissed At"
+     },
+     "document_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Document Id"
+     },
+     "error_code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error Code"
+     },
+     "error_message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error Message"
+     },
+     "fallback": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fallback"
+     },
+     "fingerprint": {
+      "title": "Fingerprint",
+      "type": "string"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "fit_skip_requested": {
+      "title": "Fit Skip Requested",
+      "type": "boolean"
+     },
+     "fit_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fit Status"
+     },
+     "force": {
+      "title": "Force",
+      "type": "boolean"
+     },
+     "format": {
+      "title": "Format",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "original_name": {
+      "title": "Original Name",
+      "type": "string"
+     },
+     "progress": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProgressOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "result_available": {
+      "title": "Result Available",
+      "type": "boolean"
+     },
+     "result_expires_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Result Expires At"
+     },
+     "retention": {
+      "enum": [
+       "saved",
+       "temporary",
+       "cached"
+      ],
+      "title": "Retention",
+      "type": "string"
+     },
+     "source_requested": {
+      "title": "Source Requested",
+      "type": "string"
+     },
+     "source_resolved": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Resolved"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "status": {
+      "enum": [
+       "queued",
+       "running",
+       "succeeded",
+       "failed",
+       "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "target": {
+      "title": "Target",
+      "type": "string"
+     },
+     "translator_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Translator Id"
+     }
+    },
+    "required": [
+     "id",
+     "batch_id",
+     "document_id",
+     "retention",
+     "status",
+     "original_name",
+     "format",
+     "mode",
+     "translator_id",
+     "source_requested",
+     "source_resolved",
+     "target",
+     "fingerprint",
+     "force",
+     "attempts",
+     "progress",
+     "cancel_requested",
+     "fit_skip_requested",
+     "cache_hit",
+     "error_code",
+     "error_message",
+     "fit_status",
+     "result_available",
+     "result_expires_at",
+     "created_at",
+     "started_at",
+     "finished_at",
+     "dismissed_at"
+    ],
+    "title": "JobOut",
+    "type": "object"
+   },
+   "JobPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/JobOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor"
+     }
+    },
+    "required": [
+     "items",
+     "next_cursor"
+    ],
+    "title": "JobPage",
+    "type": "object"
+   },
+   "Me": {
+    "properties": {
+     "display_name": {
+      "title": "Display Name",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "human",
+       "service"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "storage_quota_bytes": {
+      "title": "Storage Quota Bytes",
+      "type": "integer"
+     },
+     "storage_used_bytes": {
+      "title": "Storage Used Bytes",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "display_name",
+     "kind",
+     "storage_used_bytes",
+     "storage_quota_bytes"
+    ],
+    "title": "Me",
+    "type": "object"
+   },
+   "ProgressOut": {
+    "properties": {
+     "done": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Done"
+     },
+     "phase": {
+      "enum": [
+       "prepare",
+       "extract",
+       "translate",
+       "apply",
+       "fit",
+       "write"
+      ],
+      "title": "Phase",
+      "type": "string"
+     },
+     "total": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Total"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "phase",
+     "done",
+     "total",
+     "updated_at"
+    ],
+    "title": "ProgressOut",
+    "type": "object"
+   },
+   "SessionCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "email": {
+      "anyOf": [
+       {
+        "maxLength": 254,
+        "minLength": 3,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     },
+     "key": {
+      "anyOf": [
+       {
+        "format": "password",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+        "writeOnly": true
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Key"
+     },
+     "password": {
+      "anyOf": [
+       {
+        "format": "password",
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string",
+        "writeOnly": true
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Password"
+     }
+    },
+    "title": "SessionCreate",
+    "type": "object"
+   },
+   "SessionOut": {
+    "properties": {
+     "csrf_token": {
+      "title": "Csrf Token",
+      "type": "string"
+     },
+     "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+     },
+     "user": {
+      "$ref": "#/components/schemas/Me"
+     }
+    },
+    "required": [
+     "user",
+     "csrf_token",
+     "expires_at"
+    ],
+    "title": "SessionOut",
+    "type": "object"
+   },
+   "TranslateIn": {
+    "additionalProperties": false,
+    "description": "Translate a saved document: options plus exactly one submission identity.",
+    "properties": {
+     "batch_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Batch Id"
+     },
+     "client_item_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Client Item Id"
+     },
+     "download_semantics": {
+      "anyOf": [
+       {
+        "enum": [
+         "current_shared",
+         "exact"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Semantics"
+     },
+     "fit": {
+      "$ref": "#/components/schemas/FitOptionsIn"
+     },
+     "force_retranslate": {
+      "default": false,
+      "title": "Force Retranslate",
+      "type": "boolean"
+     },
+     "min_scale": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min Scale"
+     },
+     "min_size_pt": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min Size Pt"
+     },
+     "mode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mode"
+     },
+     "protected_terms": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Protected Terms",
+      "type": "array"
+     },
+     "retention": {
+      "default": "saved",
+      "enum": [
+       "saved",
+       "temporary",
+       "cached"
+      ],
+      "title": "Retention",
+      "type": "string"
+     },
+     "selection_policy": {
+      "anyOf": [
+       {
+        "enum": [
+         "website_auto",
+         "desktop_auto"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Selection Policy"
+     },
+     "source": {
+      "default": "auto",
+      "title": "Source",
+      "type": "string"
+     },
+     "submission_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Submission Id"
+     },
+     "target": {
+      "title": "Target",
+      "type": "string"
+     },
+     "translator_id": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Translator Id"
+     },
+     "txt_encoding": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Txt Encoding"
+     },
+     "use_default_dictionary": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Use Default Dictionary"
+     }
+    },
+    "required": [
+     "target"
+    ],
+    "title": "TranslateIn",
+    "type": "object"
+   },
+   "TranslationOut": {
+    "properties": {
+     "fit_status": {
+      "title": "Fit Status",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "job_id": {
+      "title": "Job Id",
+      "type": "string"
+     },
+     "output_sha256": {
+      "title": "Output Sha256",
+      "type": "string"
+     },
+     "output_size": {
+      "title": "Output Size",
+      "type": "integer"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source"
+     },
+     "target": {
+      "title": "Target",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "source",
+     "target",
+     "fit_status",
+     "job_id",
+     "output_size",
+     "output_sha256",
+     "updated_at"
+    ],
+    "title": "TranslationOut",
+    "type": "object"
+   },
+   "TranslationSettingsIn": {
+    "additionalProperties": false,
+    "properties": {
+     "protected_terms": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Protected Terms",
+      "type": "array"
+     },
+     "use_default_dictionary": {
+      "default": true,
+      "title": "Use Default Dictionary",
+      "type": "boolean"
+     }
+    },
+    "title": "TranslationSettingsIn",
+    "type": "object"
+   },
+   "TranslationSettingsOut": {
+    "additionalProperties": false,
+    "properties": {
+     "default_protected_terms": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Default Protected Terms",
+      "type": "array"
+     },
+     "protected_terms": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Protected Terms",
+      "type": "array"
+     },
+     "use_default_dictionary": {
+      "default": true,
+      "title": "Use Default Dictionary",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "default_protected_terms"
+    ],
+    "title": "TranslationSettingsOut",
+    "type": "object"
+   },
+   "TranslatorOut": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "location": {
+      "enum": [
+       "server",
+       "remote"
+      ],
+      "title": "Location",
+      "type": "string"
+     },
+     "mode": {
+      "enum": [
+       "mt",
+       "llm"
+      ],
+      "title": "Mode",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "mode",
+     "location"
+    ],
+    "title": "TranslatorOut",
+    "type": "object"
+   },
+   "ValidationError": {
+    "properties": {
+     "ctx": {
+      "title": "Context",
+      "type": "object"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "title": "Location",
+      "type": "array"
+     },
+     "msg": {
+      "title": "Message",
+      "type": "string"
+     },
+     "type": {
+      "title": "Error Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError",
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "title": "Document Translator",
+  "version": "0.1.0"
+ },
+ "openapi": "3.1.0",
+ "paths": {
+  "/v1/accounts": {
+   "post": {
+    "operationId": "register_v1_accounts_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AccountCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Register",
+    "tags": [
+     "sessions"
+    ]
+   }
+  },
+  "/v1/batches": {
+   "get": {
+    "operationId": "list_batches_v1_batches_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cursor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "List Batches",
+    "tags": [
+     "batches"
+    ]
+   },
+   "post": {
+    "operationId": "create_batch_v1_batches_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BatchCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Create Batch",
+    "tags": [
+     "batches"
+    ]
+   }
+  },
+  "/v1/batches/{batch_id}": {
+   "get": {
+    "operationId": "get_batch_v1_batches__batch_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Get Batch",
+    "tags": [
+     "batches"
+    ]
+   }
+  },
+  "/v1/batches/{batch_id}/cancel": {
+   "post": {
+    "operationId": "cancel_batch_v1_batches__batch_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Cancel Batch",
+    "tags": [
+     "batches"
+    ]
+   }
+  },
+  "/v1/batches/{batch_id}/items": {
+   "get": {
+    "operationId": "list_items_v1_batches__batch_id__items_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cursor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "client_item_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Client Item Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ItemPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "List Items",
+    "tags": [
+     "batches"
+    ]
+   },
+   "post": {
+    "description": "Upload one file into the batch (saved documents to reuse, or temporary).",
+    "operationId": "add_item_v1_batches__batch_id__items_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_add_item_v1_batches__batch_id__items_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Completed at once with the document's current translation"
+     },
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ItemOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "413": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Content Too Large"
+     },
+     "415": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unsupported Media Type"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Add Item",
+    "tags": [
+     "batches"
+    ]
+   }
+  },
+  "/v1/batches/{batch_id}/seal": {
+   "post": {
+    "operationId": "seal_batch_v1_batches__batch_id__seal_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Seal Batch",
+    "tags": [
+     "batches"
+    ]
+   }
+  },
+  "/v1/capabilities": {
+   "get": {
+    "operationId": "capabilities_v1_capabilities_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Capabilities"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Capabilities",
+    "tags": [
+     "service"
+    ]
+   }
+  },
+  "/v1/documents": {
+   "get": {
+    "operationId": "list_documents_v1_documents_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cursor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "List Documents",
+    "tags": [
+     "documents"
+    ]
+   },
+   "post": {
+    "description": "Save a source document: validated and language-detected before any translation.\nIdentical bytes return the owner's existing document unless ``new_document``.",
+    "operationId": "create_document_v1_documents_post",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "staging",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Staging",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_create_document_v1_documents_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "The owner's existing document"
+     },
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentOut"
+        }
+       }
+      },
+      "description": "Completed at once with the document's current translation"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "413": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Content Too Large"
+     },
+     "415": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unsupported Media Type"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Create Document",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}": {
+   "delete": {
+    "description": "Delete the source and all its translations; job downloads of it stop too.",
+    "operationId": "delete_document_v1_documents__document_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Delete Document",
+    "tags": [
+     "documents"
+    ]
+   },
+   "get": {
+    "operationId": "get_document_v1_documents__document_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Get Document",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}/original": {
+   "get": {
+    "operationId": "document_original_v1_documents__document_id__original_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Document Original",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}/translations": {
+   "get": {
+    "operationId": "list_translations_v1_documents__document_id__translations_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "List Translations",
+    "tags": [
+     "documents"
+    ]
+   },
+   "post": {
+    "description": "Translate a saved document: reuses its compatible current translation unless\n``force_retranslate``; one unfinished job per target language (409 otherwise).",
+    "operationId": "translate_document_v1_documents__document_id__translations_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TranslateIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Completed at once with the document's current translation"
+     },
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/JobOut"
+          },
+          {
+           "$ref": "#/components/schemas/ItemOut"
+          }
+         ],
+         "title": "Response Translate Document V1 Documents  Document Id  Translations Post"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "413": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Content Too Large"
+     },
+     "415": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unsupported Media Type"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Translate Document",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}/translations/{translation_id}": {
+   "delete": {
+    "operationId": "delete_translation_v1_documents__document_id__translations__translation_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "translation_id",
+      "required": true,
+      "schema": {
+       "title": "Translation Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Delete Translation",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}/translations/{translation_id}/file": {
+   "get": {
+    "operationId": "translation_file_v1_documents__document_id__translations__translation_id__file_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "translation_id",
+      "required": true,
+      "schema": {
+       "title": "Translation Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Translation File",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/documents/{document_id}/translations/{translation_id}/fit-report": {
+   "get": {
+    "operationId": "translation_report_v1_documents__document_id__translations__translation_id__fit_report_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "document_id",
+      "required": true,
+      "schema": {
+       "title": "Document Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "translation_id",
+      "required": true,
+      "schema": {
+       "title": "Translation Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Translation Report",
+    "tags": [
+     "documents"
+    ]
+   }
+  },
+  "/v1/health": {
+   "get": {
+    "operationId": "health_v1_health_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": {
+          "type": "string"
+         },
+         "title": "Response Health V1 Health Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Health",
+    "tags": [
+     "service"
+    ]
+   }
+  },
+  "/v1/history": {
+   "get": {
+    "operationId": "history_v1_history_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cursor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response History V1 History Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "History",
+    "tags": [
+     "history"
+    ]
+   }
+  },
+  "/v1/history/{identifier}": {
+   "delete": {
+    "operationId": "delete_history_v1_history__identifier__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "identifier",
+      "required": true,
+      "schema": {
+       "title": "Identifier",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Delete History",
+    "tags": [
+     "history"
+    ]
+   }
+  },
+  "/v1/history/{identifier}/file": {
+   "get": {
+    "operationId": "history_file_v1_history__identifier__file_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "identifier",
+      "required": true,
+      "schema": {
+       "title": "Identifier",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "History File",
+    "tags": [
+     "history"
+    ]
+   }
+  },
+  "/v1/jobs": {
+   "get": {
+    "description": "Owned jobs, newest first. ``active`` keeps unfinished jobs and finished ones the user\nhas not dismissed; ``q`` searches file names.",
+    "operationId": "list_jobs_v1_jobs_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cursor"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "pattern": "^(queued|running|succeeded|failed|cancelled)$",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 200,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
+      }
+     },
+     {
+      "in": "query",
+      "name": "active",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Active",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "List Jobs",
+    "tags": [
+     "jobs"
+    ]
+   },
+   "post": {
+    "operationId": "submit_job_v1_jobs_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_submit_job_v1_jobs_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Completed at once with the document's current translation"
+     },
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "413": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Content Too Large"
+     },
+     "415": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unsupported Media Type"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Submit Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}": {
+   "get": {
+    "operationId": "get_job_v1_jobs__job_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Get Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}/cancel": {
+   "post": {
+    "operationId": "cancel_job_v1_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Cancel Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}/dismiss": {
+   "post": {
+    "operationId": "dismiss_job_v1_jobs__job_id__dismiss_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Dismiss Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}/file": {
+   "get": {
+    "description": "The job's exact output until ``result_expires_at``.",
+    "operationId": "job_file_v1_jobs__job_id__file_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Job File",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}/fit-report": {
+   "get": {
+    "operationId": "job_report_v1_jobs__job_id__fit_report_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Job Report",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/jobs/{job_id}/restore": {
+   "post": {
+    "operationId": "restore_job_v1_jobs__job_id__restore_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "job_id",
+      "required": true,
+      "schema": {
+       "title": "Job Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Restore Job",
+    "tags": [
+     "jobs"
+    ]
+   }
+  },
+  "/v1/me": {
+   "get": {
+    "operationId": "me_v1_me_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Me"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Me",
+    "tags": [
+     "service"
+    ]
+   }
+  },
+  "/v1/me/translation-settings": {
+   "get": {
+    "operationId": "translation_settings_v1_me_translation_settings_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TranslationSettingsOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Translation Settings",
+    "tags": [
+     "service"
+    ]
+   },
+   "put": {
+    "operationId": "update_translation_settings_v1_me_translation_settings_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TranslationSettingsIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TranslationSettingsOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Update Translation Settings",
+    "tags": [
+     "service"
+    ]
+   }
+  },
+  "/v1/sessions": {
+   "post": {
+    "description": "Exchange an API key for a browser session (HttpOnly cookie plus CSRF token).",
+    "operationId": "sign_in_v1_sessions_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SessionCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "403": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Forbidden"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Sign In",
+    "tags": [
+     "sessions"
+    ]
+   }
+  },
+  "/v1/sessions/current": {
+   "delete": {
+    "operationId": "sign_out_v1_sessions_current_delete",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Sign Out",
+    "tags": [
+     "sessions"
+    ]
+   },
+   "get": {
+    "description": "The signed-in browser session with its CSRF token, for a reloaded or new tab.",
+    "operationId": "current_session_v1_sessions_current_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Current Session",
+    "tags": [
+     "sessions"
+    ]
+   }
+  },
+  "/v1/translators/refresh": {
+   "post": {
+    "operationId": "refresh_translators_v1_translators_refresh_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Capabilities"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorOut"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     }
+    },
+    "summary": "Refresh Translators",
+    "tags": [
+     "service"
+    ]
+   }
+  }
+ }
+}

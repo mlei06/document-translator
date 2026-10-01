@@ -1,5 +1,7 @@
 # Document Translator
 
+Current delivery contract: [Unified translator design](docs/plans/unified-translator-design.md) consolidates website, storage, direct results, desktop installation and visual design. Implementation and acceptance evidence are tracked in [unified execution](docs/plans/unified-execution.md); desktop signing and clean-machine release acceptance remain separate gates.
+
 Translate office documents between languages while preserving their layout and formatting, running on the user's laptop or approved company infrastructure.
 
 ## Problem
@@ -10,25 +12,41 @@ Teams regularly receive and produce documents (slide decks, reports, spreadsheet
 - Translating by hand, which is slow and expensive.
 - Using tools that translate text but destroy the document: fonts, colors, tables, and slide layouts are lost, and translated text overflows its boxes because target-language text is often longer than the source.
 
-The output is a translated document with structure and formatting preserved. Lightweight layout checking runs by default; the planned UI lets users skip that stage and continue saving their translated file.
+The output is a translated document with structure and formatting preserved. Standard layout fitting runs internally; the target website keeps a simple translation-to-download flow without a separate layout-check stage.
 
 ## Solution
 
 One shared translation capability, delivered in three forms:
 
 1. **Web service** - users sign in, submit documents, track jobs and download owned results.
-2. **Installed desktop app** - users select a supported model to download during setup, then open the app and drag in files or folders. Local translation works offline once its runtime/model is installed. The app manages its local service and workers; no terminal or web sign-in is required for local mode.
+2. **Installed desktop app** - setup offers Online only or Online and offline, with one approved offline bundle. Explorer right-click and main-window drag/drop share one queue. Users press Translate with no model/mode controls. The installer provisions Davy access; the app automatically tries the common Davy ladder, then installed device HY-MT, independently of the website service. See [ADR-030](docs/decisions/ADR-030-desktop-online-offline-delivery.md).
 3. **Backend for internal applications** - a versioned asynchronous REST API for document submission, progress and results, with shared processing/jobs and explicit saved or temporary retention. Python applications may also use the public core when they own orchestration.
 
-The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop users may explicitly select a hosted company service instead of local processing; local exports are user-controlled files; they are not synchronized to a hosted library.
+The CLI remains available for local and service use; MCP remains a later agent-facing adapter. All surfaces use the same core and lightweight fit policy. Desktop automatically uses direct Davy or installed local fallback; exports are user-controlled files and are not synchronized to a hosted library.
 
-The current implementation handoff remains P2-P6. The [desktop and internal-app plan](docs/plans/Desktop-and-internal-app-delivery.md) adds installer/model setup and drag/drop delivery. Explorer right-click translation is only a later consideration. Lenovo laptop integration/preload is a long-term ambition after a proven installable app, not a current shipping commitment.
+The unified specification supersedes conflicting earlier implementation handoffs. The desktop implementation includes a native shell, private local runtime, offline asset management and Explorer integration; release readiness requires the evidence listed in the execution record. Lenovo laptop integration/preload remains a later ambition.
 
 ## Storage and Retranslation
 
-Under [ADR-014](docs/decisions/ADR-014-storage-ownership-and-retranslation.md), local desktop/future Explorer processing is files or folders in, files or folders out: always translate each new explicit run, export to the chosen destination with numbered filename collisions, and clean up temporary working copies. No hidden permanent local document library or translation cache is required.
+Website requests use one shared current translation per source hash and target language, with private user History containing filenames and language pairs. Download serves the current shared translation. New verified uploads attempt only higher-ranked models before reusing a compatible result. Originals are retained only for staging and active work/recovery; website outputs have no fixed availability or version guarantee. See [ADR-028](docs/decisions/ADR-028-website-cache-and-retention.md) and the unified specification for budgets, idle eviction and History expiry.
 
-The shared website saves private source-document records and one current translation per language pair, deduplicating identical physical bytes underneath. Compatible current results can be reused; Translate again or Always generate a new translation bypasses reuse and replaces only that owner's result after success. Old results remain available while replacements run. Human accounts and application service accounts own their records; internal apps can use temporary results and store outputs themselves. Jobs retain their exact outputs only for their stated retention, independently of the library's current pointer. See the [implementation handoff](docs/plans/P5-D2-storage-and-ownership.md). These are accepted targets, not claims that the service is implemented.
+Under [ADR-014](docs/decisions/ADR-014-storage-ownership-and-retranslation.md), local desktop and Explorer processing is files or folders in, files or folders out: always translate each new explicit run, export to the chosen destination with numbered filename collisions, and clean up temporary working copies. No hidden permanent local document library or translation cache is required.
+
+Internal applications retain explicit saved/temporary submission and exact-result contracts with individual service-account authorization. They do not implicitly opt into the website cache. Website submissions explicitly use `website_auto`, `cached` retention and `current_shared` downloads.
+
+## Translator Selection
+
+Website and desktop automatic routing use the pinned common policy: Gemma, ordered approved Davy alternatives, then configured HY-MT. Website reuse stops traversal before equal/lower inference. Every rung starts the whole document afresh and records truthful producer identity; bad input, storage and fit failures do not consume inference rungs. See [ADR-027](docs/decisions/ADR-027-automatic-website-translation.md).
+
+Availability is specific to the serving backend. Automatic requests use bounded discovery, retries and fallback; explicit internal API/CLI translator requests retain their selected-translator semantics. See [ADR-024](docs/decisions/ADR-024-translator-availability.md).
+
+Administrators configure named translators and the website policy. Explicit internal API and CLI clients can select a translator; the website presents target languages only. Jobs pin identities and reuse includes model/settings compatibility. See [configuration](docs/Deployment.md#translator-configuration).
+
+Desktop setup under ADR-030 offers one offline bundle without a model picker; settings manage offline support later. The desktop owns its authenticated llama.cpp process and verifies immutable assets before activation. Hardware and packaged release evidence are recorded separately from unit tests. See [local HY-MT](docs/decisions/ADR-025-local-hy-mt.md).
+
+## Browser Accounts
+
+Email/password sign-in and deployment-enabled account creation follow [ADR-020](docs/decisions/ADR-020-browser-accounts-and-decoding.md). API-key clients remain supported. Website accounts use the standard automatic profile and private History; personal model/decoding controls are absent.
 
 ## Users
 
@@ -41,7 +59,7 @@ The shared website saves private source-document records and one current transla
 
 - Translate PPTX, DOCX, XLSX, PDF, and TXT files, producing output in the same format as the input.
 - Preserve formatting and structure: fonts, styles, colors, run-level formatting (bold, italic, etc.), tables, lists, slide layouts, and sheet structure.
-- Prioritize translation accuracy and preserved formatting, with lightweight best-effort overflow mitigation that users can skip.
+- Prioritize translation accuracy and preserved formatting, with internal lightweight best-effort overflow mitigation.
 - Keep document content on the user's device or approved company infrastructure; never silently upload local-mode documents.
 - Translate in both directions between Chinese, English, Japanese, and Spanish, with Chinese -> English as the primary focus and highest quality bar, on technical and business content.
 - Offer more than one translation mode, so users can trade quality against speed and availability.
@@ -93,25 +111,13 @@ The user selects a mode per job. Both modes produce the same output format and g
 
 **Visual quality**
 
-Translation quality and accuracy take priority. Automatic post-processing is a lightweight, best-effort overflow safeguard, not a native-layout or visual-perfection guarantee. [ADR-012](docs/decisions/ADR-012-lightweight-fit-policy.md) records the owner-approved scope.
+Translation quality and accuracy take priority. [ADR-026](docs/decisions/ADR-026-offline-fit-v2.md) defines the implemented structure-aware offline fitting policy. The [design spec](docs/plans/offline-fit-v2.md) records exact scope and acceptance requirements.
 
-*Layer 1 - automatic fit (all surfaces).* Preserve wording and formatting, allow natural reflow and inspect changed constrained containers. Use the same supported font/wrapping estimator for source and translation. Allow the larger of container bounds and source extent, then apply bounded proportional font shrinking only when overflow is reliably measurable. Defaults are 70% relative and 8pt absolute floors; original smaller text is not enlarged or further shrunk. Unknown measurements retain original sizes and produce unresolved warnings. Never rewrite, shorten or truncate translations to fit.
+Standard fitting preserves structure, measures target text even when the source font baseline is unknown, writes provisioned target font substitutions and applies bounded repairs. PowerPoint can grow eligible boxes into free space, reduce paragraph spacing and shrink proportionally. Word body content reflows naturally. PDF preserves paragraph boundaries/right anchors and rejects a document when complete text cannot be legally placed without overlap or below-floor rescue. Floors remain 70% and 8 pt by default. No wording changes, OCR or model calls occur during fitting.
 
-Normal website/desktop screens show **Checking layout** with **Skip layout check**, then **Saving** and **Ready to download**. They do not show unresolved-section details or layout-warning badges. Skipping stops further optional fit work, keeps adjustments already applied and still writes/verifies/persists the full translation. Existing technical reports can remain for troubleshooting; effective bypass is recorded as `skipped` and is excluded from normal full-fit cache reuse. This owner-approved control is planned, not implemented yet; see the [progress/skip plan](docs/plans/P5-P6-document-progress.md#skip-layout-check).
+[ADR-029](docs/decisions/ADR-029-standard-fit-direct-download.md) removes thorough fit and all production previews, eliminating the LibreOffice requirement. Standard fit and saved-file verification remain; completed items and History offer direct Download. Bubbles are status groups with explicit actions. XLSX retains standard constrained-cell fitting; TXT fit is not applicable.
 
-A measured pass is not rendered visual approval. Unresolved or user-skipped fit is compatible with complete translation; lost text or corrupt output is not. No runtime rendering loop, vision review or exhaustive Office emulation is required.
-
-| Format | Minimum fit scope |
-|---|---|
-| PPTX | Changed constrained boxes, placeholders, shapes and table cells; preserve geometry. |
-| PDF | Replacement text placement under the selected PDF strategy; explicit unsupported cases. |
-| XLSX | Changed constrained cell text, respecting wrapping/merges; preserve row/column sizes. |
-| DOCX | Constrained boxes/cells only; body and unconstrained dimensions reflow naturally. |
-| TXT | Not applicable. |
-
-Existing overflow/overlaps are not repaired. Objects are not moved and pagination is not forced. A small representative acceptance corpus checks integrity, content preservation and obvious clipping; native checks are acceptance activities, not production dependencies.
-
-*Layer 2 - later optional visual review (P7).* An MCP agent may inspect rendered pages and request supported corrections as new versions. This is outside P2-P6 and does not block its release.
+The target website uses **Translating**, **Saving**, and **Ready to download**, with no separate layout-check status or personal fit/skip control. Standard fit stays internal under Translating. Complete construction, content checks and safe PDF placement remain mandatory; Ready requires successful publication. Standard Office fit can remain unresolved without claiming rendered visual perfection. Historical thorough/skipped reports remain truthful metadata; they do not restore removed runtime options. Optional model-assisted visual editing remains outside this scope.
 
 **Users and jobs (service CLI, REST, web GUI and later MCP)**
 
@@ -154,9 +160,9 @@ Existing overflow/overlaps are not repaired. Objects are not moved and paginatio
 | Desktop local | Installer-managed per-user runtime, model and storage; OS-user ownership and authenticated local access. No company account needed for local processing. |
 | Internal-app backend | The same versioned hosted REST API; optional public-core embedding for Python callers who own lifecycle/storage. |
 
-The installer offers a curated compatible model catalog, explains resource/download requirements and verifies selected artifacts. SMALL-100 is the initial supported local engine; internal Gemma is currently a remote option, not a promised downloadable desktop model. Additional model choices require compatibility, licensing and quality validation.
+The installer offers one approved HY-MT1.5-1.8B Q8 offline bundle, explains resource/download requirements and verifies its immutable artifacts. Settings manage that capability without a model picker. Gemma and the other approved Davy models remain remote candidates. SMALL-100 remains available through the separate core/internal-app configuration, not as a desktop installer choice.
 
-P2-P6 delivers the shared service and existing web UI integration. Desktop tracks D0-D2 and internal-client track I1 build on that backend without requiring P7 MCP or P8 enterprise cloud integration. The main desktop flow is open app -> add files/folders -> choose translation options/destination -> progress -> translated files. Tray notifications are secondary; Explorer integration is optional later work.
+P2-P6 delivers the shared service and existing web UI integration. Desktop tracks D0-D2 and internal-client track I1 build on that backend without requiring P7 MCP or P8 enterprise cloud integration. The main desktop flow is open app -> add files/folders -> choose target/destination -> progress -> translated files. Tray notifications are secondary; configurable Explorer shortcuts are a unified desktop release requirement.
 
 Lenovo fleet deployment and eventual OEM preload require separate distribution, hardware and servicing validation. No signed installer, native integration or OEM availability is claimed yet. See [Deployment](docs/Deployment.md) for intended profiles versus runnable operations.
 
@@ -172,9 +178,9 @@ Lenovo fleet deployment and eventual OEM preload require separate distribution, 
 
 ## Current Status
 
-Text translation works in both modes: LLM mode through the internal LLM server (Gemma) and MT mode through SMALL-100, which runs locally ([ADR-006](docs/decisions/ADR-006-mt-model-selection.md)). The translation quality benchmark (`apps/eval`) is in place. Document formats and the CLI are next (P2).
+Text translation works through the internal LLM service and local MT runtimes. The repository includes TXT, PPTX, DOCX, XLSX and PDF translation, local/service CLI commands, the owned-job REST service, web integration and offline fit v2. The translation quality benchmark (`apps/eval`) is in place. See [release evidence](docs/plans/P2-P6-release-evidence.md) and [fit v2 evidence](docs/plans/offline-fit-v2.md#implementation-evidence-2026-09-29) for tested scope and limitations.
 
-P1 still has delivery verification/closure work recorded in its plan. Full quality baselines were explicitly deferred and must be captured before any prompt or model change. P2 is in design: its [draft plan](docs/plans/P2-document-translation-and-cli.md) and [XLSX experiment](docs/experiments/xlsx-roundtrip/README.md) distinguish proposed behavior from approved requirements. No document translation command, fit check, running web service, or MCP endpoint exists yet.
+Historical phase closure, board synchronization and reviewed-commit CI are distinct from the implementation present in the workspace. Full translation-quality baselines remain deferred under the owner's recorded instruction. MCP delivery remains future work; implementing offline fit does not close those broader delivery gates.
 
 ## Delivery Handoff
 

@@ -1,5 +1,7 @@
 # ADR-018 - PDF Strategy: Targeted Text Replacement with PyMuPDF
 
+> Amended by accepted [ADR-026](ADR-026-offline-fit-v2.md), 2026-09-29: structure-aware standard fit, explicit thorough verification, and safe complete PDF placement. Conflicting earlier fit/placement requirements below are historical.
+
 Status: Accepted 2026-09-29 (P4.0 gate). The owner approved PyMuPDF on 2026-09-28 ("just use pymupdf"), accepting its AGPL-3.0 license for this internal service. Evidence: [PDF strategy experiment](../experiments/pdf-strategy/README.md).
 
 ## Context

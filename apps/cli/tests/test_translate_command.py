@@ -69,12 +69,18 @@ def test_translates_each_office_format(tmp_path: Path, llm: FakeLlm, fixture: st
 
 def test_translates_pdf(tmp_path: Path, llm: FakeLlm) -> None:
     source = write_mixed(tmp_path / "mixed.pdf")
-    result = run(["translate", source.name, "--to", "en", "--json"], tmp_path, llm_env(llm))
+    result = run(
+        ["translate", source.name, "--to", "en", "--json"],
+        tmp_path,
+        llm_env(llm),
+    )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["format"] == "pdf"
     assert payload["source_resolved"] == "zh"
     assert payload["fit_report"]["inspected"] == 10
+    assert payload["fit_report"]["options"]["mode"] == "standard"
+    assert "verification" not in payload["fit_report"]
     assert "EN:" in page_text(tmp_path / "mixed.en.pdf")
 
 
@@ -98,7 +104,9 @@ def test_usage_and_configuration_errors_exit_2(tmp_path: Path, llm: FakeLlm) -> 
     assert missing.returncode == 2
     assert "DOCTRANSLATOR_LLM_BASE_URL" in missing.stderr
     same = run(["translate", source.name, "--to", "zh", "--from", "zh"], tmp_path, llm_env(llm))
-    assert same.returncode == 2
+    assert same.returncode == 0
+    assert llm.requests
+    llm.requests.clear()
     (tmp_path / "data.csv").write_text("a,b", encoding="utf-8")
     unsupported = run(["translate", "data.csv", "--to", "en"], tmp_path, llm_env(llm))
     assert unsupported.returncode == 2

@@ -71,3 +71,24 @@ def test_per_span_fallback_keeps_formatting_and_is_reported(tmp_path: Path) -> N
     fallback = [d for d in result.diagnostics if d.code == "formatting_fallback"]
     assert fallback and fallback[0].location is not None
     assert fallback[0].location.startswith("slide 2 / shape")
+
+
+def test_empty_formatted_translation_keeps_original_styled_text(tmp_path: Path) -> None:
+    def engine(text: str, target: Language) -> str:
+        if text == "<g1>销售额</g1>增长了百分之十二":
+            return ""
+        return fake_translation(text, target)
+
+    source = copy_fixture("pptx/deck.pptx", tmp_path)
+    result = translate_document(
+        FakeTranslator(engine),
+        source,
+        tmp_path / "out.pptx",
+        options=OPTIONS,
+        fingerprint="f",
+        limits=DocumentLimits(),
+    )
+    assert bold_texts(tmp_path / "out.pptx") == ["销售额"]
+    warning = next(d for d in result.diagnostics if d.code == "empty_translation_preserved")
+    assert warning.count == 1
+    assert result.counts.formatting_fallbacks == 0

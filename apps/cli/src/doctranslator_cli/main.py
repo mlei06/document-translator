@@ -112,12 +112,10 @@ def translate(
             target=to,
             protected_terms=tuple(protect or ()),
             txt_encoding=txt_encoding,
-            fit=FitOptions(min_scale=min_scale, min_size_pt=min_size),
+            fit=FitOptions.model_validate({"min_scale": min_scale, "min_size_pt": min_size}),
         )
     except (SettingsError, ValueError) as exc:
         _fail(EXIT_INVALID, str(exc).splitlines()[0])
-    if requested == to:
-        _fail(EXIT_INVALID, "--from and --to are the same language")
     target_path = output or input_path.with_name(f"{input_path.stem}.{to.value}{input_path.suffix}")
     printer = ProgressPrinter(sys.stderr)
     fonts = load_font_manifest(settings.font_directories())

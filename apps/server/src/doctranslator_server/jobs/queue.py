@@ -16,11 +16,12 @@ from typing import Any
 from sqlalchemy import exists, select
 
 from doctranslator_server.db import Database
-from doctranslator_server.db.models import Document, Job, utcnow
+from doctranslator_server.db.models import Document, Job, SharedSlot, utcnow
 from doctranslator_server.db.repositories import blobs as blob_repo
 from doctranslator_server.db.repositories import jobs as job_repo
 from doctranslator_server.db.repositories import results as result_repo
 from doctranslator_server.db.repositories import users as user_repo
+from doctranslator_server.jobs import shared
 
 __all__ = ["Attempt", "Output", "Queue"]
 
@@ -44,6 +45,7 @@ class Attempt:
     retention: str
     target: str
     mode: str
+    translator_id: str | None
     options: dict[str, Any]
     fingerprint: str
     input_hash: str
@@ -59,7 +61,6 @@ class Output:
 
     output_blob: str
     report_blob: str
-    preview_blob: str | None
     pins: list[str]
     source_resolved: str | None
     fit_status: str
@@ -98,6 +99,41 @@ class Queue:
         delay = delays[min(max(attempts - 1, 0), len(delays) - 1)]
         return now + timedelta(seconds=delay)
 
+    def select_candidate(self, attempt: Attempt, identifier: str, fingerprint: str) -> bool:
+        with self._db.session() as session:
+            return job_repo.fenced(
+                session,
+                attempt.job_id,
+                attempt.token,
+                {"translator_id": identifier, "fingerprint": fingerprint},
+                now=self.now(),
+                success=True,
+            )
+
+    def advance_rung(self, attempt: Attempt, rung: int, category: str, fingerprint: str) -> None:
+        with self._db.session() as session:
+            if not job_repo.fenced(
+                session,
+                attempt.job_id,
+                attempt.token,
+                {"rung": rung, "error_code": category},
+                now=self.now(),
+                success=True,
+            ):
+                return
+            work = session.get(Job, attempt.job_id)
+            if work and work.kind == "shared_work" and work.policy:
+                slot = session.get(SharedSlot, work.policy["slot_id"])
+                if slot:
+                    slot.cooldowns = dict(
+                        slot.cooldowns,
+                        **{
+                            work.policy["profile"] + fingerprint: (
+                                self.now() + timedelta(minutes=15)
+                            ).timestamp()
+                        },
+                    )
+
     def recover(self) -> list[tuple[str, str]]:
         """Requeue, fail or cancel attempts whose lease expired; returns (job, outcome)."""
         now = self.now()
@@ -108,6 +144,10 @@ class Queue:
             with self._db.session() as session:
                 outcome = job_repo.recover(session, job, now, self._retry_at(now, job.attempts))
                 if outcome is not None:
+                    recovered = session.get(Job, job.id)
+                    if recovered and outcome in ("failed", "cancelled"):
+                        session.refresh(recovered)
+                        shared.finish(session, recovered, None, now)
                     user_repo.audit(
                         session,
                         f"job_{outcome}",
@@ -140,6 +180,7 @@ class Queue:
                     retention=job.retention,
                     target=job.target,
                     mode=job.mode,
+                    translator_id=job.translator_id,
                     options=dict(job.options),
                     fingerprint=job.fingerprint,
                     input_hash=job.input_blob,
@@ -165,7 +206,11 @@ class Queue:
             owned = job is not None and job.status == "running" and job.claim_token == attempt.token
             if not owned or job is None:
                 return Control(False, False, False)
-            return Control(True, job.cancel_requested, job.fit_skip_requested)
+            return Control(
+                True,
+                job.cancel_requested or not shared.interested(session, job),
+                job.fit_skip_requested,
+            )
 
     def progress(
         self, attempt: Attempt, phase: str, done: int | None, total: int | None
@@ -217,6 +262,19 @@ class Queue:
         self, attempt: Attempt, output: Output | None, reuse: str | None, now: datetime
     ) -> None:
         with self._db.session() as session:
+            live_work = session.get(Job, attempt.job_id)
+            if live_work is None or not shared.interested(session, live_work):
+                raise _NotPublishedError
+            if live_work.kind == "shared_work":
+                policy = live_work.policy
+                slot = session.get(SharedSlot, policy["slot_id"]) if policy else None
+                if (
+                    slot is None
+                    or slot.active_work_id != live_work.id
+                    or policy is None
+                    or slot.generation != policy["generation"]
+                ):
+                    raise _NotPublishedError
             if attempt.document_id is not None:
                 live = session.scalar(
                     select(
@@ -251,6 +309,8 @@ class Queue:
                     "source_resolved": source_resolved,
                     "fit_status": fit_status,
                     "cache_hit": reuse is not None,
+                    "error_code": None,
+                    "error_message": None,
                 }
                 | _RELEASE,
                 now=now,
@@ -267,7 +327,6 @@ class Queue:
                     fingerprint=attempt.fingerprint,
                     output_blob=output.output_blob,
                     report_blob=output.report_blob,
-                    preview_blob=output.preview_blob,
                     source_resolved=output.source_resolved,
                     fit_status=output.fit_status,
                     engine=output.engine,
@@ -289,6 +348,9 @@ class Queue:
             if job is None or result is None:  # pragma: no cover
                 raise _NotPublishedError
             job.result_id = result.id
+            session.refresh(job)
+            job.result_id = result.id
+            shared.finish(session, job, result, now)
             user_repo.audit(
                 session,
                 "job_succeeded",
@@ -308,6 +370,10 @@ class Queue:
                 {"status": "cancelled", "finished_at": now} | _RELEASE,
             )
             if done:
+                job = session.get(Job, attempt.job_id)
+                if job:
+                    session.refresh(job)
+                    shared.finish(session, job, None, now)
                 user_repo.audit(
                     session,
                     "job_cancelled",
@@ -333,6 +399,10 @@ class Queue:
                 | _RELEASE,
             )
             if done:
+                job = session.get(Job, attempt.job_id)
+                if job:
+                    session.refresh(job)
+                    shared.finish(session, job, None, now)
                 user_repo.audit(
                     session,
                     "job_failed",

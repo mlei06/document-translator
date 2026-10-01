@@ -47,7 +47,7 @@ class FakeTranslator:
         return EngineInfo(mode=TranslationMode.MT, model="fake", details={})
 
     def translate_texts(
-        self, texts: Sequence[str], *, source: Language, target: Language
+        self, texts: Sequence[str], *, source: Language | None, target: Language
     ) -> list[str]:
         batch = list(texts)
         self.batches.append(batch)

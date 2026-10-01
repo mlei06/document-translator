@@ -1,5 +1,7 @@
 # P5-P6 - Store and Display Document Processing Progress
 
+> Latest website amendment: ADR-028/029 supersede older website display/skip rules below. Fit remains an internal backend phase mapped to Translating, with no Checking layout label/announcement or completed percentage during fit. Saving covers actual persistence; Ready requires verified publication. Keep backend timings and diagnostic phases. See [direct-download specification](standard-fit-direct-download.md).
+
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 

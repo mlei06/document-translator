@@ -1,5 +1,9 @@
 # ADR-012 - Lightweight Best-Effort Fit
 
+> Website amendment under ADR-028: one fixed standard fit profile replaces personal website fit/skip controls for shared cached work. Core fitting and existing explicit API/local desktop behavior remain; advanced personal fit choices are local-desktop-only in the new product flow. This specification is not implemented yet.
+
+> Amended by accepted [ADR-026](ADR-026-offline-fit-v2.md), 2026-09-29: structure-aware standard fit, explicit thorough verification, and safe complete PDF placement. Conflicting earlier fit/placement requirements below are historical.
+
 > Superseded in part on 2026-09-29 by [ADR-014](ADR-014-storage-ownership-and-retranslation.md): local exports always translate fresh with temporary working storage; hosted owners retain one current result per document/language pair, with owner-scoped reuse and immutable job results. Human and application service accounts are owners. Earlier global-cache, mandatory version-history, desktop-library and conflicting retention requirements below are historical; ADR-014 takes precedence. Fit skip remains supported, but no separate old full-fit cache is retained.
 
 

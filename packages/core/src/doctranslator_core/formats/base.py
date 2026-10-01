@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from doctranslator_core.document import LayoutContainer, Paragraph
+from doctranslator_core.document import LayoutContainer, LayoutPatch, Paragraph
 from doctranslator_core.inline import Inline
 from doctranslator_core.types import (
     DocumentDiagnostic,
@@ -15,7 +15,7 @@ from doctranslator_core.types import (
     Language,
 )
 
-__all__ = ["DocumentAdapter", "LayoutSupport", "PlacementFit"]
+__all__ = ["DocumentAdapter", "LayoutRepairSupport", "LayoutSupport", "PlacementFit"]
 
 
 class LayoutSupport(ABC):
@@ -32,6 +32,16 @@ class LayoutSupport(ABC):
 
     @abstractmethod
     def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None: ...
+
+
+class LayoutRepairSupport(ABC):
+    """Optional bounded Office layout changes, checked against current state."""
+
+    @abstractmethod
+    def layout_context(self) -> list[LayoutContainer]: ...
+
+    @abstractmethod
+    def apply_layout_patch(self, patch: LayoutPatch) -> None: ...
 
 
 class PlacementFit(ABC):

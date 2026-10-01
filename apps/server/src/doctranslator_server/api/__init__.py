@@ -26,9 +26,13 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import ValidationError
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from doctranslator_server.api.schemas import (
+    AccountCreate,
     BatchCreate,
     BatchOut,
     BatchPage,
@@ -45,14 +49,24 @@ from doctranslator_server.api.schemas import (
     SessionOut,
     SubmitOptionsIn,
     TranslateIn,
+    TranslationSettingsIn,
+    TranslationSettingsOut,
 )
-from doctranslator_server.auth import AuthenticationError, Authenticator, CsrfError, Principal
+from doctranslator_server.auth import (
+    AuthenticationError,
+    Authenticator,
+    CsrfError,
+    NewSession,
+    Principal,
+)
 from doctranslator_server.jobs.errors import (
     AdmissionError,
     DocumentRejectedError,
     InvalidRequestError,
+    NotFoundError,
     ServiceError,
     TooLargeError,
+    UnavailableError,
 )
 from doctranslator_server.jobs.service import JobService, SubmitOptions
 from doctranslator_server.jobs.views import FileView, SubmitResult
@@ -76,19 +90,22 @@ class _Limiter:
     _failures: dict[str, deque[float]] = field(default_factory=dict[str, deque[float]])
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def blocked(self, client: str) -> bool:
+    def admit(self, client: str) -> bool:
         now = time.monotonic()
         with self._lock:
-            failures = self._failures.get(client)
-            if failures is None:
+            for key in list(self._failures):
+                values = self._failures[key]
+                while values and now - values[0] > self.window:
+                    values.popleft()
+                if not values:
+                    del self._failures[key]
+            if client not in self._failures and len(self._failures) >= 10000:
                 return False
-            while failures and now - failures[0] > self.window:
-                failures.popleft()
-            return len(failures) >= self.limit
-
-    def failed(self, client: str) -> None:
-        with self._lock:
-            self._failures.setdefault(client, deque()).append(time.monotonic())
+            attempts = self._failures.setdefault(client, deque())
+            if len(attempts) >= self.limit:
+                return False
+            attempts.append(now)
+            return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +116,7 @@ class ApiContext:
     core_version: str
     max_upload_bytes: int
     web_dir: Path | None = None
+    registration_enabled: bool = False
     limiter: _Limiter = field(default_factory=_Limiter)
 
 
@@ -138,9 +156,9 @@ def _own_origin(request: Request) -> str:
 
 def _caller(
     request: Request,
-    authorization: Annotated[str | None, Header()] = None,
-    x_csrf_token: Annotated[str | None, Header()] = None,
-    origin: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header(include_in_schema=False)] = None,
+    x_csrf_token: Annotated[str | None, Header(include_in_schema=False)] = None,
+    origin: Annotated[str | None, Header(include_in_schema=False)] = None,
 ) -> Caller:
     """Bearer key or session cookie; both present must name the same owner (ADR-017)."""
     context: ApiContext = request.app.state.api
@@ -175,8 +193,80 @@ Cursor = Annotated[str | None, Query(max_length=200)]
 Search = Annotated[str | None, Query(max_length=200)]
 
 
+class _UploadAdmission:
+    """Reserve and authenticate before multipart parsing writes any request body."""
+
+    def __init__(self, app: ASGIApp, context: ApiContext) -> None:
+        self.app, self.context = app, context
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("method") != "POST":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        if not request.headers.get("content-type", "").startswith("multipart/form-data"):
+            await self.app(scope, receive, send)
+            return
+        limit = self.context.max_upload_bytes + MULTIPART_OVERHEAD
+        try:
+            declared = int(request.headers.get("content-length", str(limit)))
+            if declared < 0 or declared > limit:
+                raise TooLargeError("upload exceeds the request size limit")
+            caller = await run_in_threadpool(
+                _caller,
+                request,
+                request.headers.get("authorization"),
+                request.headers.get("x-csrf-token"),
+                request.headers.get("origin"),
+            )
+            reservation = await run_in_threadpool(
+                self.context.jobs.reserve_upload, caller.principal.user_id, declared
+            )
+        except AuthenticationError:
+            await _error(request, 401, "unauthenticated", "Sign in again, or use a valid API key.")(
+                scope, receive, send
+            )
+            return
+        except CsrfError:
+            await _error(
+                request, 403, "csrf_failed", "The request was not sent by this application."
+            )(scope, receive, send)
+            return
+        except ValueError:
+            await _error(request, 400, "bad_request", "invalid Content-Length")(
+                scope, receive, send
+            )
+            return
+        except ServiceError as exc:
+            await _error(
+                request,
+                exc.status,
+                exc.code,
+                exc.message,
+                retryable=exc.retryable,
+                headers={"Retry-After": "5"} if exc.retryable else None,
+            )(scope, receive, send)
+            return
+        received = 0
+
+        async def bounded_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > declared:
+                    raise TooLargeError("upload exceeds its reserved request size")
+            return message
+
+        try:
+            await self.app(scope, bounded_receive, send)
+        finally:
+            await run_in_threadpool(self.context.jobs.release_upload, reservation)
+
+
 def install(app: FastAPI, context: ApiContext) -> None:
     """Add ``/v1``, request IDs, security headers, the error envelope and (if built) the web UI."""
+    app.add_middleware(_UploadAdmission, context=context)
 
     @app.middleware("http")
     async def request_id(  # pyright: ignore[reportUnusedFunction]
@@ -197,7 +287,9 @@ def install(app: FastAPI, context: ApiContext) -> None:
     @app.exception_handler(ServiceError)
     async def service_error(request: Request, exc: ServiceError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         headers = (
-            {"Retry-After": str(exc.retry_after_s)} if isinstance(exc, AdmissionError) else None
+            {"Retry-After": str(exc.retry_after_s)}
+            if isinstance(exc, (AdmissionError, UnavailableError))
+            else None
         )
         details = dict(exc.details)
         if isinstance(exc, DocumentRejectedError) and exc.item_id:
@@ -256,7 +348,7 @@ def _serve_web(app: FastAPI, root: Path) -> None:
     root = root.resolve()
     index = root / "index.html"
 
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def web(path: str) -> Response:  # pyright: ignore[reportUnusedFunction]
         if path == "v1" or path.startswith("v1/"):
             raise StarletteHTTPException(404, "not found")
@@ -276,12 +368,17 @@ def _options(parsed: SubmitOptionsIn) -> SubmitOptions:
         target=parsed.target,
         source=parsed.source,
         mode=parsed.mode,
+        translator_id=parsed.translator_id,
         protected_terms=tuple(parsed.protected_terms),
+        use_default_dictionary=parsed.use_default_dictionary,
         txt_encoding=parsed.txt_encoding,
         min_scale=parsed.min_scale,
         min_size_pt=parsed.min_size_pt,
+        fit=parsed.fit.model_dump(),
         force_retranslate=parsed.force_retranslate,
         retention=parsed.retention,
+        selection_policy=parsed.selection_policy,
+        download_semantics=parsed.download_semantics,
     )
 
 
@@ -303,15 +400,9 @@ def _stream(view: FileView) -> FileResponse:
         view.path,
         media_type=view.media_type,
         filename=view.filename,
-        headers={"X-Content-SHA256": view.sha256},
+        headers={"X-Content-SHA256": view.sha256, "Cache-Control": "private, no-store"},
+        background=BackgroundTask(view.on_complete) if view.on_complete else None,
     )
-
-
-def _preview(value: dict[str, Any] | tuple[bytes, str]) -> Response:
-    if isinstance(value, dict):
-        return JSONResponse(value)
-    data, media = value
-    return Response(data, media_type=media, headers={"Cache-Control": "private, max-age=3600"})
 
 
 def _router(ctx: ApiContext) -> APIRouter:
@@ -329,7 +420,9 @@ def _router(ctx: ApiContext) -> APIRouter:
         429: {"model": ErrorOut},
     }
 
-    def upload_limit(content_length: Annotated[int | None, Header()] = None) -> None:
+    def upload_limit(
+        content_length: Annotated[int | None, Header(include_in_schema=False)] = None,
+    ) -> None:
         if content_length is None:
             raise InvalidRequestError(
                 "uploads need a Content-Length header", code="length_required"
@@ -353,31 +446,7 @@ def _router(ctx: ApiContext) -> APIRouter:
     def health() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
         return {"status": "ok"}
 
-    @router.post(
-        "/sessions",
-        tags=["sessions"],
-        status_code=201,
-        responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 429: {"model": ErrorOut}},
-    )
-    def sign_in(  # pyright: ignore[reportUnusedFunction]
-        body: SessionCreate,
-        request: Request,
-        response: Response,
-        origin: Annotated[str | None, Header()] = None,
-    ) -> SessionOut:
-        """Exchange an API key for a browser session (HttpOnly cookie plus CSRF token)."""
-        if origin is not None and origin.rstrip("/") != _own_origin(request):
-            raise CsrfError
-        client = request.client.host if request.client else "unknown"
-        if ctx.limiter.blocked(client):
-            raise AdmissionError(
-                "too many failed sign-ins; wait a few minutes", code="rate_limited"
-            )
-        try:
-            session = ctx.auth.start_session(body.key)
-        except AuthenticationError:
-            ctx.limiter.failed(client)
-            raise
+    def set_session_cookie(session: NewSession, request: Request, response: Response) -> SessionOut:
         response.set_cookie(
             SESSION_COOKIE,
             session.token,
@@ -391,6 +460,60 @@ def _router(ctx: ApiContext) -> APIRouter:
             user=me_of(session.principal), csrf_token=session.csrf, expires_at=session.expires_at
         )
 
+    @router.post("/accounts", tags=["sessions"], status_code=201, responses=errors)
+    def register(  # pyright: ignore[reportUnusedFunction]
+        body: AccountCreate,
+        request: Request,
+        response: Response,
+        origin: Annotated[str | None, Header(include_in_schema=False)] = None,
+    ) -> SessionOut:
+        if not ctx.registration_enabled:
+            raise NotFoundError("account registration")
+        if origin is not None and origin.rstrip("/") != _own_origin(request):
+            raise CsrfError
+        client = "register:" + (request.client.host if request.client else "unknown")
+        if not ctx.limiter.admit(client):
+            raise AdmissionError("too many account requests; try later", code="rate_limited")
+        session = ctx.auth.register(body.email, body.password.get_secret_value(), body.display_name)
+        return set_session_cookie(session, request, response)
+
+    @router.post(
+        "/sessions",
+        tags=["sessions"],
+        status_code=201,
+        responses={401: {"model": ErrorOut}, 403: {"model": ErrorOut}, 429: {"model": ErrorOut}},
+    )
+    def sign_in(  # pyright: ignore[reportUnusedFunction]
+        body: SessionCreate,
+        request: Request,
+        response: Response,
+        origin: Annotated[str | None, Header(include_in_schema=False)] = None,
+    ) -> SessionOut:
+        """Exchange an API key for a browser session (HttpOnly cookie plus CSRF token)."""
+        if origin is not None and origin.rstrip("/") != _own_origin(request):
+            raise CsrfError
+        client = request.client.host if request.client else "unknown"
+        if not ctx.limiter.admit(client):
+            raise AdmissionError(
+                "too many failed sign-ins; wait a few minutes", code="rate_limited"
+            )
+        if body.key is not None:
+            session = ctx.auth.start_session(body.key.get_secret_value())
+        else:
+            if body.email is None or body.password is None:
+                raise AuthenticationError
+            session = ctx.auth.password_session(body.email, body.password.get_secret_value())
+        return set_session_cookie(session, request, response)
+
+    @router.get("/sessions/current", tags=["sessions"], responses=errors)
+    def current_session(user: User, request: Request) -> SessionOut:  # pyright: ignore[reportUnusedFunction]
+        """The signed-in browser session with its CSRF token, for a reloaded or new tab."""
+        cookie = request.cookies.get(SESSION_COOKIE)
+        if user.session_id is None or cookie is None:
+            raise NotFoundError("no browser session; sign in with POST /v1/sessions")
+        csrf, expires_at = ctx.auth.session_csrf(cookie)
+        return SessionOut(user=me_of(user.principal), csrf_token=csrf, expires_at=expires_at)
+
     @router.delete("/sessions/current", tags=["sessions"], status_code=204, responses=errors)
     def sign_out(user: User) -> Response:  # pyright: ignore[reportUnusedFunction]
         if user.session_id is not None:
@@ -403,10 +526,32 @@ def _router(ctx: ApiContext) -> APIRouter:
     def me(user: User) -> Me:  # pyright: ignore[reportUnusedFunction]
         return me_of(user.principal)
 
+    @router.get("/me/translation-settings", tags=["service"], responses=errors)
+    def translation_settings(user: User) -> TranslationSettingsOut:  # pyright: ignore[reportUnusedFunction]
+        return TranslationSettingsOut(**ctx.jobs.translation_settings(user.principal.user_id))
+
+    @router.put("/me/translation-settings", tags=["service"], responses=errors)
+    def update_translation_settings(
+        user: User, body: TranslationSettingsIn
+    ) -> TranslationSettingsOut:  # pyright: ignore[reportUnusedFunction]
+        return TranslationSettingsOut(
+            **ctx.jobs.update_translation_settings(
+                user.principal.user_id, tuple(body.protected_terms), body.use_default_dictionary
+            )
+        )
+
     @router.get("/capabilities", tags=["service"], responses=errors)
     def capabilities(user: User) -> Capabilities:  # pyright: ignore[reportUnusedFunction]
         return Capabilities(
             **ctx.jobs.capabilities(),
+            service_version=ctx.service_version,
+            core_version=ctx.core_version,
+        )
+
+    @router.post("/translators/refresh", tags=["service"], responses=errors)
+    def refresh_translators(user: User) -> Capabilities:  # pyright: ignore[reportUnusedFunction]
+        return Capabilities(
+            **ctx.jobs.capabilities(refresh=True),
             service_version=ctx.service_version,
             core_version=ctx.core_version,
         )
@@ -426,6 +571,7 @@ def _router(ctx: ApiContext) -> APIRouter:
         file: Annotated[UploadFile, File()],
         new_document: Annotated[bool, Form()] = False,
         external_ref: Annotated[str | None, Form(max_length=200)] = None,
+        staging: bool = False,
     ) -> DocumentOut:
         """Save a source document: validated and language-detected before any translation.
         Identical bytes return the owner's existing document unless ``new_document``."""
@@ -435,6 +581,7 @@ def _router(ctx: ApiContext) -> APIRouter:
             file.file,
             new_document=new_document,
             external_ref=external_ref,
+            staging=staging,
         )
         if not created:
             response.status_code = 200
@@ -474,7 +621,7 @@ def _router(ctx: ApiContext) -> APIRouter:
         "/documents/{document_id}/translations",
         tags=["documents"],
         status_code=202,
-        response_model=JobOut,
+        response_model=JobOut | ItemOut,
         responses=submit_errors,
     )
     def translate_document(  # pyright: ignore[reportUnusedFunction]
@@ -538,31 +685,18 @@ def _router(ctx: ApiContext) -> APIRouter:
             ctx.jobs.translation_file(user.principal.user_id, document_id, translation_id, "report")
         )
 
-    @router.get(
-        "/documents/{document_id}/translations/{translation_id}/preview",
-        tags=["documents"],
-        responses=errors,
-    )
-    def translation_preview(  # pyright: ignore[reportUnusedFunction]
-        document_id: str, translation_id: str, user: User
-    ) -> Response:
-        return _preview(
-            ctx.jobs.translation_preview(user.principal.user_id, document_id, translation_id, None)
-        )
+    @router.get("/history", tags=["history"], responses=errors)
+    def history(user: User, cursor: Cursor = None, limit: Limit = 50) -> dict[str, Any]:  # pyright: ignore[reportUnusedFunction]
+        return ctx.jobs.list_history(user.principal.user_id, cursor, limit)
 
-    @router.get(
-        "/documents/{document_id}/translations/{translation_id}/preview/{name}",
-        tags=["documents"],
-        responses=errors,
-    )
-    def translation_preview_page(  # pyright: ignore[reportUnusedFunction]
-        document_id: str, translation_id: str, name: str, user: User
-    ) -> Response:
-        return _preview(
-            ctx.jobs.translation_preview(user.principal.user_id, document_id, translation_id, name)
-        )
+    @router.get("/history/{identifier}/file", tags=["history"], responses=errors)
+    def history_file(identifier: str, user: User) -> FileResponse:  # pyright: ignore[reportUnusedFunction]
+        return _stream(ctx.jobs.history_file(user.principal.user_id, identifier))
 
-    # Batches
+    @router.delete("/history/{identifier}", tags=["history"], responses=errors, status_code=204)
+    def delete_history(identifier: str, user: User) -> Response:  # pyright: ignore[reportUnusedFunction]
+        ctx.jobs.delete_history(user.principal.user_id, identifier)
+        return Response(status_code=204)
 
     @router.post("/batches", tags=["batches"], status_code=201, responses=errors)
     def create_batch(body: BatchCreate, user: User, response: Response) -> BatchOut:  # pyright: ignore[reportUnusedFunction]
@@ -688,20 +822,6 @@ def _router(ctx: ApiContext) -> APIRouter:
     def cancel_job(job_id: str, user: User) -> JobOut:  # pyright: ignore[reportUnusedFunction]
         return JobOut.of(ctx.jobs.cancel_job(user.principal.user_id, job_id))
 
-    @router.post(
-        "/jobs/{job_id}/skip-fit",
-        tags=["jobs"],
-        status_code=202,
-        response_model=JobOut,
-        responses=errors | {200: {"description": "Already requested"}, 409: {"model": ErrorOut}},
-    )
-    def skip_fit(job_id: str, user: User) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        """Stop the remaining optional layout check; the file is still written and saved."""
-        view, new = ctx.jobs.skip_fit(user.principal.user_id, job_id)
-        return JSONResponse(
-            JobOut.of(view).model_dump(mode="json"), status_code=202 if new else 200
-        )
-
     @router.post("/jobs/{job_id}/dismiss", tags=["jobs"], responses=errors)
     def dismiss_job(job_id: str, user: User) -> JobOut:  # pyright: ignore[reportUnusedFunction]
         return JobOut.of(ctx.jobs.set_dismissed(user.principal.user_id, job_id, True))
@@ -720,13 +840,5 @@ def _router(ctx: ApiContext) -> APIRouter:
     )
     def job_report(job_id: str, user: User) -> FileResponse:  # pyright: ignore[reportUnusedFunction]
         return _stream(ctx.jobs.job_file(user.principal.user_id, job_id, "report"))
-
-    @router.get("/jobs/{job_id}/preview", tags=["jobs"], responses=errors)
-    def job_preview(job_id: str, user: User) -> Response:  # pyright: ignore[reportUnusedFunction]
-        return _preview(ctx.jobs.job_preview(user.principal.user_id, job_id, None))
-
-    @router.get("/jobs/{job_id}/preview/{name}", tags=["jobs"], responses=errors)
-    def job_preview_page(job_id: str, name: str, user: User) -> Response:  # pyright: ignore[reportUnusedFunction]
-        return _preview(ctx.jobs.job_preview(user.principal.user_id, job_id, name))
 
     return router

@@ -6,6 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from doctranslator_core.config import EngineConfig
 from doctranslator_core.engines import prepare_identity as _prepare_engine_identity
+from doctranslator_core.protect import default_dictionary_digest
 from doctranslator_core.types import (
     DocumentTranslationOptions,
     FontManifest,
@@ -14,19 +15,19 @@ from doctranslator_core.types import (
 
 __all__ = ["STRATEGIES", "core_version", "output_fingerprint", "prepare_identity"]
 
-FINGERPRINT_SCHEMA = 1
+FINGERPRINT_SCHEMA = 2
 
 STRATEGIES: dict[str, str] = {
-    "pipeline": "pipeline-v1",
+    "pipeline": "pipeline-v3-target-only-standard",
     "inline": "inline-v1",
-    "protect": "protect-v1",
+    "protect": "protect-v2",
     "detect": "detect-v1-lingua-2.2.0",
     "txt": "txt-v1",
-    "pptx": "pptx-v1",
-    "docx": "docx-v1",
+    "pptx": "pptx-v2-offline-fit",
+    "docx": "docx-v2-offline-fit",
     "xlsx": "xlsx-v1",
-    "pdf": "pdf-v1-pymupdf-1.28.2",
-    "fit": "fit-v1",
+    "pdf": "pdf-v2-pymupdf-1.28.2",
+    "fit": "fit-v2",
     "measure": "harfbuzz-v1",
 }
 """Version of every output-affecting strategy. Bump the entry when its behavior changes."""
@@ -53,10 +54,13 @@ def output_fingerprint(
     payload = {
         "schema": FINGERPRINT_SCHEMA,
         "core_version": core_version(),
-        "strategies": STRATEGIES,
+        "strategies": {k: v for k, v in STRATEGIES.items() if k != "detect"},
         "identity": identity.model_dump(mode="json"),
-        "options": options.model_dump(mode="json"),
+        "options": options.model_dump(mode="json", exclude={"source"}),
         "font_manifest": fonts.digest if fonts is not None else None,
+        "default_dictionary": default_dictionary_digest()
+        if options.use_default_dictionary
+        else None,
     }
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

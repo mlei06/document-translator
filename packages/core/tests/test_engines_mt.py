@@ -98,7 +98,7 @@ def test_missing_extra_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_missing_model_files_are_reported(tmp_path: Path) -> None:
     with pytest.raises(EngineUnavailableError, match=r"model\.bin"):
         MtEngine(config(tmp_path))
-    (tmp_path / "model.bin").write_bytes(b"")
+    (tmp_path / "model.bin").write_bytes(b"weights")
     with pytest.raises(EngineUnavailableError, match=r"sentencepiece\.bpe\.model"):
         MtEngine(config(tmp_path))
 
@@ -106,5 +106,7 @@ def test_missing_model_files_are_reported(tmp_path: Path) -> None:
 def test_unloadable_model_is_reported(tmp_path: Path) -> None:
     (tmp_path / "model.bin").write_bytes(b"not a model")
     (tmp_path / "sentencepiece.bpe.model").write_bytes(b"not a tokenizer")
+    (tmp_path / "config.json").write_text("{}")
+    (tmp_path / "shared_vocabulary.json").write_text('["token"]')
     with pytest.raises(EngineUnavailableError, match="could not be loaded"):
         MtEngine(config(tmp_path, device="cpu"))

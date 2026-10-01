@@ -1,5 +1,10 @@
 # P6 - Audit and Integrate the Existing Web UI
 
+Current amendment: [ADR-020](../decisions/ADR-020-browser-accounts-and-decoding.md) authorizes basic email/password registration/sign-in and Lenny-accessible translator/decoding settings. It supersedes the access-key-only/no-password wording below; API-key sign-in remains compatible.
+
+> Translator configuration is governed by accepted [ADR-019](../decisions/ADR-019-configured-translators.md): selectable configured translator IDs, one default, explicit local/remote location and no automatic fallback. Desktop setup selects supported model downloads; hosted users select admin-enabled translators. Installer delivery remains D0/D1 work.
+
+
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 
@@ -29,7 +34,7 @@ For every visible feature record: screenshot/route/component, current behavior, 
 | Type/language confirmation | Type/validation/source detection are server facts. Browser extension guesses are provisional. Show `detecting`/unknown until the job reports resolved language; permit explicit source selection. |
 | One target language per batch | Preserve as the normal flow, with per-file source detection. Reflect actual available engines/formats and limits from capabilities. Do not offer unavailable options. |
 | Floating progress bubbles | Bind to real per-file job states/progress. Keep an accessible stable list/table for larger batches and all failures. Indeterminate progress is preferable to invented percentages. |
-| Preview page | Always provide real document metadata and download. Normal UI does not show per-section fit issues, fit-warning badges or a required report viewer. PDF/TXT inline viewing may use authorized real output safely. Do not pretend a browser can render Office files or add the P7 renderer implicitly. Rework unsupported previews to clear document details and download. |
+| Preview page | Always provide real document metadata and download. Normal UI does not show per-section fit issues, fit-warning badges or a required report viewer. PDF/TXT inline viewing may use authorized real output safely. Do not pretend a browser can render Office files. (Amended by ADR-023: the worker renders PDF and Office page images after publication, never delaying the download.) Rework unsupported previews to clear document details and download. |
 | Comments requesting fixes | P7 edit jobs are out of scope. Remove/rework the action unless an explicitly scoped real P6 feedback feature is justified and persisted with ownership. No fake “fix applied” or comments implying translation changes. |
 | History, counts and settings if present | Query owned persisted records. Add backend support only when needed for an audited in-scope feature; otherwise remove the misleading view. Do not infer global totals from one page of results. |
 

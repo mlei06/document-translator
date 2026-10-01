@@ -1,5 +1,9 @@
 # ADR-017 - Service Extensions for the Web UI
 
+Amended by [ADR-023](ADR-023-page-rendering-for-previews.md): preview page images for PDF and Office formats are rendered by the worker after the result is published, with a render status in the manifest; the text package below is unchanged.
+
+Amended by [ADR-020](ADR-020-browser-accounts-and-decoding.md): optional email/password self-registration and password-backed browser sessions are now accepted. API-key clients remain supported.
+
 Status: Accepted 2026-09-29 (P6.1). Extends [ADR-015](ADR-015-authentication-and-ownership.md) with browser sessions and adds what the [P6.0 audit](../design/web-gui/AUDIT.md) found missing, on top of the storage model of [ADR-014](ADR-014-storage-ownership-and-retranslation.md) and the [progress/skip plan](../plans/P5-P6-document-progress.md). Everything stays owner-scoped as in ADR-015.
 
 ## Context
@@ -11,7 +15,7 @@ The owner wants every Lenny mock feature except comment-driven edits and fit not
 ### Browser sessions
 
 - `POST /v1/sessions` `{key}` validates a provisioned API key (ADR-015 rules), creates a session and returns the owner plus a CSRF token; it sets cookie `dt_session` (HttpOnly, SameSite=Strict, Path=/, Secure on HTTPS). The key is never stored or returned. `DELETE /v1/sessions/current` revokes the session and clears the cookie.
-- `sessions(id, token_digest, csrf_digest, user_id, api_key_id, created_at, last_seen_at, expires_at, revoked_at)` stores only SHA-256 digests of 256-bit random tokens. Idle expiry 30 minutes (sliding, updated at most once a minute), absolute 12 hours. A session is valid only while its key is not revoked and its owner is active.
+- `sessions(id, token_digest, csrf_digest, user_id, api_key_id, created_at, last_seen_at, expires_at, revoked_at)` stores only SHA-256 digests: the cookie token is randomly generated and the CSRF token is derived one-way from it with a separate domain prefix. `GET /v1/sessions/current` recovers the CSRF token for a reloaded page after session authentication. Sessions from the earlier random-CSRF implementation require sign-in again on reload rather than returning a token that mutations would reject. Idle expiry 30 minutes (sliding, updated at most once a minute), absolute 12 hours. A session is valid only while its key is not revoked and its owner is active.
 - A request authenticates with `Authorization: Bearer` or the cookie; if both are present and name different owners, it is rejected (401). Cookie-authenticated state-changing requests need `X-CSRF-Token` and, when sent, an `Origin` equal to the request's own origin (403 `csrf_failed`). Sign-in itself checks `Origin` too.
 - Failed sign-ins are limited to 10 per client address per 5 minutes (429); the limiter is per web process (the single-host deployment).
 - Session expiry never touches jobs; the UI asks the user to sign in again and resumes from server state.

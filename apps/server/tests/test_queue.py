@@ -32,13 +32,15 @@ TXT = "这是一个用于测试的中文段落，内容足够长以便识别语�
 
 class Clock:
     def __init__(self) -> None:
-        self.now = utcnow() + timedelta(seconds=5)  # after the fixtures' submissions
+        self.now: datetime | None = None
 
     def __call__(self) -> datetime:
+        if self.now is None:
+            self.now = utcnow()  # anchor after submission, independently of machine speed
         return self.now
 
     def advance(self, seconds: float) -> None:
-        self.now += timedelta(seconds=seconds)
+        self.now = self() + timedelta(seconds=seconds)
 
 
 @pytest.fixture
@@ -113,7 +115,7 @@ def test_stale_attempt_cannot_publish_after_reclaim(
     assert new is not None and new.token != old.token and new.attempts == 2
     assert queue.heartbeat(old) == (False, False)
     assert queue.progress(old, "translate", 1, 2).owned is False
-    output = Output("0" * 64, "1" * 64, None, [], "zh", "passed", {})
+    output = Output("0" * 64, "1" * 64, [], "zh", "passed", {})
     assert queue.publish(old, output, reuse=None) is False
     assert queue.fail(old, "x", "y") is False
     assert queue.cancelled(old) is False
@@ -133,7 +135,7 @@ def test_expired_lease_cannot_publish_even_without_reclaim(
     attempt = queue.claim("w1")
     assert attempt is not None
     clock.advance(61)
-    output = Output("0" * 64, "1" * 64, None, [], "zh", "passed", {})
+    output = Output("0" * 64, "1" * 64, [], "zh", "passed", {})
     assert queue.publish(attempt, output, reuse=None) is False
     assert queue.heartbeat(attempt)[0] is False
 
@@ -283,25 +285,17 @@ def test_two_owners_translate_the_same_bytes_independently(
     assert translations(services, alice) == translations(services, bob) == 1
 
 
-def test_skip_fit_is_accepted_only_during_the_fit_stage(services: Services, clock: Clock) -> None:
+def test_skip_fit_endpoint_is_removed_even_during_fit(services: Services, clock: Clock) -> None:
     _, headers = add_user(services)
     job_id = submit(services, headers)
     queue = make_queue(services, clock)
     attempt = queue.claim("w1")
     assert attempt is not None
     client = TestClient(create_app(services))
-    assert client.post(f"/v1/jobs/{job_id}/skip-fit", headers=headers).status_code == 409
+    assert client.post(f"/v1/jobs/{job_id}/skip-fit", headers=headers).status_code == 404
     queue.progress(attempt, "fit", None, None)
-    first = client.post(f"/v1/jobs/{job_id}/skip-fit", headers=headers)
-    assert first.status_code == 202 and first.json()["fit_skip_requested"] is True
-    assert first.json()["progress"] == {
-        "phase": "fit",
-        "done": None,
-        "total": None,
-        "updated_at": first.json()["progress"]["updated_at"],
-    }
-    assert client.post(f"/v1/jobs/{job_id}/skip-fit", headers=headers).status_code == 200
-    assert queue.control(attempt).skip_fit is True
+    assert client.post(f"/v1/jobs/{job_id}/skip-fit", headers=headers).status_code == 404
+    assert queue.control(attempt).skip_fit is False
 
 
 def test_skipped_fit_is_saved_but_never_reused(

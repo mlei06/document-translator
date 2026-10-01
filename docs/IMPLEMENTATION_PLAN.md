@@ -1,6 +1,24 @@
 # Implementation Plan
 
-> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. Implementation and migration are pending; no phase completion is implied.
+Latest owner amendments: follow the unified specification's target-only language contract and clean-slate authorization. Detect source only as best-effort ingestion metadata; remove source pickers, overrides, required prompt inputs and source-equals-target rejection from automatic website/desktop translation. Existing app-managed development data may be reset; do not spend implementation time preserving obsolete records or clients.
+
+Current execution contract: [Unified translator design](plans/unified-translator-design.md) consolidates routing, shared cache/History, standard fit/direct downloads, desktop installer/application and subtle Lenovo UI. Desktop has automatic direct-Davy routing, installer-provisioned shared inference key and optional installed HY-MT, with no operating-mode controls. Both targets use the new Gemma/Nemotron Ultra/Nemotron Super/GPT-OSS Thinking/GPT-OSS/Laguna order. Follow its delivery and acceptance sections before older plans. Implementation and measured acceptance are tracked in [unified execution](plans/unified-execution.md); signed clean-machine desktop acceptance remains a release gate. Historical phase and board states below are not updated by this execution record.
+
+Owner-approved simplification, 2026-09-29: [ADR-029](decisions/ADR-029-standard-fit-direct-download.md) and [direct-download removal plan](plans/standard-fit-direct-download.md) remove thorough fit and all production previews/LibreOffice paths. Keep standard fitting and integrity checks, non-navigating progress bubbles with explicit actions, and direct History downloads. Coordinated ADR-027/028/029 implementation and verification are recorded in unified execution.
+
+Owner-approved website specifications, 2026-09-29: [automatic translation](plans/automatic-website-translation.md) under ADR-027 and [shared cache/private History](plans/website-cache-and-retention.md) under ADR-028. The unified implementation provides one common website profile, shared source/target slots and work, private grants/history, ranked Gemma/Davy/HY-MT replacement and current-shared downloads. HY-MT Q8_0 uses llama.cpp Vulkan with four generation/prompt threads and four slots. No personal website options, owner-specific cache, original retention or new exact-version guarantee. Explicit internal-app saved/temporary promises remain. The latest specification also removes desktop source/model/mode selectors and rendered-fit controls. See unified execution for implementation evidence; board synchronization and historical phase completion are not claimed.
+
+Owner-authorized follow-on, 2026-09-29: [Offline fit v2](plans/offline-fit-v2.md) and
+[accepted ADR-026](decisions/ADR-026-offline-fit-v2.md) specify improvements for PPTX,
+DOCX and PDF. The owner requested implementation; the fit v2 implementation and evidence
+are tracked in that plan. Existing phase and board states are unchanged.
+
+Owner-authorized follow-on, 2026-09-29: [laptop MT performance and HY-MT integration](plans/laptop-mt-performance.md)
+benchmarks CPU threads and Arc acceleration with per-test profiling, and adds the explicit
+HY-MT protocol under [ADR-025](decisions/ADR-025-local-hy-mt.md). The owner deferred broad
+accuracy baselines for this task; correctness and document-preservation checks remain required.
+
+> Historical storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) retain the internal-app explicit saved/temporary contract and fresh desktop exports. The unified specification supersedes their website owner-scoped storage with shared current results/private History and authorizes fresh development initialization without backfill.
 
 
 <!--
@@ -20,7 +38,7 @@ Owner-approved [ADR-013](decisions/ADR-013-deployment-profiles.md) adds installe
 | D2 desktop files/folders | D1 and complete P2-P5 backend; real drag/drop batches, progress/history/results and local offline operation. Reuse P6 UI where useful. |
 | I1 internal-app integration | P5 contract, P2-P4 format/fit coverage; independent REST client, credentials/ownership and integration guide. |
 
-D2/I1 do not require P7 MCP or P8 enterprise cloud access. Right-click translation is a later consideration, not a D2 criterion. Lenovo fleet/OEM integration follows a proven installer app and separate hardware/licensing/distribution validation.
+D2/I1 do not require P7 MCP or P8 enterprise cloud access. The current unified specification makes configurable Explorer right-click translation a desktop release requirement, superseding the earlier deferral. Lenovo fleet/OEM integration follows a proven installer app and separate hardware/licensing/distribution validation.
 
 ## Board Tracking
 
@@ -283,7 +301,9 @@ Run user-owned translations as persistent asynchronous jobs behind a REST API an
 
 ## P6 - Web GUI
 
-Board: [Feature #9014](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9014) | Status: Not started
+Owner-approved extension: [ADR-019](decisions/ADR-019-configured-translators.md) adds configured translator IDs, an admin default and a single web Translator selector. Preserve legacy mode clients; model runtime integration is separate from model selection.
+
+Board: [Feature #9014](https://chintand.visualstudio.com/AI%20Projects/_workitems/edit/9014) | Status: In progress on `release/p2-p6`; browser evidence and reviewed-commit CI required
 
 Plan: [P6 existing UI audit and integration](plans/P6-web-ui-integration.md). Locate the runnable mock artifact and preserve a baseline before editing.
 
@@ -364,3 +384,5 @@ To be planned when the blockers are resolved.
 ### Completion Criteria
 
 To be planned when the blockers are resolved.
+
+Owner-approved local website extension: [ADR-020](decisions/ADR-020-browser-accounts-and-decoding.md) adds email/password registration/sign-in and SMALL-100 Beam 4/Greedy presets selectable through Lenny. Preserve API-key clients and account ownership.

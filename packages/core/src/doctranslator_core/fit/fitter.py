@@ -46,6 +46,8 @@ def fit_container(
     options: FitOptions,
     library: FontLibrary | None,
     should_stop: Callable[[], bool] | None = None,
+    *,
+    independent_source: bool = False,
 ) -> FitOutcome:
     """Fit one container. ``should_stop`` is checked before every measurement; when it returns
     true the container keeps its current sizes and the outcome is ``skipped``."""
@@ -56,20 +58,44 @@ def fit_container(
     flat = [s for sizes in base_sizes for s in sizes]
     if library is None:
         return _unresolved(translated, "font_manifest_missing", flat, None, None, None)
+    source = None
+    source_unknown = False
     try:
         source = measure(original, library)
+    except Unmeasurable as exc:
+        if not independent_source:
+            return _unresolved(translated, exc.reason, flat, None, None, None)
+        source_unknown = True
+    try:
         allowed = Extent(
             width_pt=_allow(
-                original.width_pt, source.width_pt, horizontal=True, wrap=original.wrap
+                original.width_pt,
+                source.width_pt if source else 0.0,
+                horizontal=True,
+                wrap=original.wrap,
             ),
             height_pt=_allow(
-                original.height_pt, source.height_pt, horizontal=False, wrap=original.wrap
+                original.height_pt,
+                source.height_pt if source else 0.0,
+                horizontal=False,
+                wrap=original.wrap,
             ),
         )
+        if independent_source:
+            # Unknown obstacle geometry cannot authorize legacy source overflow outside
+            # nominal bounds. Eligible growth profiles carry their verified new bounds.
+            allowed = Extent(
+                width_pt=None if translated.wrap else translated.width_pt,
+                height_pt=translated.height_pt,
+            )
         current = measure(translated, library)
     except Unmeasurable as exc:
         return _unresolved(translated, exc.reason, flat, None, None, None)
     if _fits(current, allowed):
+        if source_unknown:
+            return _unresolved(
+                translated, "source_measurement_unknown", flat, allowed, None, _extent(current)
+            )
         return FitOutcome("unchanged", None, None)
     floors = [[_floor(s, options) for s in sizes] for sizes in base_sizes]
     scale = 1.0 - SCALE_STEP
@@ -94,12 +120,12 @@ def fit_container(
             measured += 1
             if _fits(final, allowed):
                 return FitOutcome(
-                    "adjusted",
+                    "unresolved" if source_unknown else "adjusted",
                     candidate,
                     _entry(
                         translated,
-                        "adjusted",
-                        "shrunk_to_fit",
+                        "unresolved" if source_unknown else "adjusted",
+                        "source_measurement_unknown" if source_unknown else "shrunk_to_fit",
                         flat,
                         candidate,
                         allowed,

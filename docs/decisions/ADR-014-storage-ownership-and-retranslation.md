@@ -2,6 +2,8 @@
 
 ## Status
 
+Website amendment: [ADR-028](ADR-028-website-cache-and-retention.md) specifies a shared standard cache, private History and current-result downloads for new website work. It supersedes owner-only reuse, permanent website libraries and new exact-job output retention below. Legacy saved files keep their promises until explicit conversion/deletion; existing API saved/temporary and local desktop contracts remain unchanged. The amendment is not yet implemented.
+
 Accepted product and architecture direction, 2026-09-29, from the owner's explicit decisions. Implementation pending. Supersedes conflicting storage/reuse/version rules in ADR-004, ADR-007, ADR-010, ADR-012 and ADR-013. Retains their core boundaries, within-document deduplication, fingerprints, job recovery and fit behavior.
 
 ## Context
@@ -75,3 +77,8 @@ These document public behavior, not undisclosed vendor storage internals. Our re
 - [CloudConvert jobs](https://cloudconvert.com/docs/api-reference/jobs) and [exports](https://cloudconvert.com/docs/import-export/export-files): processing jobs, temporary outputs and export to caller storage.
 - [Amazon Textract asynchronous operations](https://docs.aws.amazon.com/textract/latest/dg/api-async.html): idempotent request tokens and temporary/caller-controlled result storage.
 - [Cloudinary transformations](https://cloudinary.com/documentation/image_transformations): processing-dependent derived assets and version-aware delivery.
+
+
+## Owner amendment: desktop export destination, 2026-09-30
+
+The desktop defaults to the current Windows Downloads known folder, or a user-selected export folder. The shell supplies an explicit destination for new main-window and Explorer submissions; do not derive it from the source path or mirror the source folder hierarchy. Language-tagged names and atomic numbered collisions remain. Source paths are temporary ingestion/retry metadata; export uses the accepted snapshot and does not require the original to remain in place. Successful publication clears the source path from the export journal. Previously accepted jobs retain their already-pinned export destination.

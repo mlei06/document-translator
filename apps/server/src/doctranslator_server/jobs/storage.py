@@ -19,8 +19,11 @@ from typing import BinaryIO
 from doctranslator_server.db import Database
 from doctranslator_server.db.models import new_id, utcnow
 from doctranslator_server.db.repositories import blobs as repo
+from doctranslator_server.db.repositories import results as results_repo
 from doctranslator_server.db.repositories import users as locks
+from doctranslator_server.jobs import capacity
 from doctranslator_server.jobs.errors import TooLargeError, UnavailableError
+from doctranslator_server.settings import ServerSettings
 
 __all__ = ["GC_LOCK", "BlobStore", "Staged", "StoredBlob"]
 
@@ -38,6 +41,7 @@ class Staged:
     path: Path
     sha256: str
     size: int
+    reservation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +52,14 @@ class StoredBlob:
 
 
 class BlobStore:
-    def __init__(self, root: Path, db: Database, *, pin_ttl: timedelta) -> None:
+    def __init__(
+        self,
+        root: Path,
+        db: Database,
+        *,
+        pin_ttl: timedelta,
+        settings: ServerSettings | None = None,
+    ) -> None:
         self.root = root
         self.blobs = root / "blobs" / "sha256"
         self.staging = root / "staging"
@@ -56,6 +67,7 @@ class BlobStore:
         self.staging.mkdir(parents=True, exist_ok=True)
         self._db = db
         self._pin_ttl = pin_ttl
+        self._settings = settings
 
     def path(self, digest: str) -> Path:
         return self.blobs / digest[:2] / digest
@@ -63,11 +75,26 @@ class BlobStore:
     def staging_path(self, suffix: str = "") -> Path:
         return self.staging / f"{new_id()}{suffix}"
 
-    def stage(self, chunks: Iterable[bytes], *, suffix: str = "", max_bytes: int) -> Staged:
+    def stage(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        suffix: str = "",
+        max_bytes: int,
+        reservation_owner: str | None = None,
+    ) -> Staged:
         """Write ``chunks`` to a new staging file, hashing; ``TooLargeError`` past ``max_bytes``."""
         path = self.staging_path(suffix)
         digest = hashlib.sha256()
         size = 0
+        reservation = None
+        if self._settings is not None:
+            with self._db.session() as session:
+                if reservation_owner:
+                    capacity.consume_output(session, reservation_owner, max_bytes)
+                reservation = capacity.reserve(
+                    session, self._settings, path.name, "staging", max_bytes
+                )
         try:
             with path.open("xb") as handle:
                 for chunk in chunks:
@@ -78,15 +105,31 @@ class BlobStore:
                     handle.write(chunk)
         except BaseException:
             path.unlink(missing_ok=True)
+            if reservation:
+                with self._db.session() as session:
+                    capacity.release(session, reservation)
             raise
-        return Staged(path, digest.hexdigest(), size)
+        return Staged(path, digest.hexdigest(), size, reservation)
 
     def stage_stream(self, stream: BinaryIO, *, suffix: str = "", max_bytes: int) -> Staged:
         return self.stage(iter(lambda: stream.read(CHUNK), b""), suffix=suffix, max_bytes=max_bytes)
 
-    def stage_file(self, source: Path, *, suffix: str = "") -> Staged:
+    def discard(self, staged: Staged) -> None:
+        staged.path.unlink(missing_ok=True)
+        if staged.reservation:
+            with self._db.session() as session:
+                capacity.release(session, staged.reservation)
+
+    def stage_file(
+        self, source: Path, *, suffix: str = "", reservation_owner: str | None = None
+    ) -> Staged:
         with source.open("rb") as handle:
-            return self.stage_stream(handle, suffix=suffix, max_bytes=1 << 62)
+            return self.stage(
+                iter(lambda: handle.read(CHUNK), b""),
+                suffix=suffix,
+                max_bytes=source.stat().st_size,
+                reservation_owner=reservation_owner,
+            )
 
     def put(self, staged: Staged) -> StoredBlob:
         """Publish a staged file as a pinned blob; the staging file is consumed."""
@@ -94,6 +137,8 @@ class BlobStore:
         for _ in range(_DELETING_RETRIES):
             with self._db.session() as session:
                 pin_id = repo.pin(session, staged.sha256, staged.size, utcnow() + self._pin_ttl)
+                if pin_id is not None and staged.reservation:
+                    capacity.release(session, staged.reservation)
             if pin_id is not None:
                 break
             time.sleep(0.1)  # a cleanup is deleting this content right now; re-put afterwards
@@ -101,7 +146,7 @@ class BlobStore:
             staged.path.unlink(missing_ok=True)
             raise UnavailableError("storage is busy; retry the request")
         target = self.path(staged.sha256)
-        if target.exists():
+        if target.exists() and self.verify(staged.sha256):
             staged.path.unlink(missing_ok=True)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -109,29 +154,42 @@ class BlobStore:
                 staged.path.replace(target)
             except OSError:
                 staged.path.unlink(missing_ok=True)
-                if not target.exists():
+                if not self.verify(staged.sha256):
                     raise
         with self._db.session() as session:
             repo.mark_available(session, staged.sha256)
+            if staged.reservation:
+                capacity.release(session, staged.reservation)
         return StoredBlob(staged.sha256, staged.size, pin_id)
 
-    def put_file(self, source: Path) -> StoredBlob:
-        return self.put(self.stage_file(source))
+    def put_file(self, source: Path, *, reservation_owner: str | None = None) -> StoredBlob:
+        return self.put(self.stage_file(source, reservation_owner=reservation_owner))
 
     def release_pins(self, pin_ids: list[str]) -> None:
         with self._db.session() as session:
             repo.release_pins(session, pin_ids)
 
+    def sweep_capacity(self, *, protected_slot: str | None = None) -> None:
+        if self._settings is None:
+            return
+        with self._db.session() as session:
+            capacity.expire_slots(session, self._settings, protected_slot=protected_slot)
+            results_repo.delete_expired_results(session, utcnow())
+        self.collect(holder=f"capacity:{new_id()}", pending_grace=self._pin_ttl)
+
     def verify(self, digest: str) -> bool:
         """The stored file exists and still has its digest."""
         path = self.path(digest)
-        if not path.is_file():
+        try:
+            if not path.is_file():
+                return False
+            hasher = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(CHUNK), b""):
+                    hasher.update(chunk)
+            return hasher.hexdigest() == digest
+        except OSError:
             return False
-        hasher = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(CHUNK), b""):
-                hasher.update(chunk)
-        return hasher.hexdigest() == digest
 
     # Cleanup
 
@@ -153,7 +211,11 @@ class BlobStore:
                     claimed = repo.mark_deleting(session, digest, now, now - pending_grace)
                 if not claimed:
                     continue
-                self.path(digest).unlink(missing_ok=True)
+                try:
+                    self.path(digest).unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("blob deletion deferred; bytes remain charged")
+                    continue
                 with self._db.session() as session:
                     repo.delete_deleting(session, digest)
                 deleted += 1
@@ -168,7 +230,12 @@ class BlobStore:
         removed = 0
         for path in self.staging.iterdir():
             with contextlib.suppress(OSError):
-                if path.stat().st_mtime < cutoff:
+                if (
+                    not path.is_symlink()
+                    and not path.is_junction()
+                    and path.resolve().parent == self.staging.resolve()
+                    and path.stat().st_mtime < cutoff
+                ):
                     if path.is_dir():
                         shutil.rmtree(path)
                     else:

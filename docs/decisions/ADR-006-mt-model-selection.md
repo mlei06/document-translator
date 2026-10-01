@@ -1,5 +1,8 @@
 # ADR-006: MT Model Selection
 
+> ADR-019 supersedes the single installed/configured MT model restriction. SMALL-100 remains the validated initial local choice; additional model adapters and catalog entries require their own compatibility, quality and distribution evidence.
+
+
 ## Status
 
 Accepted (2026-09-27). Quality sanity check (COMET on the bake-off set) pending; see [Evidence](#evidence).

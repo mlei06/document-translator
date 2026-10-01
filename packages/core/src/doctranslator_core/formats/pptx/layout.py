@@ -9,9 +9,9 @@ Speaker notes are not fit containers.
 
 import copy
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
-from doctranslator_core.document import LayoutContainer, LayoutParagraph, LayoutRun
+from doctranslator_core.document import LayoutContainer, LayoutParagraph, LayoutPatch, LayoutRun
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats.pptx.model import Container
 
@@ -40,6 +40,7 @@ class _Mapping:
     runs: list[list[Element]]
     ends: list[Element | None]
     font_scale: float
+    paragraph_elements: list[Element] = field(default_factory=list[Element])
 
 
 class PptxLayout:
@@ -47,6 +48,9 @@ class PptxLayout:
         self._package = package
         self._themes: dict[str, _Theme] = {}
         self._mappings: dict[str, _Mapping] = {}
+        self._containers: dict[str, Container] = {}
+        self._revision: dict[str, int] = {}
+        self._cache: dict[str, LayoutContainer] = {}
         presentation = package.xml(package.main_part())
         self._default_style = presentation.find(qn("p:defaultTextStyle"))
 
@@ -54,12 +58,18 @@ class PptxLayout:
 
     def containers(self, containers: Sequence[Container]) -> list[LayoutContainer]:
         result: list[LayoutContainer] = []
-        self._mappings.clear()
+        self._containers = {str(c.key): c for c in containers}
         for container in containers:
             if container.kind == "notes":
                 continue
-            result.append(self._describe(container))
+            key = str(container.key)
+            if key not in self._cache:
+                self._cache[key] = self._describe(container)
+            result.append(self._cache[key])
         return result
+
+    def invalidate(self, container_id: str) -> None:
+        self._cache.pop(container_id, None)
 
     def _describe(self, container: Container) -> LayoutContainer:
         key = str(container.key)
@@ -103,7 +113,21 @@ class PptxLayout:
             paragraphs[0] = replace(paragraphs[0], space_before_pt=0.0)
             paragraphs[-1] = replace(paragraphs[-1], space_after_pt=0.0)
         self._mappings[key] = mapping
+        bounds, growth = self._bounds(container)
         return LayoutContainer(
+            spacing_supported=next(container.tx_body.iter(qn("a:br")), None) is None,
+            page_index=container.slide_index - 1 if container.slide_index else None,
+            bounds_pt=bounds,
+            growth_bounds_pt=growth,
+            content_bounds_pt=(
+                bounds[0] + insets[0] / EMU_PER_PT,
+                bounds[1] + insets[1] / EMU_PER_PT,
+                bounds[2] - insets[2] / EMU_PER_PT,
+                bounds[3] - insets[3] / EMU_PER_PT,
+            )
+            if bounds
+            else None,
+            revision=self._revision.get(key, 0),
             id=key,
             location=container.location,
             kind=container.kind,
@@ -114,6 +138,174 @@ class PptxLayout:
             unsupported=unsupported,
             line_metric="em",
         )
+
+    def _bounds(
+        self, container: Container
+    ) -> tuple[tuple[float, float, float, float] | None, tuple[float, float, float, float] | None]:
+        shape = container.element
+        bounds = _explicit_bounds(shape)
+        if bounds is None or container.kind != "shape" or container.slide_index is None:
+            return bounds, None
+        body = container.tx_body.find(qn("a:bodyPr"))
+        if body is not None and (
+            body.get("anchor", "t") != "t" or body.find(qn("a:spAutoFit")) is not None
+        ):
+            return bounds, None
+        # Growth preserves only the top-left anchor. Other alignments remain font-fit only.
+        if any(p.get("algn", "l") != "l" for p in container.tx_body.iter(qn("a:pPr"))):
+            return bounds, None
+        tree = shape.getparent()
+        if tree is None or tree.tag != qn("p:spTree"):
+            return bounds, None
+        size = self._package.xml(self._package.main_part()).find(qn("p:sldSz"))
+        if size is None:
+            return bounds, None
+        x0, y0, x1, y1 = bounds
+        right = min(x1 + (x1 - x0) * 0.2, int(size.get("cx", "0")) / EMU_PER_PT - 2)
+        bottom = min(y1 + (y1 - y0) * 0.2, int(size.get("cy", "0")) / EMU_PER_PT - 2)
+        obstacles: list[tuple[float, float, float, float]] = []
+        objects = list(tree)
+        part = container.part
+        for relation in ("slideLayout", "slideMaster"):
+            related = self._package.related(part, relation)
+            if not related:
+                break
+            part = related[0].target
+            inherited = self._package.xml(part).find(f"{qn('p:cSld')}/{qn('p:spTree')}")
+            if inherited is not None:
+                objects.extend(o for o in inherited if next(o.iter(qn("p:ph")), None) is None)
+        for other in objects:
+            if other is shape or other.tag in (qn("p:nvGrpSpPr"), qn("p:grpSpPr"), qn("p:extLst")):
+                continue
+            b = _explicit_bounds(other)
+            if b is None:
+                return bounds, None
+            preset = other.find(f"{qn('p:spPr')}/{qn('a:prstGeom')}")
+            # A plain text-free containing shape is a card, never permission to leave it.
+            if (
+                b[0] <= x0
+                and b[1] <= y0
+                and b[2] >= x1
+                and b[3] >= y1
+                and other.tag == qn("p:sp")
+                and preset is not None
+                and preset.get("prst") in ("rect", "roundRect")
+                and next(other.iter(qn("a:t")), None) is None
+            ):
+                right = min(right, b[2] - min(2.0, b[2] - x1))
+                bottom = min(bottom, b[3] - min(2.0, b[3] - y1))
+                continue
+            if _intersects(bounds, b):
+                return bounds, None
+            obstacles.append(b)
+        # Reserve the full grown rectangle, including corner collisions.
+        for b in obstacles:
+            if b[0] >= x1 and b[1] < bottom and b[3] > y0:
+                right = min(right, b[0] - min(2.0, b[0] - x1))
+            if b[1] >= y1 and b[0] < right and b[2] > x0:
+                bottom = min(bottom, b[1] - min(2.0, b[1] - y1))
+        grown = (x0, y0, max(x1, right), max(y1, bottom))
+        return bounds, grown if grown != bounds else None
+
+    def apply_patch(self, patch: LayoutPatch) -> None:
+        before, after = patch.expected, patch.replacement
+        container = self._containers[before.id]
+        mapping = self._mappings[before.id]
+        if patch.operation == "fonts":
+            permitted = replace(
+                before,
+                paragraphs=tuple(
+                    replace(
+                        p,
+                        runs=tuple(
+                            replace(r, latin_font=n.latin_font, east_asian_font=n.east_asian_font)
+                            for r, n in zip(p.runs, q.runs, strict=True)
+                        ),
+                    )
+                    for p, q in zip(before.paragraphs, after.paragraphs, strict=True)
+                ),
+            )
+            if permitted != after:
+                raise ValueError("invalid font patch")
+            for elements, paragraph in zip(mapping.runs, after.paragraphs, strict=True):
+                for element, run in zip(elements, paragraph.runs, strict=True):
+                    props = element.find(qn("a:rPr"))
+                    if props is None:
+                        props = element.makeelement(qn("a:rPr"), {})
+                        element.insert(0, props)
+                    for slot, name in (("latin", run.latin_font), ("ea", run.east_asian_font)):
+                        if name:
+                            font = props.find(qn("a:" + slot))
+                            if font is None:
+                                font = props.makeelement(qn("a:" + slot), {})
+                                props.append(font)
+                            font.set("typeface", name)
+        elif patch.operation == "geometry":
+            if after.bounds_pt != before.growth_bounds_pt or after.bounds_pt is None:
+                raise ValueError("unsupported growth")
+            if before.bounds_pt is None or before.content_bounds_pt is None:
+                raise ValueError("missing base geometry")
+            dw = after.bounds_pt[2] - before.bounds_pt[2]
+            dh = after.bounds_pt[3] - before.bounds_pt[3]
+            c = before.content_bounds_pt
+            permitted = replace(
+                before,
+                bounds_pt=after.bounds_pt,
+                content_bounds_pt=(c[0], c[1], c[2] + dw, c[3] + dh),
+                width_pt=before.width_pt + dw if before.width_pt is not None else None,
+                height_pt=before.height_pt + dh if before.height_pt is not None else None,
+            )
+            if permitted != after:
+                raise ValueError("invalid geometry patch")
+            ext = container.element.find(f"{qn('p:spPr')}/{qn('a:xfrm')}/{qn('a:ext')}")
+            if ext is None:
+                raise ValueError("missing explicit geometry")
+            b = after.bounds_pt
+            ext.set("cx", str(round((b[2] - b[0]) * EMU_PER_PT)))
+            ext.set("cy", str(round((b[3] - b[1]) * EMU_PER_PT)))
+        elif patch.operation == "spacing":
+            if not before.spacing_supported:
+                raise ValueError("spacing edits are unsupported for this container")
+            permitted = replace(
+                before,
+                paragraphs=tuple(
+                    replace(p, space_before_pt=q.space_before_pt, space_after_pt=q.space_after_pt)
+                    for p, q in zip(before.paragraphs, after.paragraphs, strict=True)
+                ),
+            )
+            if permitted != after or any(
+                q.space_before_pt < p.space_before_pt * 0.5
+                or q.space_after_pt < p.space_after_pt * 0.5
+                or q.space_before_pt > p.space_before_pt
+                or q.space_after_pt > p.space_after_pt
+                or min(q.space_before_pt, q.space_after_pt) < 0
+                for p, q in zip(before.paragraphs, after.paragraphs, strict=True)
+            ):
+                raise ValueError("invalid spacing patch")
+            for para, paragraph in zip(mapping.paragraph_elements, after.paragraphs, strict=True):
+                props = para.find(qn("a:pPr"))
+                if props is None:
+                    props = para.makeelement(qn("a:pPr"), {})
+                    para.insert(0, props)
+                for tag, value in (
+                    ("spcBef", paragraph.space_before_pt),
+                    ("spcAft", paragraph.space_after_pt),
+                ):
+                    old = props.find(qn("a:" + tag))
+                    if old is not None:
+                        props.remove(old)
+                    spacing = props.makeelement(qn("a:" + tag), {})
+                    spacing.append(
+                        props.makeelement(qn("a:spcPts"), {"val": str(round(value * 100))})
+                    )
+                    props.append(spacing)
+        self._revision[before.id] = before.revision + 1
+        if patch.operation == "geometry":
+            for key, other in self._containers.items():
+                if other.part == container.part:
+                    self.invalidate(key)
+        else:
+            self.invalidate(before.id)
 
     # ---- geometry ----------------------------------------------------------------------------
 
@@ -342,6 +534,7 @@ class PptxLayout:
                         other_lines_start_pt=other_start,
                     )
                 )
+                mapping.paragraph_elements.append(para)
                 mapping.runs.append([e for _, e in line])
                 mapping.ends.append(end_element if number == len(lines) - 1 else None)
         return paragraphs, mapping
@@ -406,6 +599,7 @@ class PptxLayout:
     def apply_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
         """Write effective sizes (divided by any autofit font scale PowerPoint applies)."""
         mapping = self._mappings[container_id]
+        self.invalidate(container_id)
         for runs, end, run_sizes in zip(mapping.runs, mapping.ends, sizes, strict=True):
             for element, size in zip(runs, run_sizes, strict=True):
                 _set_size(element, "a:rPr", size / mapping.font_scale)
@@ -535,3 +729,24 @@ def _find_placeholder(
         if other == normalized:
             return shape
     return None
+
+
+def _explicit_bounds(shape: Element) -> tuple[float, float, float, float] | None:
+    if _ancestor(shape, qn("p:grpSp")) is not None:
+        return None
+    transform = shape.find(f"{qn('p:spPr')}/{qn('a:xfrm')}")
+    if transform is None:
+        transform = shape.find(qn("p:xfrm"))
+    if transform is None or any(
+        transform.get(k, "0") not in ("0", "false") for k in ("rot", "flipH", "flipV")
+    ):
+        return None
+    off, ext = transform.find(qn("a:off")), transform.find(qn("a:ext"))
+    if off is None or ext is None:
+        return None
+    x, y = int(off.get("x", "0")) / EMU_PER_PT, int(off.get("y", "0")) / EMU_PER_PT
+    return x, y, x + int(ext.get("cx", "0")) / EMU_PER_PT, y + int(ext.get("cy", "0")) / EMU_PER_PT
+
+
+def _intersects(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])

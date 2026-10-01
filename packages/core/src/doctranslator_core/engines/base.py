@@ -18,7 +18,7 @@ class TranslationEngine(ABC):
 
     @abstractmethod
     def translate_batch(
-        self, texts: Sequence[str], source: Language, target: Language
+        self, texts: Sequence[str], source: Language | None = None, target: Language | None = None
     ) -> list[str]:
         """Translate non-empty, stripped, unique texts. Same length and order as input."""
 

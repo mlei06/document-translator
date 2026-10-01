@@ -8,9 +8,9 @@ when the grid type asks for it. A DrawingML text box's VML fallback copy receive
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from doctranslator_core.document import LayoutContainer, LayoutParagraph, LayoutRun
+from doctranslator_core.document import LayoutContainer, LayoutParagraph, LayoutPatch, LayoutRun
 from doctranslator_core.fit.measure import is_east_asian
 from doctranslator_core.formats._ooxml import Element, Package, qn
 
@@ -56,6 +56,7 @@ class DocxLayout:
         self._theme = _theme_fonts(package, main)
         self._grid = _document_grid(package.xml(main))
         self._mappings: dict[str, _Mapping] = {}
+        self._revision: dict[str, int] = {}
         self.boxes: dict[str, _Box] = {}
 
     # ---- containers --------------------------------------------------------------------------
@@ -166,6 +167,7 @@ class DocxLayout:
             wrap=box.wrap,
             paragraphs=tuple(paragraphs),
             unsupported=box.unsupported or _unvalidated(paragraphs),
+            revision=self._revision.get(box.id, 0),
             line_metric="font",
         )
 
@@ -251,6 +253,50 @@ class DocxLayout:
         return fonts.get(qn(f"w:{slot}")) or None
 
     # ---- applying sizes ----------------------------------------------------------------------
+
+    def apply_patch(self, patch: LayoutPatch) -> None:
+        if patch.operation != "fonts":
+            raise ValueError("DOCX only supports explicit target font patches")
+        before, after = patch.expected, patch.replacement
+        permitted = replace(
+            before,
+            paragraphs=tuple(
+                replace(
+                    p,
+                    runs=tuple(
+                        replace(r, latin_font=n.latin_font, east_asian_font=n.east_asian_font)
+                        for r, n in zip(p.runs, q.runs, strict=True)
+                    ),
+                )
+                for p, q in zip(before.paragraphs, after.paragraphs, strict=True)
+            ),
+        )
+        if permitted != after:
+            raise ValueError("invalid font patch")
+        mapping = self._mappings[before.id]
+        for runs, mirrors, paragraph in zip(
+            mapping.runs, mapping.mirror_runs, after.paragraphs, strict=True
+        ):
+            for elements in (runs, mirrors):
+                for element, run in zip(elements, paragraph.runs, strict=False):
+                    props = element.find(qn("w:rPr"))
+                    if props is None:
+                        props = element.makeelement(qn("w:rPr"), {})
+                        element.insert(0, props)
+                    fonts = props.find(qn("w:rFonts"))
+                    if fonts is None:
+                        fonts = props.makeelement(qn("w:rFonts"), {})
+                        props.insert(0, fonts)
+                    for slot, name in (
+                        ("ascii", run.latin_font),
+                        ("hAnsi", run.latin_font),
+                        ("eastAsia", run.east_asian_font),
+                    ):
+                        if name:
+                            fonts.set(qn("w:" + slot), name)
+                            fonts.attrib.pop(qn("w:" + slot + "Theme"), None)
+
+        self._revision[before.id] = before.revision + 1
 
     def apply_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> str:
         """Write sizes (half-points) to the runs and the VML mirror; returns the part."""

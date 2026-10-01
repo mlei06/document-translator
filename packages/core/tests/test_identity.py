@@ -38,6 +38,8 @@ def test_llm_identity_is_metadata_only_and_matches_the_engine() -> None:
 def test_mt_identity_hashes_artifacts_without_loading(tmp_path: Path) -> None:
     (tmp_path / "model.bin").write_bytes(b"weights")
     (tmp_path / "sentencepiece.bpe.model").write_bytes(b"tokenizer")
+    (tmp_path / "config.json").write_text("{}")
+    (tmp_path / "shared_vocabulary.json").write_text('["token"]')
     config = MtEngineConfig(model_dir=tmp_path, model_family="small100", device="cpu")
     prepared = prepare_identity(config)
     assert prepared.details["device"] == "cpu"
@@ -81,7 +83,6 @@ def test_fingerprint_is_stable_and_sensitive_to_every_output_affecting_input() -
 
     variants = [
         output_fingerprint(identity, OPTIONS.model_copy(update={"target": Language.JA})),
-        output_fingerprint(identity, OPTIONS.model_copy(update={"source": Language.ZH})),
         output_fingerprint(identity, OPTIONS.model_copy(update={"protected_terms": ("X",)})),
         output_fingerprint(identity, OPTIONS.model_copy(update={"txt_encoding": "gbk"})),
         output_fingerprint(identity, OPTIONS.model_copy(update={"fit": FitOptions(min_scale=0.8)})),
@@ -115,3 +116,14 @@ def test_identity_digest_is_canonical() -> None:
     a = TranslationIdentity(mode=TranslationMode.MT, model="m", details={"a": "1", "b": "2"})
     b = TranslationIdentity(mode=TranslationMode.MT, model="m", details={"b": "2", "a": "1"})
     assert a.digest == b.digest
+
+
+def test_source_metadata_does_not_change_output_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    from doctranslator_core.identity import STRATEGIES
+
+    identity = prepare_identity(LLM)
+    original = output_fingerprint(identity, OPTIONS)
+    monkeypatch.setitem(STRATEGIES, "detect", "new-detector")
+    assert (
+        output_fingerprint(identity, OPTIONS.model_copy(update={"source": Language.ZH})) == original
+    )

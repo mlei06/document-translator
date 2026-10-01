@@ -7,6 +7,8 @@ dependencies = [
     "alembic>=1.20.0",
     "doctranslator-core[mt]",
     "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "truststore>=0.10.4",
     "pydantic-settings>=2.15.0",
     "python-multipart>=0.0.32",
     "sqlalchemy>=2.1.1",

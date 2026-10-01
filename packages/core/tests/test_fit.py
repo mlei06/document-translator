@@ -225,7 +225,10 @@ def test_translator_uses_its_font_manifest(
             return TranslationIdentity(mode=TranslationMode.MT, model="fake", details={})
 
         def translate_batch(
-            self, texts: Sequence[str], source: Language, target: Language
+            self,
+            texts: Sequence[str],
+            source: Language | None = None,
+            target: Language | None = None,
         ) -> list[str]:
             return ["EN " + t for t in texts]
 

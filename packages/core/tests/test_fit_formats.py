@@ -138,12 +138,12 @@ def test_docx_fixed_cell_with_east_asian_text_is_unresolved(
     edited = _docx_with_fixed_cell(tmp_path, "固定单元格")
     result = _run(edited, manifest, {"固定单元格": "Fixed cell text"})
     cell = _cell_entry(result)
-    # Word's East Asian layout is not validated (ADR-012): size untouched, never passed.
+    # Source East Asian layout stays unknown; the supported Latin target is fitted (ADR-026).
     assert cell is not None
     assert (cell.status, cell.reason, cell.final_sizes_pt) == (
         "unresolved",
-        "east_asian_layout_unvalidated",
-        [10.0],
+        "source_measurement_unknown",
+        [8.5],
     )
 
 

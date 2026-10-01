@@ -68,8 +68,8 @@ def entries_from_paths(paths: Iterable[Path], defaults: dict[str, Any]) -> Itera
 
 
 def entries_from_manifest(manifest: Path, defaults: dict[str, Any]) -> Iterator[Entry]:
-    """UTF-8 JSON Lines, one ``{path, source?, target?, mode?}`` per line; paths resolve relative
-    to the manifest; per-item values override the submission defaults."""
+    """UTF-8 JSON Lines, one ``{path, source?, target?, mode?, translator_id?}`` per line.
+    Paths resolve relative to the manifest; per-item values override the submission defaults."""
     base = manifest.resolve().parent
     with manifest.open(encoding="utf-8") as handle:
         for number, raw in enumerate(handle, start=1):
@@ -82,7 +82,7 @@ def entries_from_manifest(manifest: Path, defaults: dict[str, Any]) -> Iterator[
             if not isinstance(record, dict) or not isinstance(record.get("path"), str):
                 raise ManifestError(f"manifest line {number} needs a string 'path'")
             options = dict(defaults)
-            for name in ("source", "target", "mode"):
+            for name in ("source", "target", "mode", "translator_id", "fit"):
                 value = record.get(name)
                 if value is not None:
                     options[name] = value

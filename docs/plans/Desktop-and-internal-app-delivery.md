@@ -1,5 +1,12 @@
 # Desktop and Internal-App Delivery
 
+> Current authority: [Unified translator design](unified-translator-design.md) incorporates the surviving desktop runtime/installer requirements and supersedes all conflicting text below, including mode/model selectors, individual credential provisioning, old model order and deferred Explorer delivery. Desktop automatically uses the installer-provisioned shared Davy key and then installed HY-MT. Historical packaging evidence and separate I1 integration scope remain valid.
+
+> Superseding desktop specification: [ADR-030](../decisions/ADR-030-desktop-online-offline-delivery.md) and [Online/Offline delivery](desktop-online-offline-delivery.md). The latest owner instruction selects direct-Davy Online processing independently of the website service; desktop does not use its cache/History. Two installation choices, one offline bundle, Automatic/Online/Offline modes and first-class Explorer translation replace conflicting D0/D1/D2 text below. ADR-029 removes preview/thorough-fit/skip-fit UI. Existing I1 internal API scope remains separate. No desktop implementation is claimed.
+
+> Translator configuration is governed by accepted [ADR-019](../decisions/ADR-019-configured-translators.md): selectable configured translator IDs, one default, explicit local/remote location and no automatic fallback. Desktop setup selects supported model downloads; hosted users select admin-enabled translators. Installer delivery remains D0/D1 work.
+
+
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 

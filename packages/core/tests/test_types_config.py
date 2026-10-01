@@ -29,7 +29,7 @@ def test_llm_defaults() -> None:
         base_url=HttpUrl("https://llm.example/v1"), api_key=SecretStr(API_KEY), model="gemma"
     )
     assert config.mode is TranslationMode.LLM
-    assert (config.batch_size, config.max_concurrency, config.max_retries) == (16, 4, 3)
+    assert (config.batch_size, config.max_concurrency, config.max_retries) == (16, 4, 2)
     assert config.temperature == 0.0
     assert config.json_mode is True
 
@@ -89,3 +89,21 @@ def test_api_key_never_shown() -> None:
     assert API_KEY not in str(config)
     assert API_KEY not in config.model_dump_json()
     assert config.api_key.get_secret_value() == API_KEY
+
+
+def test_standard_fit_report_has_no_render_claim() -> None:
+    from doctranslator_core.types import FitReport
+
+    report = FitReport.model_validate(
+        {
+            "version": 2,
+            "format": "pptx",
+            "status": "unresolved",
+            "measurement": "harfbuzz-v1",
+            "font_manifest": None,
+            "options": {"min_scale": 0.7, "min_size_pt": 8},
+        }
+    )
+    assert report.version == 2
+    assert report.options.mode == "standard"
+    assert "verification" not in report.model_dump()

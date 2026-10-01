@@ -9,7 +9,6 @@ import contextlib
 import logging
 import os
 import secrets
-import shutil
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -21,8 +20,9 @@ from doctranslator_core.detect import detect_source
 from doctranslator_core.document import LayoutContainer, Paragraph
 from doctranslator_core.fit.fitter import fit_container
 from doctranslator_core.fit.fonts import FontLibrary
+from doctranslator_core.fit.office import fit_office_container
 from doctranslator_core.formats import DocumentAdapter, detect_format, open_adapter
-from doctranslator_core.formats.base import LayoutSupport, PlacementFit
+from doctranslator_core.formats.base import LayoutRepairSupport, LayoutSupport, PlacementFit
 from doctranslator_core.identity import STRATEGIES
 from doctranslator_core.inline import (
     Encoded,
@@ -42,6 +42,7 @@ from doctranslator_core.inline import (
 from doctranslator_core.protect import passes_through, protect
 from doctranslator_core.types import (
     DiagnosticSeverity,
+    DocumentDetection,
     DocumentDiagnostic,
     DocumentFormat,
     DocumentLimitError,
@@ -80,7 +81,7 @@ class TextTranslator(Protocol):
     def engine_info(self) -> EngineInfo: ...
 
     def translate_texts(
-        self, texts: Sequence[str], *, source: Language, target: Language
+        self, texts: Sequence[str], *, source: Language | None, target: Language
     ) -> list[str]: ...
 
 
@@ -100,18 +101,6 @@ class _Unit:
     output: str = ""
 
 
-_NO_TEXT = DocumentDiagnostic(
-    code="no_translatable_text",
-    severity=DiagnosticSeverity.INFO,
-    message="The document has no translatable text; the output is an unchanged copy.",
-)
-_ALREADY_TARGET = DocumentDiagnostic(
-    code="already_target_language",
-    severity=DiagnosticSeverity.INFO,
-    message="The document is already in the target language; the output is an unchanged copy.",
-)
-
-
 def translate_document(
     translator: TextTranslator,
     input_path: Path,
@@ -124,6 +113,7 @@ def translate_document(
     on_progress: ProgressCallback | None = None,
     font_library: FontLibrary | None = None,
     should_skip_fit: Callable[[], bool] | None = None,
+    detection_metadata: DocumentDetection | None = None,
 ) -> DocumentTranslationResult:
     """Translate ``input_path`` into a new file at ``output_path`` (see the Document API).
 
@@ -131,8 +121,6 @@ def translate_document(
     work stops (translation and adjustments already applied are kept) and the result records
     ``FitStatus.SKIPPED``.
     """
-    if options.source != "auto" and options.source == options.target:
-        raise ValueError(f"source and target language are both {options.target.value!r}")
     _check_paths(input_path, output_path)
     started = time.perf_counter()
     report = _reporter(on_progress)
@@ -145,60 +133,82 @@ def translate_document(
             raise DocumentLimitError(
                 f"document has {len(paragraphs)} paragraphs (limit {limits.max_segments})"
             )
-        protected = {p.id: protect(p.nodes, options.protected_terms) for p in paragraphs}
+        protected = {
+            p.id: protect(
+                p.nodes,
+                options.protected_terms,
+                use_default_dictionary=options.use_default_dictionary,
+            )
+            for p in paragraphs
+        }
         report(ProgressPhase.EXTRACT, 1, 1)
         extract_s = time.perf_counter() - started
 
         diagnostics: list[DocumentDiagnostic] = []
         source: Language | None
-        if options.source == "auto":
-            source, notes = detect_source(_translatable_text(protected[p.id]) for p in paragraphs)
-            diagnostics.extend(notes)
+        if detection_metadata is not None:
+            source = detection_metadata.source
+            diagnostics.extend(detection_metadata.diagnostics)
+        elif options.source == "auto":
+            try:
+                source, notes = detect_source(
+                    _translatable_text(protected[p.id]) for p in paragraphs
+                )
+                diagnostics.extend(notes)
+            except Exception:
+                # Detection is display metadata only. An unavailable detector cannot stop inference.
+                source = None
+                diagnostics.append(
+                    DocumentDiagnostic(
+                        code="source_unknown",
+                        severity=DiagnosticSeverity.INFO,
+                        message="Source language is unknown; translation uses the selected target.",
+                    )
+                )
         else:
             source = options.source
-        if source is None or source == options.target:
-            diagnostics.append(_NO_TEXT if source is None else _ALREADY_TARGET)
-            originals = _containers(adapter)
-            fit_started = time.perf_counter()
-            fit_report = _fit(
-                adapter, originals, options.fit, fonts, fmt, report, font_library, should_skip_fit
-            )
-            fit_s = time.perf_counter() - fit_started
-            report(ProgressPhase.WRITE, 0, 1)
-            _publish_copy(input_path, output_path, report)
-            counts = SegmentCounts(
-                segments=len(paragraphs), passed_through=len(paragraphs), unique_inputs=0
-            )
-            return _result(
-                output_path,
-                fmt,
-                options,
-                source,
-                translator,
-                fingerprint,
-                counts,
-                diagnostics,
-                fit_report,
-                {"extract": extract_s, "fit": fit_s},
-            )
 
         units: dict[str, _Unit] = {}
         passed = 0
         for paragraph in paragraphs:
             nodes = protected[paragraph.id]
-            if passes_through(nodes, source):
+            if passes_through(nodes):
                 passed += 1
                 continue
             encoded = encode(nodes)
             unit = units.setdefault(encoded.text, _Unit(encoded.text))
             unit.occurrences.append(_Occurrence(paragraph, nodes, encoded))
 
+        empty_preserved = 0
+
         def translate(texts: list[str]) -> list[str]:
-            return translator.translate_texts(texts, source=source, target=options.target)
+            nonlocal empty_preserved
+            outputs = translator.translate_texts(texts, source=None, target=options.target)
+            safe: list[str] = []
+            for text, output in zip(texts, outputs, strict=True):
+                if text.strip() and not output.strip():
+                    # Keep the encoded source, including protected/formatting markers. A blank
+                    # model answer must neither erase this text nor discard valid siblings.
+                    empty_preserved += 1
+                    safe.append(text)
+                else:
+                    safe.append(output)
+            return safe
 
         results, fallbacks = _translate_units(
             list(units.values()), translate, options.target, report, diagnostics
         )
+        if empty_preserved:
+            diagnostics.append(
+                DocumentDiagnostic(
+                    code="empty_translation_preserved",
+                    severity=DiagnosticSeverity.WARNING,
+                    message=(
+                        "Some text could not be translated and was kept in its original language."
+                    ),
+                    count=empty_preserved,
+                )
+            )
         translate_s = time.perf_counter() - started - extract_s
         originals = _containers(adapter)
         report(ProgressPhase.APPLY, 0, 1)
@@ -211,7 +221,17 @@ def translate_document(
         )
         fit_s = time.perf_counter() - fit_started
         write_started = time.perf_counter()
-        _write_verify_publish(adapter, output_path, fmt, limits, options, report)
+        verified_report = _write_verify_publish(
+            adapter,
+            output_path,
+            fmt,
+            limits,
+            options,
+            report,
+            fit_report=fit_report,
+        )
+        if verified_report is not None:
+            fit_report = verified_report
         write_s = time.perf_counter() - write_started
         diagnostics.extend(adapter.diagnostics)
         logger.info(
@@ -398,7 +418,9 @@ def _write_verify_publish(
     limits: DocumentLimits,
     options: DocumentTranslationOptions,
     report: _Report,
-) -> None:
+    *,
+    fit_report: FitReport | None = None,
+) -> FitReport | None:
     """Write to a temporary file, reopen it as the same format, then publish atomically."""
     temporary = _temporary_path(output_path)
     expected = _run_sizes(adapter)
@@ -408,6 +430,7 @@ def _write_verify_publish(
         _verify(adapter, temporary, fmt, limits, options, expected)
         report(ProgressPhase.WRITE, 1, 1)
         publish(temporary, output_path)
+        return fit_report
     finally:
         with contextlib.suppress(FileNotFoundError):
             temporary.unlink()
@@ -431,6 +454,12 @@ def _verify(
         reopened.paragraphs()
         if expected is not None and _run_sizes(reopened) != expected:
             raise InvalidDocumentError("the written output does not contain the fitted font sizes")
+        if (
+            isinstance(adapter, LayoutRepairSupport)
+            and isinstance(reopened, LayoutRepairSupport)
+            and _effective_layout(adapter) != _effective_layout(reopened)
+        ):
+            raise InvalidDocumentError("the written output does not contain the fitted layout")
         adapter.verify_output(reopened)
     finally:
         reopened.close()
@@ -444,6 +473,31 @@ def _run_sizes(adapter: DocumentAdapter) -> dict[str, list[list[float]]] | None:
         c.id: [[round(r.size_pt, 2) for r in p.runs] for p in c.paragraphs]
         for c in adapter.layout_containers()
     }
+
+
+def _effective_layout(adapter: LayoutRepairSupport) -> list[object]:
+    """Serialized properties only: dynamic growth limits/revisions are not file contents."""
+    return [
+        (
+            c.id,
+            c.width_pt,
+            c.height_pt,
+            c.bounds_pt,
+            c.content_bounds_pt,
+            tuple(
+                (
+                    p.space_before_pt,
+                    p.space_after_pt,
+                    tuple(
+                        (r.text, r.size_pt, r.latin_font, r.east_asian_font, r.bold, r.italic)
+                        for r in p.runs
+                    ),
+                )
+                for p in c.paragraphs
+            ),
+        )
+        for c in adapter.layout_context()
+    ]
 
 
 def _check_paths(input_path: Path, output_path: Path) -> None:
@@ -480,19 +534,10 @@ def publish(temporary: Path, output_path: Path) -> None:
     temporary.unlink()
 
 
-def _publish_copy(input_path: Path, output_path: Path, report: _Report) -> None:
-    temporary = _temporary_path(output_path)
-    try:
-        shutil.copyfile(input_path, temporary)
-        report(ProgressPhase.WRITE, 1, 1)
-        publish(temporary, output_path)
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            temporary.unlink()
-
-
 def _containers(adapter: DocumentAdapter) -> list[LayoutContainer] | None:
     """The original fit baseline, described before any translation is applied."""
+    if isinstance(adapter, LayoutRepairSupport):
+        return adapter.layout_context()
     return adapter.layout_containers() if isinstance(adapter, LayoutSupport) else None
 
 
@@ -553,11 +598,26 @@ def _fit(
             if stop():
                 skipped = True
                 break
-            current = translated[original.id]
+            current = (
+                next(c for c in adapter.layout_context() if c.id == original.id)
+                if isinstance(adapter, LayoutRepairSupport)
+                else translated[original.id]
+            )
             if _same_text(original, current):
                 unchanged += 1  # untranslated text cannot introduce new overflow
             else:
-                outcome = fit_container(original, current, options, library, stop)
+                if isinstance(adapter, LayoutRepairSupport):
+                    outcome = fit_office_container(
+                        original,
+                        current,
+                        options,
+                        library,
+                        adapter.apply_layout_patch,
+                        adapter.layout_context,
+                        stop,
+                    )
+                else:
+                    outcome = fit_container(original, current, options, library, stop)
                 if outcome.status == "skipped":
                     skipped = True
                     break

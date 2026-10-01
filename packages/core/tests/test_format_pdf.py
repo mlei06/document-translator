@@ -5,6 +5,7 @@
 import hashlib
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import pymupdf
 import pytest
@@ -40,6 +41,7 @@ from doctranslator_core.types import (
     FitStatus,
     InvalidDocumentError,
     Language,
+    LayoutUnresolvableError,
     NoExtractableTextError,
     UnsupportedDocumentError,
 )
@@ -88,7 +90,7 @@ def test_text_is_replaced_and_artwork_links_and_numbers_are_kept(tmp_path: Path)
         assert after_doc[0].rect == before_doc[0].rect
     assert hashlib.sha256(source.read_bytes()).hexdigest() == digest
     assert result.fit_report.format.value == "pdf"
-    assert result.fit_report.measurement.startswith("pdf-v1")
+    assert result.fit_report.measurement.startswith("pdf-v2")
     assert result.fit_report.inspected == 10  # every translated unit, not the page number
     assert result.counts.segments == 11
 
@@ -128,7 +130,7 @@ def test_growth_shrinks_within_the_floor(tmp_path: Path) -> None:
     assert result.fit_report.status is FitStatus.ADJUSTED
 
 
-def test_overflow_at_floor_is_unresolved_and_text_is_never_dropped(tmp_path: Path) -> None:
+def test_overflow_at_floor_fails_without_publishing(tmp_path: Path) -> None:
     def build(page: pymupdf.Page) -> None:
         page.draw_rect(pymupdf.Rect(72, 72, 172, 100), color=(0, 0, 0), fill=(0.9, 0.9, 0.9))
         page.insert_text((78, 90), "分析", fontname="china-s", fontsize=12)
@@ -137,12 +139,10 @@ def test_overflow_at_floor_is_unresolved_and_text_is_never_dropped(tmp_path: Pat
     source = write_pdf(tmp_path / "box.pdf", build)
     words = " ".join(f"word{i}" for i in range(40))
     translator = FakeTranslator(lambda text, _: words if text == "分析" else "Next paragraph")
-    output, result = translate(source, translator)
-    assert result.fit_report.status is FitStatus.UNRESOLVED
-    [entry] = result.fit_report.entries
-    assert entry.reason == "overflow_at_floor"
-    assert entry.final_sizes_pt == [8.4]  # 70% of 12 pt: floor sizes are kept
-    assert "".join(words.split()) in "".join(page_text(output).split())
+    with pytest.raises(LayoutUnresolvableError, match="page 1, text 1"):
+        translate(source, translator)
+    assert not (tmp_path / "out.pdf").exists()
+    assert "分析" in page_text(source)
 
 
 def test_small_text_is_never_shrunk(tmp_path: Path) -> None:
@@ -279,3 +279,123 @@ def test_output_fonts_are_subset(tmp_path: Path) -> None:
     source = write_mixed(tmp_path / "mixed.pdf")
     output, _ = translate(source, FakeTranslator(english))
     assert output.stat().st_size < 200_000
+
+
+def test_heading_stack_and_labelled_rows_remain_separate(tmp_path: Path) -> None:
+    def build(page: pymupdf.Page) -> None:
+        page.insert_text(
+            (72, 100), "A sufficiently long project heading", fontname="hebo", fontsize=12
+        )
+        page.insert_text((72, 113), "Python, FastAPI, PostgreSQL", fontsize=10)
+        page.insert_text((72, 150), "Data systems: databases and queues", fontsize=10)
+        page.insert_text((72, 161), "Infrastructure: containers and servers", fontsize=10)
+
+    source = write_pdf(tmp_path / "roles.pdf", build)
+    adapter = PdfAdapter(source, DocumentLimits())
+    texts = ["".join(n.text for n in p.nodes if isinstance(n, Text)) for p in adapter.paragraphs()]
+    adapter.close()
+    assert texts == [
+        "A sufficiently long project heading",
+        "Python, FastAPI, PostgreSQL",
+        "Data systems: databases and queues",
+        "Infrastructure: containers and servers",
+    ]
+
+
+@pytest.mark.parametrize("anchor", [350, 520])
+def test_repeated_right_column_expands_left_and_preserves_anchor(
+    tmp_path: Path, anchor: int
+) -> None:
+    def build(page: pymupdf.Page) -> None:
+        for y, text in ((100, "May 2028"), (130, "June 2029")):
+            width = pymupdf.get_text_length(text, fontsize=12)
+            page.insert_text((anchor - width, y), text, fontsize=12)
+            page.insert_text((72, y), "University degree", fontsize=12)
+
+    source = write_pdf(tmp_path / "right.pdf", build)
+    adapter = PdfAdapter(source, DocumentLimits())
+    for paragraph in adapter.paragraphs():
+        if "202" in "".join(n.text for n in paragraph.nodes if isinstance(n, Text)):
+            adapter.apply(
+                paragraph.id,
+                [Text("Graduation in the year 2030", paragraph.nodes[0].style)],
+                Language.EN,
+            )
+    adapter.place(FitOptions(), None)
+    output = tmp_path / "right-out.pdf"
+    adapter.save(output)
+    adapter.close()
+    with pymupdf.open(output) as doc:
+        boxes = doc[0].search_for("Graduation in the year 2030")
+        assert len(boxes) == 2
+        assert all(abs(box.x1 - anchor) < 1 for box in boxes)
+        assert all(box.x0 < anchor - 60 for box in boxes)
+
+
+def test_failed_trials_and_skip_leave_working_pdf_intact(tmp_path: Path) -> None:
+    def build(page: pymupdf.Page) -> None:
+        page.insert_text((72, 100), "Small heading", fontsize=12)
+        page.insert_text((72, 120), "Next paragraph", fontsize=12)
+
+    source = write_pdf(tmp_path / "trial.pdf", build)
+    adapter = PdfAdapter(source, DocumentLimits())
+    paragraph = adapter.paragraphs()[0]
+    adapter.apply(
+        paragraph.id, [Text("oversized translation " * 1000, paragraph.nodes[0].style)], Language.EN
+    )
+    for skip in (False, True):
+        with pytest.raises(LayoutUnresolvableError):
+            adapter.place(FitOptions(), None, lambda skip=skip: skip)
+        output = tmp_path / f"unchanged-{skip}.pdf"
+        adapter.save(output)
+        assert page_text(output) == page_text(source)
+    adapter.close()
+
+
+def test_intersecting_neighbour_does_not_disappear_from_region() -> None:
+    unit = (72.0, 100.0, 180.0, 112.0)
+    region = region_for(
+        unit, "left", None, [(75.0, 110.0, 190.0, 121.0)], (36.0, 36.0, 559.0, 806.0)
+    )
+    assert region == unit
+
+
+def test_dense_baselines_keep_neighbour_when_font_boxes_overlap(tmp_path: Path) -> None:
+    def build(page: pymupdf.Page) -> None:
+        page.insert_text((72, 100), "First: row", fontsize=10)
+        page.insert_text((72, 112), "Second: row", fontsize=10)
+
+    source = write_pdf(tmp_path / "dense.pdf", build)
+    adapter = PdfAdapter(source, DocumentLimits())
+    for paragraph in adapter.paragraphs():
+        adapter.apply(
+            paragraph.id, [Text("Replacement row", paragraph.nodes[0].style)], Language.EN
+        )
+    adapter.place(FitOptions(), None)
+    output = tmp_path / "dense-out.pdf"
+    adapter.save(output)
+    reopened = PdfAdapter(output, DocumentLimits())
+    reopened.paragraphs()
+    adapter.verify_output(reopened)
+    assert "".join(page_text(output).split()).count("Replacementrow") == 2
+    reopened.close()
+    adapter.close()
+
+
+def test_wrapped_continuation_can_cross_producer_blocks(tmp_path: Path) -> None:
+    first = "First paragraph starts with a sufficiently long line of ordinary text here"
+    continuation = "and continues on the following line."
+
+    def build(page: pymupdf.Page) -> None:
+        page.insert_text((72, 100), first, fontsize=10)
+        page.insert_text((79, 112), continuation, fontsize=10)
+
+    source = write_pdf(tmp_path / "separate-blocks.pdf", build)
+    with pymupdf.open(source) as doc:
+        assert len(cast(dict[str, Any], doc[0].get_text("dict"))["blocks"]) == 2
+    adapter = PdfAdapter(source, DocumentLimits())
+    [paragraph] = adapter.paragraphs()
+    assert (
+        "".join(n.text for n in paragraph.nodes if isinstance(n, Text)) == f"{first} {continuation}"
+    )
+    adapter.close()

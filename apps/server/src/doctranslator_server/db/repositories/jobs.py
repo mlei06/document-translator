@@ -17,6 +17,7 @@ from doctranslator_server.db.repositories._rows import rowcount
 __all__ = [
     "NONTERMINAL",
     "active_in_slot",
+    "active_work_directories",
     "by_submission",
     "cancel_for_user",
     "claim",
@@ -36,6 +37,18 @@ __all__ = [
 ]
 
 NONTERMINAL = ("queued", "running")
+
+
+def active_work_directories(session: Session) -> set[str]:
+    """Names owned by current running attempts, including ones awaiting lease recovery.
+
+    A lease expiring does not mean a native model call has stopped. Recovery changes the
+    claim token before another worker creates its directory; tokens are never reused.
+    """
+    rows = session.execute(
+        select(Job.id, Job.claim_token).where(Job.status == "running", Job.claim_token.is_not(None))
+    )
+    return {f"{job_id}-{token[:8]}" for job_id, token in rows if token is not None}
 
 
 def insert(session: Session, **fields: Any) -> Job:
@@ -112,7 +125,12 @@ def next_candidates(session: Session, now: datetime, limit: int = 8) -> list[str
     return list(
         session.scalars(
             select(Job.id)
-            .where(Job.status == "queued", Job.available_at <= now, ~Job.cancel_requested)
+            .where(
+                Job.status == "queued",
+                Job.kind != "waiter",
+                Job.available_at <= now,
+                ~Job.cancel_requested,
+            )
             .order_by(Job.available_at, Job.created_at)
             .limit(limit)
         )

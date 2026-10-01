@@ -137,10 +137,12 @@ def add_session(session: Session, **fields: object) -> SessionRow:
     return row
 
 
-def session_by_digest(session: Session, digest: str) -> tuple[SessionRow, ApiKey, User] | None:
+def session_by_digest(
+    session: Session, digest: str
+) -> tuple[SessionRow, ApiKey | None, User] | None:
     row = session.execute(
         select(SessionRow, ApiKey, User)
-        .join(ApiKey, ApiKey.id == SessionRow.api_key_id)
+        .outerjoin(ApiKey, ApiKey.id == SessionRow.api_key_id)
         .join(User, User.id == SessionRow.user_id)
         .where(SessionRow.token_digest == digest)
     ).first()
@@ -157,3 +159,7 @@ def revoke_session(session: Session, session_id: str, now: datetime) -> None:
         .where(SessionRow.id == session_id, SessionRow.revoked_at.is_(None))
         .values(revoked_at=now)
     )
+
+
+def user_by_email(session: Session, email: str) -> User | None:
+    return session.scalar(select(User).where(User.email == email))

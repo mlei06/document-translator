@@ -5,7 +5,13 @@ from typing import Literal
 
 from doctranslator_core.inline import Inline
 
-__all__ = ["LayoutContainer", "LayoutParagraph", "LayoutRun", "Paragraph"]
+__all__ = [
+    "LayoutContainer",
+    "LayoutParagraph",
+    "LayoutPatch",
+    "LayoutRun",
+    "Paragraph",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,3 +87,18 @@ class LayoutContainer:
     """How single line spacing is computed: ``em`` is a fixed ``em_line_height`` times the font
     size (PowerPoint); ``font`` uses each font's own ascent and descent (Word, Excel)."""
     em_line_height: float = 1.2
+    page_index: int | None = None
+    bounds_pt: tuple[float, float, float, float] | None = None
+    content_bounds_pt: tuple[float, float, float, float] | None = None
+    growth_bounds_pt: tuple[float, float, float, float] | None = None
+    revision: int = 0
+    spacing_supported: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LayoutPatch:
+    """Validated, optimistic patch containing no arbitrary document edits."""
+
+    expected: LayoutContainer
+    replacement: LayoutContainer
+    operation: Literal["fonts", "geometry", "spacing"]

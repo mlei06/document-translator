@@ -25,7 +25,7 @@ from doctranslator_server.app import (
     migrate,
     open_admin,
 )
-from doctranslator_server.jobs.backup import BackupError, backup, restore
+from doctranslator_server.jobs.backup import BackupError, backup, daily_backup, restore
 from doctranslator_server.jobs.engines import EngineCatalog
 from doctranslator_server.jobs.retention import run_retention
 from doctranslator_server.jobs.service import cancel_user_jobs
@@ -92,6 +92,23 @@ def _logging() -> None:
         stream=sys.stderr,
     )
     logging.getLogger("fontTools").setLevel(logging.ERROR)
+    # HTTPX INFO request logs contain private upstream endpoint URLs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+@app.command(name="openapi")
+def openapi_command(
+    output: Annotated[Path, typer.Argument(help="Where to write the OpenAPI JSON.")],
+) -> None:
+    """Write the /v1 OpenAPI document (used to generate the web client's types)."""
+    import json
+
+    from doctranslator_server.app import openapi_document
+
+    output.write_text(
+        json.dumps(openapi_document(), indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    typer.echo(str(output))
 
 
 @app.command(name="migrate")
@@ -188,9 +205,10 @@ def _stop_process(process: subprocess.Popen[bytes]) -> None:
 
 def _retention_loop(services: Services, stop: threading.Event) -> None:
     holder = f"serve:{worker_identity()}"
-    while not stop.wait(3600):
+    while not stop.wait(300):
         try:
             run_retention(services.settings, services.db, services.store, holder=holder)
+            daily_backup(services.settings, services.db, services.store)
         except Exception:
             logger.exception("retention failed")
 
@@ -219,10 +237,20 @@ def worker() -> None:
             stop
         )
     finally:
+        stop.set()
         services.close()
 
 
 # Users and keys
+
+
+@app.command()
+def desktop() -> None:
+    """Run the authenticated per-user desktop profile, bootstrapped through stdin."""
+    from doctranslator_server.desktop import run
+
+    _logging()
+    run(_settings())
 
 
 @users_app.command("create")

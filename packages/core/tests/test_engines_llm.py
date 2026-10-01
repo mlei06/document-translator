@@ -12,6 +12,7 @@ from doctranslator_core.types import (
     EngineAuthenticationError,
     EngineResponseError,
     EngineUnavailableError,
+    IdentityMismatchError,
     Language,
     TranslationError,
 )
@@ -89,8 +90,84 @@ def test_request_shape_and_auth_header() -> None:
     assert body["model"] == "gemma"
     assert body["temperature"] == 0.0
     assert body["response_format"] == {"type": "json_object"}
-    assert "Simplified Chinese to English" in body["messages"][0]["content"]
+    assert "into English" in body["messages"][0]["content"]
     assert json.loads(body["messages"][1]["content"]) == {"segments": ["你好"]}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '<thinking>Reasoning about the output.</thinking>\n{"translations":["translated"]}',
+        '<thinking>Reasoning</thinking>\n```json\n{"translations":["translated"]}\n```',
+    ],
+)
+def test_known_single_reasoning_envelope_keeps_strict_translation_schema(content: str) -> None:
+    recorder = Recorder(lambda _: completion(content))
+    assert translate(recorder.engine(), ["source"]) == ["translated"]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '<thinking>unterminated {"translations":["translated"]}',
+        '<thinking>outer<thinking>inner</thinking></thinking>{"translations":["translated"]}',
+        '<thinking>one</thinking><thinking>two</thinking>{"translations":["translated"]}',
+        '<thinking>reason</thinking>{"translations":["translated"]} trailing junk',
+        '<thinking>reason</thinking>{"translations":["one", "two"]}',
+        "<thinking>" + "x" * 65_536 + '</thinking>{"translations":["translated"]}',
+    ],
+    ids=["unterminated", "nested", "repeated", "trailing-junk", "wrong-count", "oversized"],
+)
+def test_reasoning_envelope_does_not_accept_malformed_or_unbounded_output(content: str) -> None:
+    recorder = Recorder(lambda _: completion(content))
+    with pytest.raises(EngineResponseError):
+        translate(recorder.engine(), ["source"])
+
+
+def test_thinking_text_inside_json_remains_translation_content() -> None:
+    value = "<thinking>quoted example</thinking>"
+    recorder = Recorder(lambda _: completion(json.dumps({"translations": [value]})))
+    assert translate(recorder.engine(), ["source"]) == [value]
+
+
+@pytest.mark.parametrize("served", ["gemma", "approved-alias"])
+def test_reported_model_must_match_requested_or_explicit_alias(served: str) -> None:
+    recorder = Recorder(
+        lambda _: httpx.Response(
+            200,
+            json={
+                "model": served,
+                "choices": [{"message": {"content": '{"translations":["text"]}'}}],
+            },
+        )
+    )
+    assert translate(recorder.engine(response_model_aliases=("approved-alias",)), ["source"]) == [
+        "text"
+    ]
+
+
+def test_unexpected_reported_model_fails_identity_without_retry() -> None:
+    recorder = Recorder(
+        lambda _: httpx.Response(
+            200,
+            json={
+                "model": "unexpected-model",
+                "choices": [{"message": {"content": '{"translations":["text"]}'}}],
+            },
+        )
+    )
+    with pytest.raises(IdentityMismatchError):
+        translate(recorder.engine(), ["source"])
+    assert len(recorder.requests) == 1 and not recorder.sleeps
+
+
+def test_aliases_change_pinned_identity_and_order_does_not() -> None:
+    base = Recorder(lambda _: translations(["text"]))
+    assert base.engine().identity != base.engine(response_model_aliases=("a",)).identity
+    assert (
+        base.engine(response_model_aliases=("a", "b")).identity
+        == base.engine(response_model_aliases=("b", "a")).identity
+    )
 
 
 def test_json_mode_off_omits_response_format() -> None:
@@ -152,9 +229,9 @@ def test_503_exhausts_retries_with_backoff() -> None:
     recorder = Recorder(lambda request: httpx.Response(503))
     with pytest.raises(EngineResponseError, match="503") as caught:
         translate(recorder.engine(max_retries=3), ["a"])
-    assert len(recorder.requests) == 4
-    assert len(recorder.sleeps) == 3
-    for sleep, base in zip(recorder.sleeps, [1, 2, 4], strict=True):
+    assert len(recorder.requests) == 3
+    assert len(recorder.sleeps) == 2
+    for sleep, base in zip(recorder.sleeps, [1, 2], strict=True):
         assert 0.75 * base <= sleep <= 1.25 * base
     assert API_KEY not in str(caught.value)
 

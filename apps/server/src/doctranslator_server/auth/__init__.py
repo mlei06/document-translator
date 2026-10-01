@@ -13,9 +13,13 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
+
+from doctranslator_server.auth.passwords import hash_password, verify_password
 from doctranslator_server.db import Database
 from doctranslator_server.db.models import ApiKey, utcnow
 from doctranslator_server.db.repositories import users as repo
+from doctranslator_server.jobs.errors import ConflictError
 
 __all__ = [
     "SESSION_ABSOLUTE",
@@ -109,6 +113,13 @@ def _digest(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
+def _csrf_of(token: str) -> str:
+    """A session's CSRF token, derived one-way from its cookie token so any tab of the signed-in
+    page can recover it from ``GET /v1/sessions/current`` (it proves the same-origin page)."""
+    raw = hashlib.sha256(b"doctranslator-csrf:" + token.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
 def _new_key() -> tuple[str, str, str]:
     prefix = base64.b32encode(secrets.token_bytes(10)).decode("ascii").lower()[:12]
     secret = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii").rstrip("=")
@@ -162,11 +173,17 @@ class Authenticator:
     def start_session(self, key: str) -> NewSession:
         """Exchange a valid API key for a new browser session (the key is not kept)."""
         principal, key_id = self._key(key.strip())
+        return self._start_session(principal, key_id)
+
+    def _start_session(self, principal: Principal, key_id: str | None = None) -> NewSession:
         token = secrets.token_urlsafe(32)
-        csrf = secrets.token_urlsafe(32)
+        csrf = _csrf_of(token)
         now = utcnow()
         expires = now + SESSION_ABSOLUTE
         with self._db.session() as session:
+            user = repo.get_user(session, principal.user_id)
+            if user is None or not user.active:
+                raise AuthenticationError
             row = repo.add_session(
                 session,
                 token_digest=_digest(token),
@@ -187,6 +204,40 @@ class Authenticator:
             session_id = row.id
         return NewSession(principal, session_id, token, csrf, expires)
 
+    def register(self, email: str, password: str, display_name: str | None) -> NewSession:
+        encoded = hash_password(password)
+        try:
+            with self._db.session() as session:
+                user = repo.add_user(session, display_name or email.split("@", 1)[0], "human")
+                user.email = email
+                user.password_hash = encoded
+                session.flush()
+                principal = Principal(user.id, user.display_name, user.kind)
+                repo.audit(
+                    session,
+                    "account_registered",
+                    actor=user.id,
+                    target_type="user",
+                    target_id=user.id,
+                )
+        except IntegrityError:
+            raise ConflictError(
+                "Unable to create an account with these details", code="account_unavailable"
+            ) from None
+        return self._start_session(principal)
+
+    def password_session(self, email: str, password: str) -> NewSession:
+        with self._db.session() as session:
+            user = repo.user_by_email(session, email)
+            encoded = user.password_hash if user is not None else None
+            principal = (
+                Principal(user.id, user.display_name, user.kind) if user is not None else None
+            )
+        valid = verify_password(password, encoded)
+        if not valid or principal is None or principal.kind != "human":
+            raise AuthenticationError
+        return self._start_session(principal)
+
     def from_session(
         self, token: str, *, method: str, csrf: str | None, origin: str | None, own_origin: str
     ) -> tuple[Principal, str]:
@@ -202,7 +253,7 @@ class Authenticator:
                 row.revoked_at is not None
                 or row.expires_at <= now
                 or now - row.last_seen_at >= SESSION_IDLE
-                or key.revoked_at is not None
+                or (row.api_key_id is not None and (key is None or key.revoked_at is not None))
                 or not user.active
             ):
                 raise AuthenticationError
@@ -214,6 +265,19 @@ class Authenticator:
             if now - row.last_seen_at >= _TOUCH_INTERVAL:
                 repo.touch_session(session, row.id, now)
             return Principal(user.id, user.display_name, user.kind), row.id
+
+    def session_csrf(self, token: str) -> tuple[str, datetime]:
+        """The CSRF token and absolute expiry of a valid session cookie (for a reloaded page)."""
+        with self._db.session() as session:
+            found = repo.session_by_digest(session, _digest(token))
+            if found is None:
+                raise AuthenticationError
+            csrf = _csrf_of(token)
+            if not hmac.compare_digest(found[0].csrf_digest, _digest(csrf)):
+                # Older releases used a random CSRF token that cannot be recovered from its
+                # stored digest. Require sign-in instead of returning a token mutations reject.
+                raise AuthenticationError
+            return csrf, found[0].expires_at
 
     def end_session(self, session_id: str) -> None:
         with self._db.session() as session:

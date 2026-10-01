@@ -1,5 +1,9 @@
 # P2-P6 - Document Translation Delivery Handoff
 
+> Latest simplification: [ADR-029](../decisions/ADR-029-standard-fit-direct-download.md) and [direct downloads](standard-fit-direct-download.md) supersede thorough fit, previews and product LibreOffice requirements in earlier plans. Standard fit/integrity checks remain; no implementation completion is implied.
+
+> Latest website direction: ADR-027/028 and the [routing](automatic-website-translation.md) / [storage](website-cache-and-retention.md) specifications supersede older website model-picker and permanent-library targets. Implementation is pending; preserve legacy saved files and explicit API/desktop contracts.
+
 > Storage/identity revision, 2026-09-29: follow accepted [ADR-014](../decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](P5-D2-storage-and-ownership.md). These supersede earlier global-cache, version-0, desktop-library and conflicting retention requirements in this plan. Human/service ownership, local fresh exports, hosted current results and immutable job downloads are the target; implementation is pending.
 
 

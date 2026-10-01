@@ -301,9 +301,11 @@ dependencies = [
     { name = "alembic" },
     { name = "doctranslator-core", extra = ["mt"] },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
+    { name = "truststore" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -313,9 +315,11 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "doctranslator-core", extras = ["mt"], editable = "packages/core" },
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "sqlalchemy", specifier = ">=2.1.1" },
+    { name = "truststore", specifier = ">=0.10.4" },
     { name = "typer", specifier = ">=0.27.2" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]

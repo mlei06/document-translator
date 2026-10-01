@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 from importlib.metadata import PackageNotFoundError, version
+from typing import cast
 
 from fastapi import FastAPI
 
@@ -22,6 +23,7 @@ __all__ = [
     "create_app",
     "migrate",
     "open_admin",
+    "openapi_document",
     "package_version",
 ]
 
@@ -90,7 +92,10 @@ def open_admin(settings: ServerSettings) -> Admin:
         db.dispose()
         raise
     store = BlobStore(
-        settings.data_dir, db, pin_ttl=timedelta(hours=settings.staging_retention_hours)
+        settings.data_dir,
+        db,
+        pin_ttl=timedelta(hours=settings.staging_retention_hours),
+        settings=settings,
     )
     return Admin(settings, db, store)
 
@@ -130,6 +135,28 @@ def create_app(services: Services) -> FastAPI:
             core_version=package_version("doctranslator-core"),
             max_upload_bytes=services.settings.max_upload_bytes,
             web_dir=services.settings.web_dir,
+            registration_enabled=services.settings.registration_enabled,
         ),
     )
     return app
+
+
+def openapi_document() -> dict[str, object]:
+    """The ``/v1`` OpenAPI document, built without a database or engines (for client generation).
+
+    Routes only reach the services when a request is handled, so a placeholder context suffices.
+    """
+    app = FastAPI(
+        title="Document Translator",
+        version=package_version("doctranslator-server"),
+        openapi_url="/v1/openapi.json",
+    )
+    placeholder = ApiContext(
+        jobs=cast(JobService, None),
+        auth=cast(Authenticator, None),
+        service_version=package_version("doctranslator-server"),
+        core_version=package_version("doctranslator-core"),
+        max_upload_bytes=ServerSettings.model_fields["max_upload_bytes"].default,
+    )
+    install(app, placeholder)
+    return app.openapi()

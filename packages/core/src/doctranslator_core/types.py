@@ -19,7 +19,9 @@ __all__ = [
     "DocumentTranslationOptions",
     "DocumentTranslationResult",
     "EngineAuthenticationError",
+    "EngineEndpointUnavailableError",
     "EngineInfo",
+    "EnginePolicyDeniedError",
     "EngineResponseError",
     "EngineUnavailableError",
     "Extent",
@@ -32,6 +34,7 @@ __all__ = [
     "IdentityMismatchError",
     "InvalidDocumentError",
     "Language",
+    "LayoutUnresolvableError",
     "NoExtractableTextError",
     "OutputPathError",
     "ProgressPhase",
@@ -162,6 +165,7 @@ class FitOptions(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    mode: Literal["standard"] = "standard"
     min_scale: float = Field(default=0.7, ge=0.3, le=1.0)
     min_size_pt: float = Field(default=8.0, ge=1.0, le=72.0)
 
@@ -175,6 +179,8 @@ class DocumentTranslationOptions(BaseModel):
     target: Language
     protected_terms: tuple[str, ...] = ()
     """Terms that are never translated (exact, case-sensitive), e.g. product names."""
+    use_default_dictionary: bool = True
+    """Protect the maintained product/company names in addition to caller terms."""
     txt_encoding: str | None = None
     """TXT only: the input's encoding. ``None`` means UTF-8, honouring a UTF-8/UTF-16 BOM."""
     fit: FitOptions = FitOptions()
@@ -264,12 +270,20 @@ class FitEntry(BaseModel):
     translated_extent: Extent | None
     """At the original sizes, before any shrinking."""
     final_extent: Extent | None
+    operations: tuple[str, ...] = ()
+    original_bounds_pt: tuple[float, float, float, float] | None = None
+    final_bounds_pt: tuple[float, float, float, float] | None = None
+    original_fonts: tuple[tuple[str | None, str | None], ...] = ()
+    final_fonts: tuple[tuple[str | None, str | None], ...] = ()
+    original_spacing_pt: tuple[tuple[float, float], ...] = ()
+    final_spacing_pt: tuple[tuple[float, float], ...] = ()
+    timings_s: dict[str, float] = Field(default_factory=dict[str, float])
 
 
 class FitReport(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: int = 1
+    version: Literal[1, 2] = 2
     format: DocumentFormat
     status: FitStatus
     measurement: str
@@ -291,7 +305,7 @@ class DocumentTranslationResult(BaseModel):
     format: DocumentFormat
     source_requested: Language | Literal["auto"]
     source_resolved: Language | None
-    """``None`` when the document has no translatable text."""
+    """Optional display metadata; unknown or mixed content still translates."""
     target: Language
     engine: EngineInfo
     fingerprint: str
@@ -309,16 +323,17 @@ class DocumentTranslationResult(BaseModel):
 class DocumentDetection(BaseModel):
     """What a document is before translation: its verified format and detected source language.
 
-    ``status`` is ``detected``, ``ambiguous`` (the text does not settle the language; ``source`` is
-    ``None`` and the caller should choose) or ``no_text`` (nothing translatable was found).
+    Language is optional display metadata. Unknown, mixed and ambiguous documents translate
+    without a source selection or a different inference profile.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     format: DocumentFormat
     source: Language | None
-    status: Literal["detected", "ambiguous", "no_text"]
-    segments: int
+    status: Literal["detected", "ambiguous", "unknown", "mixed", "no_text"]
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    segments: int | None = None
     diagnostics: list[DocumentDiagnostic] = Field(default_factory=list[DocumentDiagnostic])
 
 
@@ -344,8 +359,16 @@ class EngineUnavailableError(TranslationError):
     """The engine cannot be reached or loaded."""
 
 
+class EngineEndpointUnavailableError(EngineUnavailableError):
+    """Shared endpoint connectivity failed, rather than one model request timing out."""
+
+
 class EngineAuthenticationError(TranslationError):
     """The LLM server rejected the credentials. Never retried."""
+
+
+class EnginePolicyDeniedError(TranslationError):
+    """The endpoint explicitly denied policy or hard quota. Never retried or rerouted."""
 
 
 class EngineResponseError(TranslationError):
@@ -372,6 +395,12 @@ class InvalidDocumentError(DocumentError):
     """The file claims a supported format but is malformed."""
 
     code = "invalid_document"
+
+
+class LayoutUnresolvableError(DocumentError):
+    """Complete translated text cannot be placed within legal regions and font floors."""
+
+    code = "layout_unresolvable"
 
 
 class DocumentLimitError(DocumentError):

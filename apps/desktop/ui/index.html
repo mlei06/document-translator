@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Lenny Translator</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img class="mark" src="icon.svg" alt="" />
+        <div>
+          <h1>Lenny Translator</h1>
+          <p>Translate documents and keep their formatting.</p>
+        </div>
+        <button id="quit">Quit</button>
+      </header>
+      <section class="composer" aria-labelledby="add-title">
+        <div id="drop-zone">
+          <svg
+            class="drop-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"
+            />
+          </svg>
+          <h2 id="add-title">Drop files or folders here</h2>
+          <div class="actions picker-actions">
+            <button id="files">Choose files</button
+            ><button id="folders">Choose folders</button>
+          </div>
+          <p class="help">DOCX, PPTX, XLSX, PDF and TXT</p>
+        </div>
+        <div id="draft-section" hidden>
+          <div class="section-heading">
+            <h3 id="selection">Selected</h3>
+            <button id="clear-draft" class="quiet">Clear all</button>
+          </div>
+          <ul id="draft-list" aria-labelledby="selection"></ul>
+        </div>
+        <div class="destination-row">
+          <div>
+            <span class="help">Save translations to</span>
+            <p id="destination-path">Finding Downloads folder…</p>
+          </div>
+          <button id="destination" class="quiet">Change folder</button>
+          <button id="reset-destination" class="quiet" hidden>
+            Use Downloads
+          </button>
+        </div>
+        <div class="language-heading">
+          <h3 id="language-title">Translate to</h3>
+          <p class="help" id="language-help">
+            Clicking a language starts translation.
+          </p>
+        </div>
+        <div
+          class="actions language-actions"
+          role="group"
+          aria-labelledby="language-title"
+          aria-describedby="language-help"
+        >
+          <button
+            class="translate"
+            data-target="en"
+            aria-label="Translate to English"
+          >
+            English
+          </button>
+          <button
+            class="translate"
+            data-target="zh"
+            aria-label="Translate to Chinese"
+          >
+            Chinese
+          </button>
+          <button
+            class="translate"
+            data-target="ja"
+            aria-label="Translate to Japanese"
+          >
+            Japanese
+          </button>
+          <button
+            class="translate"
+            data-target="es"
+            aria-label="Translate to Spanish"
+          >
+            Spanish
+          </button>
+        </div>
+        <p class="help original-note">
+          Translated copies save automatically. Originals stay unchanged.
+        </p>
+      </section>
+      <p id="announcement" role="status" aria-live="polite"></p>
+      <section class="activity" aria-labelledby="queue-title">
+        <div class="section-heading">
+          <h2 id="queue-title" tabindex="-1">Activity</h2>
+          <p id="activity-summary" class="help"></p>
+        </div>
+        <div id="discoveries"></div>
+        <div id="queue-columns" class="queue-columns" aria-hidden="true" hidden>
+          <span>Document</span><span>Language</span><span>Status</span
+          ><span>Actions</span>
+        </div>
+        <div id="queue" role="list" aria-label="Translation activity">
+          <p>No translations yet.</p>
+        </div>
+      </section>
+      <details class="settings">
+        <summary>Settings</summary>
+        <section>
+          <h2>Offline support</h2>
+          <p id="offline-state">Checking installed support</p>
+          <div class="actions">
+            <button id="offline-install">Install</button
+            ><button id="offline-repair">Repair</button
+            ><button id="offline-remove">Remove</button
+            ><button id="offline-cancel">Cancel setup</button>
+          </div>
+          <h2>Explorer shortcuts</h2>
+          <p>
+            Languages appear in this order under Translate. Remove every
+            shortcut to hide the menu.
+          </p>
+          <div id="shortcuts"></div>
+          <label for="shortcut-language">Add language</label
+          ><select id="shortcut-language">
+            <option value="en">English</option>
+            <option value="zh">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="es">Spanish</option></select
+          ><button id="shortcut-add">Add shortcut</button>
+        </section>
+      </details>
+      <dialog id="quit-dialog">
+        <h2>Quit Lenny?</h2>
+        <p>
+          Active translations will be interrupted. Your original and exported
+          files are preserved.
+        </p>
+        <button id="keep">Keep working</button
+        ><button id="confirm-quit">Quit application</button>
+      </dialog>
+      <p class="help">Closing this window keeps translations running.</p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+LIBRARY lenny-explorer
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

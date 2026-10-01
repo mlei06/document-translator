@@ -32,6 +32,15 @@ jobs:
 
       - bash: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui \
+            fonts-noto-cjk
+        displayName: Install LibreOffice for page rendering (ADR-023)
+
+      - bash: |
+          set -euo pipefail
+          export DOCTRANSLATOR_TEST_REQUIRE_LIBREOFFICE=1
           uv sync --locked --all-packages
           uv run ruff format --check
           uv run ruff check
@@ -39,6 +48,26 @@ jobs:
           uv run lint-imports
           uv run pytest
         displayName: Run checks
+
+      - task: NodeTool@0
+        inputs:
+          versionSpec: "24.x"
+        displayName: Install Node
+
+      - bash: |
+          set -euo pipefail
+          npm ci
+          npm run gen:api
+          git diff --exit-code -- openapi.json src/api/schema.d.ts
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm test
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run e2e
+        workingDirectory: apps/web
+        displayName: Web checks and real-service browser tests
 
   - job: WindowsTests
     displayName: Tests on Windows

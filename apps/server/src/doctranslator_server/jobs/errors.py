@@ -70,3 +70,12 @@ class UnavailableError(ServiceError):
     code = "unavailable"
     status = 503
     retryable = True
+    retry_after_s = 5
+
+
+class TranslationUnavailableError(ServiceError):
+    status = 410
+    code = "translation_unavailable"
+
+    def __init__(self) -> None:
+        super().__init__("Translation no longer available. Upload the original to translate again.")

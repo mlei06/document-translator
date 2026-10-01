@@ -24,10 +24,10 @@ from pathlib import Path
 from lxml import etree
 
 from doctranslator_core.config import DocumentLimits
-from doctranslator_core.document import LayoutContainer, Paragraph
+from doctranslator_core.document import LayoutContainer, LayoutPatch, Paragraph
 from doctranslator_core.formats._ooxml import Element, Package, qn
 from doctranslator_core.formats._ooxml.runs import StyleTable, clean_text
-from doctranslator_core.formats.base import DocumentAdapter, LayoutSupport
+from doctranslator_core.formats.base import DocumentAdapter, LayoutRepairSupport, LayoutSupport
 from doctranslator_core.formats.docx.layout import DocxLayout
 from doctranslator_core.inline import Inline, Keep, Obj, Text, Wrap
 from doctranslator_core.types import (
@@ -99,7 +99,7 @@ class _ParagraphRef:
     trailing: list[Element]
 
 
-class DocxAdapter(DocumentAdapter, LayoutSupport):
+class DocxAdapter(DocumentAdapter, LayoutSupport, LayoutRepairSupport):
     format = DocumentFormat.DOCX
 
     def __init__(self, path: Path, limits: DocumentLimits) -> None:
@@ -369,6 +369,16 @@ class DocxAdapter(DocumentAdapter, LayoutSupport):
 
     def layout_containers(self) -> list[LayoutContainer]:
         return self._layout.containers()
+
+    def layout_context(self) -> list[LayoutContainer]:
+        return self.layout_containers()
+
+    def apply_layout_patch(self, patch: LayoutPatch) -> None:
+        current = next(c for c in self.layout_containers() if c.id == patch.expected.id)
+        if current != patch.expected:
+            raise ValueError("stale layout patch")
+        self._layout.apply_patch(patch)
+        self.package.mark_modified(self._layout.boxes[current.id].part)
 
     def apply_run_sizes(self, container_id: str, sizes: Sequence[Sequence[float]]) -> None:
         self.package.mark_modified(self._layout.apply_sizes(container_id, sizes))

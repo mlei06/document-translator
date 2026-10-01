@@ -17,6 +17,7 @@ from doctranslator_core.types import (
     FitStatus,
     FontManifest,
     Language,
+    LayoutUnresolvableError,
     ProgressPhase,
     TranslationProgress,
 )
@@ -45,9 +46,10 @@ def _run(
     manifest: FontManifest | None,
     skip: object = None,
     progress: list[TranslationProgress] | None = None,
+    target_text: str = LONG,
 ) -> DocumentTranslationResult:
     return translate_document(
-        FakeTranslator(lambda text, _: LONG),
+        FakeTranslator(lambda text, _: target_text),
         path,
         path.with_name("out" + path.suffix),
         options=OPTIONS,
@@ -99,10 +101,17 @@ def test_txt_has_no_fit_to_skip(tmp_path: Path) -> None:
 
 def test_pdf_skip_still_places_every_translation(tmp_path: Path) -> None:
     source = write_mixed(tmp_path / "mixed.pdf")
-    result = _run(source, None, skip=lambda: True)
+    result = _run(source, None, skip=lambda: True, target_text="Translated")
     assert result.fit_status is FitStatus.SKIPPED
     text = "".join(unicodedata.normalize("NFKC", page_text(result.output_path)).split())
-    assert text.count("".join(LONG.split())) >= 9  # every translated unit is on the page
+    assert text.count("Translated") >= 9  # every translated unit is on the page
+
+
+def test_pdf_skip_does_not_authorize_overlapping_placement(tmp_path: Path) -> None:
+    source = write_mixed(tmp_path / "mixed.pdf")
+    with pytest.raises(LayoutUnresolvableError):
+        _run(source, None, skip=lambda: True)
+    assert not (tmp_path / "out.pdf").exists()
 
 
 def test_phases_include_apply_between_translate_and_fit(

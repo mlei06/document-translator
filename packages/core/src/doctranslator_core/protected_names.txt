@@ -1,0 +1,14 @@
+# Maintained exact names. One case-sensitive term per line.
+# Avoid ambiguous common words such as Yoga, Legion, Windows and Excel.
+Lenovo
+联想
+ThinkPad
+ThinkBook
+ThinkCentre
+ThinkStation
+ElevenLabs
+HyperFrames
+Node.js
+FFmpeg
+Microsoft
+PowerPoint

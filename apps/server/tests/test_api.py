@@ -11,13 +11,34 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from support.fakes import FIXTURES
-from support.pdf import write_mixed
 from support.server import FakeEngines, add_user, make_services, make_worker, server_settings
 
 from doctranslator_server import auth
 from doctranslator_server.app import Services, create_app
+from doctranslator_server.db.models import JobResult
+from doctranslator_server.db.models import Session as BrowserSession
 
 TXT = "这是一个用于测试的中文段落，内容足够长以便识别语言。\n".encode()
+
+
+def test_old_session_reload_requires_sign_in_instead_of_returning_broken_csrf(
+    services: Services, client: TestClient
+) -> None:
+    _, bearer = add_user(services)
+    key = bearer["Authorization"].removeprefix("Bearer ")
+    assert client.post("/v1/sessions", json={"key": key}).status_code == 201
+    with services.db.session() as session:
+        row = session.query(BrowserSession).one()
+        row.csrf_digest = hashlib.sha256(b"previous-release-random-csrf").hexdigest()
+    assert client.get("/v1/sessions/current").status_code == 401
+    signed_in = client.post("/v1/sessions", json={"key": key})
+    assert signed_in.status_code == 201
+    assert (
+        client.delete(
+            "/v1/sessions/current", headers={"X-CSRF-Token": signed_in.json()["csrf_token"]}
+        ).status_code
+        == 204
+    )
 
 
 @pytest.fixture
@@ -184,6 +205,12 @@ def test_reuse_is_owner_scoped_and_force_replaces_the_current_result(
     assert len(en) == 1 and en[0]["job_id"] == forced["id"]
 
 
+def test_only_standard_fit_is_executable(client: TestClient, services: Services) -> None:
+    _, headers = add_user(services)
+    for mode in ("online", "thorough"):
+        assert submit(client, headers, fit={"mode": mode}).status_code == 422
+
+
 def test_temporary_jobs_never_reuse_and_expire(
     client: TestClient, services: Services, engines: FakeEngines
 ) -> None:
@@ -319,7 +346,7 @@ def test_rejections_are_typed(client: TestClient, services: Services) -> None:
         submit(client, headers, content=b"PK\x03\x04garbage", name="deck.pptx").status_code == 422
     )
     same = submit(client, headers, target="zh", source="zh")
-    assert same.status_code == 422 and same.json()["code"] == "invalid_options"
+    assert same.status_code == 202  # same-language metadata does not reject mixed documents
 
 
 def test_admission_and_quota_limits(tmp_path: Path, engines: FakeEngines) -> None:
@@ -389,6 +416,11 @@ def test_sessions_with_csrf(client: TestClient, services: Services, engines: Fak
     assert no_csrf.status_code == 403 and no_csrf.json()["code"] == "csrf_failed"
     csrf = {"X-CSRF-Token": body["csrf_token"]}
     assert submit(client, csrf).status_code == 202
+    # A reloaded page recovers the same CSRF token from its cookie.
+    current = client.get("/v1/sessions/current")
+    assert current.status_code == 200 and current.json()["csrf_token"] == body["csrf_token"]
+    bearer = {"Authorization": f"Bearer {key}"}
+    assert TestClient(client.app).get("/v1/sessions/current", headers=bearer).status_code == 404
     cross = submit(client, csrf | {"Origin": "https://evil.example"})
     assert cross.status_code == 403
     assert client.delete("/v1/sessions/current", headers=csrf).status_code == 204
@@ -435,33 +467,21 @@ def test_skip_fit_outside_the_fit_stage_is_a_conflict(
     _, headers = add_user(services)
     queued = submit(client, headers).json()
     response = client.post(f"/v1/jobs/{queued['id']}/skip-fit", headers=headers)
-    assert response.status_code == 409 and response.json()["code"] == "not_in_fit"
+    assert response.status_code == 404
 
 
-def test_previews_for_text_and_pdf(
-    client: TestClient, services: Services, engines: FakeEngines, tmp_path: Path
+def test_preview_endpoints_are_removed(
+    client: TestClient, services: Services, engines: FakeEngines
 ) -> None:
     _, headers = add_user(services)
-    text = submit(client, headers).json()
-    pdf = submit(
-        client, headers, content=write_mixed(tmp_path / "m.pdf").read_bytes(), name="m.pdf"
-    ).json()
+    item = submit(client, headers).json()
     run_all(services, engines)
-    manifest = client.get(f"/v1/jobs/{text['id']}/preview", headers=headers).json()
-    [group] = manifest["groups"]
-    assert group["paired"] is True
-    assert group["units"][0]["source"].startswith("这是")
-    assert group["units"][0]["target"].startswith("EN:")
-    pages = client.get(f"/v1/jobs/{pdf['id']}/preview", headers=headers).json()
-    assert pages["format"] == "pdf" and len(pages["pages"]) == 1
-    image = client.get(
-        f"/v1/jobs/{pdf['id']}/preview/{pages['pages'][0]['target']}", headers=headers
-    )
-    assert image.status_code == 200 and image.headers["content-type"] == "image/jpeg"
-    assert (
-        client.get(f"/v1/jobs/{pdf['id']}/preview/manifest.json", headers=headers).status_code
-        == 404
-    )
+    assert client.get(f"/v1/jobs/{item['id']}/file", headers=headers).status_code == 200
+    assert client.get(f"/v1/jobs/{item['id']}/preview", headers=headers).status_code == 404
+    with services.db.session() as session:
+        result = session.query(JobResult).one()
+        assert "preview_blob" not in result.__table__.columns
+        assert "pages_blob" not in result.__table__.columns
 
 
 def test_openapi_documents_the_contract(client: TestClient) -> None:
@@ -473,8 +493,163 @@ def test_openapi_documents_the_contract(client: TestClient) -> None:
         "/v1/documents/{document_id}/translations",
         "/v1/documents/{document_id}/translations/{translation_id}/file",
         "/v1/jobs/{job_id}/file",
-        "/v1/jobs/{job_id}/skip-fit",
         "/v1/jobs/{job_id}/dismiss",
-        "/v1/jobs/{job_id}/preview",
+        "/v1/history",
         "/v1/batches/{batch_id}/items",
     } <= paths
+
+
+def test_hosts_the_web_app_without_shadowing_the_api(tmp_path: Path, engines: FakeEngines) -> None:
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<!doctype html><title>Lenny</title>", encoding="utf-8")
+    (web / "assets" / "app-1a2b.js").write_text("console.log(1)", encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("outside", encoding="utf-8")
+    services = make_services(server_settings(tmp_path, web_dir=web), engines)
+    try:
+        client = TestClient(create_app(services))
+        page = client.get("/")
+        assert page.status_code == 200 and "Lenny" in page.text
+        assert page.headers["cache-control"] == "no-cache"
+        assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+        assert "Lenny" in client.get("/files/some-route").text  # UI routes fall back to the app
+        asset = client.get("/assets/app-1a2b.js")
+        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+        assert client.head("/assets/app-1a2b.js").status_code == 200
+        missing = client.get("/v1/nothing-here")
+        assert missing.status_code == 404 and missing.json()["code"]  # never HTML under /v1
+        escaped = client.get("/..%2Fsecret.txt")
+        assert "outside" not in escaped.text
+    finally:
+        services.close()
+
+
+def test_translation_settings_private_persisted_and_csrf(
+    services: Services, client: TestClient
+) -> None:
+    _, first = add_user(services)
+    _, second = add_user(services)
+    url = "/v1/me/translation-settings"
+    assert client.get(url).status_code == 401
+    default = client.get(url, headers=first).json()
+    assert default["protected_terms"] == [] and default["use_default_dictionary"] is True
+    assert "Lenovo" in default["default_protected_terms"]
+    updated = client.put(
+        url,
+        headers=first,
+        json={"protected_terms": [" Zebra ", "Acme", "Acme"], "use_default_dictionary": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["protected_terms"] == ["Acme", "Zebra"]
+    assert client.get(url, headers=second).json()["protected_terms"] == []
+    with TestClient(create_app(services)) as other_client:
+        assert other_client.get(url, headers=first).json() == updated.json()
+    signed = client.post(
+        "/v1/sessions", json={"key": first["Authorization"].removeprefix("Bearer ")}
+    )
+    assert signed.status_code == 201
+    assert client.put(url, json={"protected_terms": []}).status_code == 403
+    assert (
+        client.put(
+            url, json={"protected_terms": []}, headers={"X-CSRF-Token": signed.json()["csrf_token"]}
+        ).status_code
+        == 200
+    )
+
+
+@pytest.mark.parametrize("terms", [[""], ["a\nb"], ["a\tb"], ["x" * 201], ["a"] * 501])
+def test_translation_settings_reject_invalid_terms(
+    services: Services, client: TestClient, terms: list[str]
+) -> None:
+    _, headers = add_user(services)
+    assert (
+        client.put(
+            "/v1/me/translation-settings", headers=headers, json={"protected_terms": terms}
+        ).status_code
+        == 422
+    )
+    assert submit(client, headers, protected_terms=terms).status_code == 422
+
+
+def test_protected_preferences_snapshot_replay_and_cache(
+    services: Services, client: TestClient, engines: FakeEngines
+) -> None:
+    from doctranslator_server.db.models import Job
+
+    _, headers = add_user(services)
+    url = "/v1/me/translation-settings"
+    assert (
+        client.put(
+            url,
+            headers=headers,
+            json={"protected_terms": ["Acme"], "use_default_dictionary": False},
+        ).status_code
+        == 200
+    )
+    sid = str(uuid.uuid4())
+    original = submit(client, headers, submission_id=sid, protected_terms=["Project X"]).json()
+    with services.db.session() as session:
+        row = session.get(Job, original["id"])
+        assert row is not None
+        assert row.options["protected_terms"] == ["Acme", "Project X"]
+        assert row.options["use_default_dictionary"] is False
+    assert (
+        client.put(
+            url,
+            headers=headers,
+            json={"protected_terms": ["Other"], "use_default_dictionary": True},
+        ).status_code
+        == 200
+    )
+    replay = submit(client, headers, submission_id=sid, protected_terms=["Project X"])
+    assert replay.status_code == 200 and replay.json()["id"] == original["id"]
+    assert (
+        submit(client, headers, submission_id=sid, protected_terms=["changed"]).status_code == 409
+    )
+    run_all(services, engines)
+    fresh = submit(client, headers, protected_terms=["Project X"])
+    assert fresh.status_code == 202
+    assert fresh.json()["fingerprint"] != original["fingerprint"]
+    with services.db.session() as session:
+        row = session.get(Job, fresh.json()["id"])
+        assert row is not None
+        assert row.options["protected_terms"] == ["Other", "Project X"]
+        assert row.options["use_default_dictionary"] is True
+    run_all(services, engines)
+    override = submit(client, headers, use_default_dictionary=False)
+    assert override.status_code == 202
+    with services.db.session() as session:
+        row = session.get(Job, override.json()["id"])
+        assert row is not None and row.options["use_default_dictionary"] is False
+
+
+def test_service_account_settings_apply_to_saved_document_batch(
+    services: Services, client: TestClient
+) -> None:
+    from doctranslator_server.db.models import Job, User
+
+    owner, headers = add_user(services)
+    with services.db.session() as session:
+        user = session.get(User, owner)
+        assert user is not None
+        user.kind = "service"
+    url = "/v1/me/translation-settings"
+    assert (
+        client.put(url, headers=headers, json={"protected_terms": ["CaseManager"]}).status_code
+        == 200
+    )
+    doc = client.post("/v1/documents", headers=headers, files={"file": ("a.txt", TXT)}).json()
+    batch = client.post(
+        "/v1/batches", headers=headers, json={"idempotency_key": str(uuid.uuid4())}
+    ).json()
+    body = {"target": "en", "batch_id": batch["id"], "client_item_id": str(uuid.uuid4())}
+    path = f"/v1/documents/{doc['id']}/translations"
+    accepted = client.post(path, headers=headers, json=body)
+    assert accepted.status_code == 202
+    with services.db.session() as session:
+        row = session.query(Job).filter_by(owner_id=owner).one()
+        assert row.options["protected_terms"] == ["CaseManager"]
+        assert row.options["use_default_dictionary"] is True
+    client.put(url, headers=headers, json={"protected_terms": ["NewName"]})
+    replay = client.post(path, headers=headers, json=body)
+    assert replay.status_code == 200 and replay.json()["id"] == accepted.json()["id"]

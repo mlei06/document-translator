@@ -1,9 +1,113 @@
 # Deployment and Local Operation
 
-> Accepted storage/identity revision (2026-09-29): [ADR-014](decisions/ADR-014-storage-ownership-and-retranslation.md) and [the storage transition plan](plans/P5-D2-storage-and-ownership.md) supersede earlier shared-cache/version-history and desktop-library requirements. Local runs always export fresh to a chosen path; hosted saved mode keeps owner-scoped current results; internal apps can use temporary results. The hosted parts (saved documents with current translations, temporary jobs, owner-scoped reuse, immutable job results) are implemented in the service below; the desktop local-export profile is a desktop-track deliverable.
+## Unified runtime configuration
+
+The automatic website API is implemented as verified staging followed by target-only
+submission. Configure `DOCTRANSLATOR_WEB_TRANSLATION_POLICY` as JSON with revision
+`web-auto-v2`, `davy_order` equal to `gemma`, `nemotron-3-ultra`,
+`nemotron-3-super-120b`, `gpt-oss-120b-thinking`, `gpt-oss-120b`, `laguna-s-2.1`, and
+`local_translator_id` equal to `hy-mt-local`. Configure candidate identities through the
+existing translator/Davy settings. Gemma must bind to `gemma-4-31b-it`; website HY-MT
+must use the loopback HY-MT protocol with a deployment revision. Missing policy is a
+configuration error, not permission to select an arbitrary model.
+
+Set global blob and workspace budgets with `DOCTRANSLATOR_GLOBAL_BLOB_BUDGET_BYTES`
+and `DOCTRANSLATOR_GLOBAL_WORK_BUDGET_BYTES` (defaults 100 GiB and 8 GiB). Reserve
+additional filesystem capacity for database/WAL, logs, models and backups. Admission
+preserves the larger of 5 GiB or 10% free volume capacity. Default input/output/report/work
+caps are 100 MiB, 200 MiB, 16 MiB and 1 GiB. Retention sweeps run every five minutes.
+
+Website clients upload to `POST /v1/documents?staging=true` immediately, then submit
+`POST /v1/documents/{id}/translations` with `target`, `selection_policy=website_auto`,
+`retention=cached`, `download_semantics=current_shared` and a stable submission ID or
+batch/client-item identity. `GET /v1/history` and its authorized `/{id}/file` resolve current
+results; deletion revokes only that user's grant. Removed preview and skip-fit routes
+return 404, and thorough fit requests are rejected. LibreOffice is no longer required.
+
+Desktop bootstrap is `doctranslator-server desktop` with the versioned secret envelope
+on inherited stdin. Do not invoke it by putting a credential in command-line arguments.
+The runtime and shell release evidence distinguish unsigned local builds from signed
+clean-machine installer acceptance. Existing secrets and model assets are not rewritten
+automatically when applying source changes.
+
+The older deployment examples below are historical where they specify preview/thorough
+operations or personalized website translation controls; those features are removed.
+
+> Current target contract: [Unified translator design](plans/unified-translator-design.md). Both products use Gemma, Nemotron 3 Ultra, Nemotron 3 Super, GPT-OSS Thinking, GPT-OSS, Laguna, then available HY-MT. Desktop has no mode controls and calls Davy directly with the website deployment's Davy inference key injected during restricted installer packaging. Do not put that secret in repository configuration, documentation or logs. The shared client key is recoverable by recipients; rotation must update website and desktop distribution together. These are design requirements, not live environment changes.
 
 
-Status (2026-09-29): this document distinguishes intended deployment profiles from implemented operations. The shared service (P5) and local CLI are implemented and verified on one Windows host; desktop packaging and non-loopback TLS deployment remain pending.
+
+
+
+
+
+## Local HY-MT inference
+
+The `hy-mt` LLM protocol supports HY-MT1.5-1.8B served by an explicitly managed llama.cpp
+process ([ADR-025](decisions/ADR-025-local-hy-mt.md)). This is local inference despite using
+the existing `llm` wire mode. It requires installed GGUF weights and a compatible llama.cpp
+binary; it does not download models or supervise the process.
+
+For the tested Core Ultra 7 155H / Intel Arc laptop, use:
+
+```powershell
+data/tools/llama.cpp/vulkan/llama-server.exe `
+  -m data/models/gguf/HY-MT1.5-1.8B-Q8_0.gguf `
+  --alias hy-mt --host 127.0.0.1 --port 8099 `
+  -ngl 99 -t 4 -tb 4 -c 16384 -np 4 --no-context-shift --cache-ram 0
+```
+
+These are measured settings for this host, not universal performance defaults. See the
+[laptop experiment](experiments/laptop-mt/README.md) for measured settings and hardware.
+For CPU inference, use the CPU build and `-ngl 0`. Keep context capacity per slot when
+increasing `-np`; align client concurrency with the number of server slots. Disabling context
+shift ensures oversized inputs fail rather than silently discarding earlier source tokens.
+
+For the local CLI, create a private settings file:
+
+```dotenv
+DOCTRANSLATOR_MODE=llm
+DOCTRANSLATOR_LLM_PROTOCOL=hy-mt
+DOCTRANSLATOR_LLM_EXECUTION_LOCATION=server
+DOCTRANSLATOR_LLM_BASE_URL=http://127.0.0.1:8099/v1/
+DOCTRANSLATOR_LLM_API_KEY=local
+DOCTRANSLATOR_LLM_MODEL=hy-mt
+DOCTRANSLATOR_LLM_DEPLOYMENT_REVISION=replace-with-gguf-sha256-and-runtime-settings-revision
+DOCTRANSLATOR_LLM_MAX_CONCURRENCY=4
+DOCTRANSLATOR_LLM_MAX_OUTPUT_TOKENS=2048
+```
+
+Use `doctranslator translate INPUT --from zh --to en --config PATH` as usual. `local` is a
+placeholder for an unauthenticated loopback server; when server authentication is enabled,
+configure the matching secret privately. Server-local configurations ignore HTTP proxy
+environment variables. Never point this configuration at an unapproved remote endpoint.
+
+For web/service selection, add an entry to the existing `DOCTRANSLATOR_TRANSLATORS` JSON list:
+
+```json
+{
+  "id": "hy-mt-local",
+  "label": "HY-MT 1.5 1.8B Q8",
+  "engine": {
+    "mode": "llm",
+    "protocol": "hy-mt",
+    "execution_location": "server",
+    "base_url": "http://127.0.0.1:8099/v1/",
+    "api_key": "local",
+    "model": "hy-mt",
+    "deployment_revision": "replace-with-gguf-sha256-and-runtime-settings-revision",
+    "max_concurrency": 4,
+    "max_output_tokens": 2048
+  }
+}
+```
+
+Preserve existing entries/default unless deliberately changing them, and restart API/workers
+after configuration changes. HY-MT appears as **On server** and is not a Davy model. The configured
+entry is not a health check: an unavailable external server produces an explicit job failure.
+The model revision is operator-declared, not remotely attested; update it whenever weights or
+generation-affecting runtime settings change. `max_loaded_local_models` does not unload this
+external model, so stop unused llama.cpp processes explicitly. No model is silently substituted.
 
 ## Intended Deployment Profiles
 
@@ -23,6 +127,47 @@ The main desktop workflow is open -> drag/drop files or folders -> select option
 The [desktop/internal-app delivery plan](plans/Desktop-and-internal-app-delivery.md) defines D0-D2/I1. Do not publish invented installer commands or claim packaging is complete. Existing developer instructions below remain separate from the intended end-user installer.
 
 ## Local Development
+
+Old demo renderer settings no longer apply. Initialize the current schema before starting matched API/workers and the rebuilt website; the unified service publishes direct output/report files only.
+
+LAN demo exception approved by the owner on 2026-09-29: the laptop binds HTTPS to its Wi-Fi address `10.41.41.102:8765`, with two workers. A temporary self-signed certificate in ignored `data/website/tls-demo/` expires 2026-10-06; coworkers must accept its browser warning. This is a temporary exception to ADR-015's company-issued certificate requirement, not the production certificate policy. The Windows firewall rule `DocumentTranslator-Demo-HTTPS-8765` permits TCP 8765 only on Wi-Fi, Domain/Private profiles, from `10.41.40.0/22`. An IP/subnet change requires reconfiguration and a matching certificate. Use the HTTPS Wi-Fi URL on the laptop too; the listener is no longer on loopback. Remove the demo firewall rule and restore the loopback configuration when LAN access is no longer needed. Never distribute the private key.
+
+The web `npm run build` command typechecks, then awaits Vite's build API through `scripts/build.mjs`. The script exits after successful output writes because native file handles can otherwise leave the completed Vite build process running on Windows. Build errors still produce a nonzero exit.
+
+### Translator configuration
+
+Availability follows [ADR-024](decisions/ADR-024-translator-availability.md): local MT models must have their required artifacts installed on this backend. Missing models are omitted from new-job choices without loading every model or disabling other installed models. Local installation is checked at startup; restart API/workers after installing or removing models. Davy Retry connection does not reload the local catalog.
+
+For Davy, set `DOCTRANSLATOR_DAVY_BASE_URL` to the OpenAI-compatible API base (including `/v1` when required), `DOCTRANSLATOR_DAVY_API_KEY` to its secret, and `DOCTRANSLATOR_DAVY_MODELS` to an approved JSON list such as `[{"id":"gemma","label":"Gemma","model":"gemma-4-31b-it"}]`. Each model supports `enabled`, `json_mode`, `batch_size`, `max_concurrency` and `deployment_revision`. Use exact model IDs from your deployment. Remove corresponding generic LLM entries from `DOCTRANSLATOR_TRANSLATORS` so they do not bypass Davy discovery. The default can name an enabled Davy entry even when the connection is temporarily unavailable.
+
+The service intersects that list with authenticated `GET /models`, caching discovery for 60 seconds. `POST /v1/translators/refresh` returns refreshed capabilities and is authenticated, with browser CSRF protection and a five-second retry floor. No per-model inference probes run. Missing credentials, network/VPN failures, rejected credentials and no matching models are distinct UI states. A model being listed does not prove inference health. Configuration changes still require an API/worker restart.
+
+[ADR-019](decisions/ADR-019-configured-translators.md) defines installation choices. The shared service administrator configures translators; website users choose enabled entries. LLM support is built in, but no LLM is offered without connection configuration. Configured does not guarantee remote reachability, and failure never silently switches models or sends local-mode files remotely.
+
+For multiple translators, set `DOCTRANSLATOR_TRANSLATORS` to a JSON list and `DOCTRANSLATOR_DEFAULT_TRANSLATOR_ID` to an enabled ID. Each entry has `id`, `label`, `enabled` and `engine`. Example entry for an already-installed supported model:
+
+```json
+{
+  "id": "small100",
+  "label": "SMALL-100",
+  "enabled": true,
+  "engine": {
+    "mode": "mt",
+    "model_dir": "data/models/alirezamsh--small100-ct2-int8",
+    "model_family": "small100",
+    "device": "auto",
+    "compute_type": "int8"
+  }
+}
+```
+
+An LLM entry uses `engine.mode=llm` with `base_url`, `api_key`, `model` and `deployment_revision`; supply real connection values through the protected deployment configuration, not committed examples or browser settings. Multiple entries may use the same mode. Supported runtime adapters remain limited to those actually implemented; a configured name does not install a new model or certify another model family.
+
+Without a translator list, the existing `DOCTRANSLATOR_MT_*` and `DOCTRANSLATOR_LLM_*` settings create legacy `mt` and `llm` IDs. Local synchronous CLI configuration remains separate. API requests use `translator_id`; legacy `mode` callers are still supported. Capabilities return safe names, IDs, execution location and default, never secrets or model paths. Hosted local inference is labelled **On server**, not **On this device**.
+
+`DOCTRANSLATOR_MAX_LOADED_LOCAL_MODELS` defaults to 1 per worker. Models load only when selected. Compatible SMALL-100 Beam 4/Greedy presets share weights and tokenizer, passing decoding settings per inference call. The bound counts distinct runtimes, not presets; exceeding it closes all bindings of the least-recently-used local runtime. Account for the number of worker processes when budgeting RAM/VRAM. Restart API and workers together when changing configuration. Queued jobs retain their selected ID/fingerprint and fail explicitly if the configured model identity no longer matches; they never switch to the new default.
+
+Desktop installer/setup selection and subsequent downloads/removal remain D0/D1 deliverables. It will use the supported catalog, show download/disk/hardware information, offer a default and permit an explicit remote-only setup. This service configuration is not a shipped installer.
 
 From the repository root, with `uv` installed:
 
@@ -138,3 +283,37 @@ Local check results do not establish CI success; record CI run IDs and the teste
 The [P2-P6 handoff](plans/P2-P6-delivery-handoff.md) requires a verified operating guide at implementation completion. P5 must document migrations, user/key provisioning/revocation, company TLS, model/font identity, worker lifecycle, manifest submissions, owned history/downloads, retention and a tested database-plus-blobs backup/restore. P6 adds browser sessions, the integrated static build, routed reloads and the same-user web workflow. Proposed command names in plans are not runnable instructions until implemented.
 
 Service CLI and REST use the same server. Local `translate` is a distinct mode without persistent cache/history; documentation must never imply local output is automatically saved to the service. Human and service accounts own their batches/jobs/documents even when physical bytes are shared. Saved originals/current translations have quotas, not automatic expiry; temporary results and superseded job outputs expose expiration. Configure cleanup, backup retention and recovery bounds before launch.
+
+### Upgrade compatibility for batch retries
+
+Migration `0003` preserves existing jobs and their pinned model identity. Accepted pre-upgrade submissions remain replayable. A rejected batch item created before this migration has no persisted translator selection; retrying that old item can return `409` instead of the original rejection. Submit a corrected item with a new item identity. This does not duplicate translation work.
+
+### Local website with accounts and model presets
+
+[ADR-020](decisions/ADR-020-browser-accounts-and-decoding.md) adds email/password sign-in and optional account creation. Set `DOCTRANSLATOR_REGISTRATION_ENABLED=true` to allow registration; it defaults to false. Passwords must contain 8 to 128 characters. Password-backed sessions retain the same owner scope, cookie/CSRF protections and expiry as key-backed sessions. API keys remain available to CLI/internal clients. Email verification and password recovery are not implemented by this basic account flow.
+
+For the current local instance, ignored `data/website.env` configures HTTPS on loopback port 8765, persistent state under `data/website`, the built `apps/web/dist`, and two workers. The configured local presets are `small100-beam4`, `small100-greedy`, and `hy-mt-local`, alongside six existing Davy entries. SMALL-100 shares one installed bundle with beam sizes 4 and 1; its beam-4 preset remains the default. HY-MT requires the separate loopback llama-server described above. This private settings file contains endpoint credentials and must remain untracked. The previous network bind address was unavailable during HY-MT integration, so it was replaced with loopback while retaining TLS settings.
+
+Build the frontend with `npm run build` from `apps/web`, then run from the repository root:
+
+```powershell
+uv run doctranslator-server --env-file data/website.env migrate
+uv run doctranslator-server --env-file data/website.env serve
+```
+
+Open `https://127.0.0.1:8765` using the configured certificate trust and sign in. Click Lenny to open translator settings. Changes affect future submissions and retranslation; accepted jobs retain their selected preset. The service must remain running for the website and workers to function.
+
+
+### Protected words and maintained names
+
+Users manage private protected words in **Lenny settings > Protected words**. Save applies to new submissions across devices. The built-in company/product list can be disabled; syntax protection remains active. Explicit API `protected_terms` add to the account list, and optional `use_default_dictionary` overrides its switch for that submission. Existing CLI clients inherit service account preferences when they omit the override.
+
+Maintainers edit `packages/core/src/doctranslator_core/protected_names.txt`, review ambiguous names carefully, run protection regressions, and deploy/restart the service. The packaged dictionary digest and protection version prevent reuse of older incompatible results. Do not modify that data file inside a running installation. Local core document callers can set `use_default_dictionary=False` and supply their own `protected_terms`.
+
+### Offline fit modes
+
+New translations use fit v2 `standard` automatically. It performs local structure, font and geometry work without invoking an Office renderer or another translation model. Explicit internal API clients can configure supported fit floors. Website automatic requests use the fixed standard profile and expose no fit controls.
+
+Thorough fit, preview rendering and production LibreOffice integration have been removed. Standard fit may report unresolved constraints honestly. PDF construction requires legal placement; impossible placement returns `layout_unresolvable` without publishing a damaged PDF.
+
+Output fingerprints pin standard-fit settings and relevant font identities. Restart matched API/workers after deploying code or changing configuration. Website shared downloads resolve the current slot, while explicit internal-app exact-result promises remain separate.

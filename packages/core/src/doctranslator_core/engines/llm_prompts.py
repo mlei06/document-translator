@@ -9,10 +9,10 @@ from collections.abc import Sequence
 
 from doctranslator_core.types import LANGUAGE_NAMES, Language
 
-PROMPT_VERSION = "llm-translate-v1"
+PROMPT_VERSION = "llm-target-only-v2"
 
 SYSTEM_TEMPLATE = """\
-You are a professional translator. Translate each segment from {source} to {target}.
+You are a professional translator. Translate each segment into {target}.
 
 Rules:
 - Translate every segment completely. Never merge, split, omit, or reorder segments.
@@ -25,8 +25,8 @@ such as {{0}}, %s, or <tag> exactly as written.
 Respond with a JSON object of the form {{"translations": ["...", "..."]}}."""
 
 
-def system_prompt(source: Language, target: Language) -> str:
-    return SYSTEM_TEMPLATE.format(source=LANGUAGE_NAMES[source], target=LANGUAGE_NAMES[target])
+def system_prompt(target: Language) -> str:
+    return SYSTEM_TEMPLATE.format(target=LANGUAGE_NAMES[target])
 
 
 def user_message(segments: Sequence[str]) -> str:

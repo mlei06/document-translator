@@ -1,0 +1,6 @@
+Weekly project meeting - sample notes
+
+Attendees: design, engineering and support teams.
+The new onboarding flow is ready for internal testing next Monday.
+Support asked for clearer error messages when an upload fails.
+Action: engineering will share a short demo before Friday.

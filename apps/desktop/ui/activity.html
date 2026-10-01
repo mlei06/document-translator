@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Translation activity</title>
+    <link rel="stylesheet" href="activity.css" />
+    <script src="activity.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icon.svg" alt="" width="40" height="40" />
+        <div>
+          <h1>Translation activity</h1>
+          <p>Your selected documents, on this device.</p>
+        </div>
+      </header>
+      <p
+        id="announcement"
+        class="visually-hidden"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <p id="connection" hidden></p>
+      <div id="groups"><p>Connecting to your translations.</p></div>
+      <footer>
+        <button id="open-main">Open Lenny</button>
+        <p>Closing this window keeps accepted translations running.</p>
+      </footer>
+    </main>
+  </body>
+</html>

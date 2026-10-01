@@ -121,8 +121,14 @@ def register(app: typer.Typer) -> None:
         to: Annotated[str | None, typer.Option("--to", help="Target language.")] = None,
         source: Annotated[str, typer.Option("--from", help="Source language or auto.")] = "auto",
         mode: Annotated[str | None, typer.Option("--mode", help="mt or llm.")] = None,
+        translator_id: Annotated[
+            str | None, typer.Option("--translator-id", help="Configured translator ID.")
+        ] = None,
         manifest: Annotated[
-            Path | None, typer.Option(help="JSON Lines: {path, source?, target?, mode?} per line.")
+            Path | None,
+            typer.Option(
+                help="JSON Lines: {path, source?, target?, mode?, translator_id?} per line."
+            ),
         ] = None,
         resume_state: Annotated[
             Path | None,
@@ -165,13 +171,14 @@ def register(app: typer.Typer) -> None:
         """
         if bool(files) == bool(manifest):
             _fail(EXIT_INVALID, "give FILES or --manifest (not both)")
-        with _client(server, config) as (client, settings, url):
+        with _client(server, config) as (client, _settings, url):
             me = client.get("/me")
-            caps = client.get("/capabilities")
-            chosen_mode = mode or settings.mode.value
-            if chosen_mode not in caps["modes"]:
-                _fail(EXIT_INVALID, f"mode {chosen_mode} is not available on this service")
-            defaults: dict[str, Any] = {"source": source, "mode": chosen_mode}
+            defaults: dict[str, Any] = {"source": source}
+            defaults["fit"] = {"mode": "standard"}
+            if translator_id:
+                defaults["translator_id"] = translator_id
+            if mode:
+                defaults["mode"] = mode
             if to:
                 defaults["target"] = to
             if force:

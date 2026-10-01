@@ -33,6 +33,10 @@ class CliSettings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_model: str | None = None
     llm_deployment_revision: str = ""
+    llm_protocol: Literal["json-batch", "hy-mt"] = "json-batch"
+    llm_execution_location: Literal["server", "remote"] = "remote"
+    llm_max_output_tokens: int = 2048
+    llm_max_concurrency: int = 4
     mt_model_dir: Path | None = None
     mt_model_family: Literal["small100"] = "small100"
     mt_device: Literal["cpu", "cuda", "auto"] = "auto"
@@ -102,6 +106,10 @@ class CliSettings(BaseSettings):
                     api_key=api_key,
                     model=model,
                     deployment_revision=self.llm_deployment_revision,
+                    protocol=self.llm_protocol,
+                    execution_location=self.llm_execution_location,
+                    max_output_tokens=self.llm_max_output_tokens,
+                    max_concurrency=self.llm_max_concurrency,
                 )
             case TranslationMode.MT:
                 if self.mt_model_dir is None:
